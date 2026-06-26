@@ -12,6 +12,7 @@
 
 <p align="center">
   <a href="#为什么需要它">为什么需要它</a> |
+  <a href="#推荐使用方式">使用方式</a> |
   <a href="docs/README_en.md">English</a> |
   <a href="docs/showcase.html">Showcase</a> |
   <a href="#核心-skills">Skills</a> |
@@ -42,6 +43,98 @@
 | Guarded Handoff | `execution-contract.md` 是规划到实现的唯一交接层 |
 | Strong Guardrails | 实现过程中违反契约的行为被明确拦截并回退 |
 | Self-Contained | 不需要运行时安装 OpenSpec 或 Superpowers |
+
+## 推荐使用方式
+
+### 入口永远从这里开始
+
+**触发入口是 `workflow-orchestrator`。**
+
+每次开始或恢复一个变更，你只需要告诉 Agent 一句话：
+
+```
+用 workflow-orchestrator 开始
+```
+
+`workflow-orchestrator` 会检查当前工件目录，判断你处于哪个阶段，然后自动路由到正确的下一个 skill。你不需要记住 6 个 skill 的名字，也不需要手动判断"现在该干什么"——入口自己会判断。
+
+### 完整流程：一次贯穿 6 个状态
+
+```text
+你说"帮我加一个权限控制"
+       │
+       ▼
+┌──────────────────┐
+│ workflow-orchestrator  │  ← 唯一入口。检查状态、路由
+└──────┬───────────┘
+       │
+       ▼
+   exploring         spec-explorer 追问："你要 RBAC 还是 ABAC？" "多大粒度？" "哪些接口受影响？"
+       │
+       ▼
+   specifying        spec-forger 产出 4 份工件：proposal + specs + design + tasks
+       │
+       ▼
+   bridging          bridge-contract 把 4 份工件压缩为 1 份 execution-contract.md
+       │                 ┌────────────────────────────────────────┐
+       │                 │ execution-contract.md                  │
+       │                 │  - 输入 / 输出 / 边界                   │
+       │                 │  - 逐条测试清单                         │
+       │                 │  - 验收关卡                             │
+       │                 └────────────────────────────────────────┘
+       │
+  ◇ 用户批准 ◇        ← 唯一一次人工介入：你看一眼，确认，然后说"批准"
+       │
+       ▼
+   executing         execution-governor 强制 TDD、卡 review 关、违规拦截
+       │
+       ▼
+   closing           closure-archivist 验证、总结、归档
+```
+
+**关键约束：**
+
+- 没有 `execution-contract.md` 或未被用户批准 → **不允许进入实现**
+- 实现中违反契约 → **拦截并回退**，不是靠开发者"感觉不对"来手动纠偏
+- 需求变更 → **强制回退到 `specifying` 或 `bridging`**，不在执行阶段悄悄改
+
+### 为什么它厉害：把 OpenSpec 和 Superpowers 真正打通了
+
+市面上 AI 编程工作流基本是两派：
+
+| 流派 | 代表 | 优势 | 短板 |
+|---|---|---|---|
+| 规划派 | OpenSpec | 产出清晰的 proposal、specs、design、tasks | 只管写文档，不管执行。文档写完了，实现阶段还是裸奔 |
+| 纪律派 | Superpowers | TDD、review gate、subagent 驱动开发 | 没有正式的规划工件层，对"需求是否已经明确"缺乏硬判断 |
+
+**spec-superflow 做的事不是"两边都装"，而是"把两头真正接起来"：**
+
+```text
+OpenSpec 擅长的                    Superpowers 擅长的
+    │                                    │
+    │  proposal                          │  brainstorming
+    │  specs                             │  TDD
+    │  design                            │  review gates
+    │  tasks                             │  subagent-driven-dev
+    │                                    │
+    └──────────┬─────────────────────────┘
+               │
+               ▼
+      ┌─────────────────────┐
+      │  execution-contract  │  ← spec-superflow 的桥接层
+      │  .md                 │     规划工件被压缩为可检查的契约
+      └─────────────────────┘     执行纪律只对已批准的契约生效
+               │
+               ▼
+      规划不再只是参考资料，执行不再是自己跑偏
+```
+
+具体来说：
+
+1. **吸收 OpenSpec 的规划能力** — proposal、specs、design、tasks 全套工件，但不止于产出文档
+2. **吸收 Superpowers 的执行纪律** — TDD、review gate、违规拦截，但需要先有批准过的契约才能触发
+3. **桥接层 `execution-contract.md` 是独有创新** — 它不是又一份规划文档，而是一份**可验证的契约**：输入/输出/边界/测试清单/验收关卡，每一项都能在实现过程中被逐条检查
+4. **Self-Contained** — 不需要安装 OpenSpec，不需要安装 Superpowers。一个插件，一个 workflow owner
 
 ## 核心 Skills
 

@@ -28,6 +28,99 @@ Most AI coding sessions fail in one of two ways:
 - `bridge-contract` turns planning artifacts into an `execution-contract.md`.
 - `execution-governor` treats that contract as the approved source for implementation behavior.
 
+## Recommended Usage
+
+### The Single Entry Point
+
+**Everything starts from `workflow-orchestrator`.**
+
+Whenever you begin or resume a change, just tell your agent:
+
+```
+use workflow-orchestrator to start
+```
+
+`workflow-orchestrator` inspects the current artifact directory, determines which stage you're in, and routes to the correct next skill. You don't need to memorize six skill names or manually figure out "what should I do next" — the entry point handles it.
+
+### Full Flow: Six States, One Pipeline
+
+```text
+You: "add authorization to the API"
+       │
+       ▼
+┌──────────────────────────┐
+│  workflow-orchestrator    │  ← Single entry. Inspects state, routes forward
+└──────┬───────────────────┘
+       │
+       ▼
+   exploring         spec-explorer asks: "RBAC or ABAC?" "What granularity?" "Which endpoints?"
+       │
+       ▼
+   specifying        spec-forger produces 4 artifacts: proposal + specs + design + tasks
+       │
+       ▼
+   bridging          bridge-contract compresses 4 artifacts into 1 execution-contract.md
+       │                 ┌────────────────────────────────────────┐
+       │                 │ execution-contract.md                  │
+       │                 │  - Input / Output / Boundaries         │
+       │                 │  - Per-item test checklist             │
+       │                 │  - Review gates                        │
+       │                 └────────────────────────────────────────┘
+       │
+  ◇ User Approval ◇   ← The only human gate: you review, confirm, say "approved"
+       │
+       ▼
+   executing         execution-governor enforces TDD, review gates, contract compliance
+       │
+       ▼
+   closing           closure-archivist verifies, summarizes, archives
+```
+
+**Hard constraints:**
+
+- No `execution-contract.md` or no user approval → **implementation is blocked**
+- Violating the contract during implementation → **intercepted and rolled back**, not left to developer intuition
+- Requirements change mid-execution → **forced rollback to `specifying` or `bridging`**, no silent scope creep
+
+### The Superpower: Truly Integrating OpenSpec + Superpowers
+
+Most AI coding workflows fall into two camps:
+
+| Camp | Example | Strength | Weakness |
+|---|---|---|---|
+| Planning-first | OpenSpec | Clean proposal, specs, design, tasks | Stops at documentation. Implementation runs unguarded |
+| Discipline-first | Superpowers | TDD, review gates, subagent-driven dev | No formal planning layer. No hard judgment on "is the spec stable?" |
+
+**spec-superflow bridges both worlds:**
+
+```text
+OpenSpec strengths                 Superpowers strengths
+    │                                    │
+    │  proposal                          │  brainstorming
+    │  specs                             │  TDD
+    │  design                            │  review gates
+    │  tasks                             │  subagent-driven-dev
+    │                                    │
+    └──────────┬─────────────────────────┘
+               │
+               ▼
+      ┌─────────────────────┐
+      │  execution-contract  │  ← spec-superflow's bridge layer
+      │  .md                 │     Planning artifacts compressed into
+      └─────────────────────┘     verifiable contract.
+               │                  Execution discipline only activates
+               ▼                  against approved contract.
+        Planning is no longer just reference material.
+        Execution no longer drifts on its own.
+```
+
+In concrete terms:
+
+1. **Absorbs OpenSpec's planning capability** — proposal, specs, design, tasks as formal artifacts, not the end of the process
+2. **Absorbs Superpowers' execution discipline** — TDD, review gates, violation interception, but requires an approved contract to activate
+3. **`execution-contract.md` is the unique innovation** — not another planning doc, but a **verifiable contract**: inputs/outputs/boundaries/test checklist/review gates, each item checkable during implementation
+4. **Self-Contained** — no OpenSpec install, no Superpowers install. One plugin, one workflow owner.
+
 ## Core Skills
 
 | Skill | Stage | Responsibility |
@@ -38,22 +131,6 @@ Most AI coding sessions fail in one of two ways:
 | `bridge-contract` | Bridging | Convert planning artifacts into `execution-contract.md` |
 | `execution-governor` | Executing | Enforce TDD, review gates, and contract-first implementation |
 | `closure-archivist` | Closing | Verify, summarize, and prepare for archive |
-
-## First Release Scope
-
-- Self-contained plugin, not a dual-install runtime wrapper
-- Spec-first workflow with a guarded bridge into execution
-- First release targets Claude Code and Trae style local skill loading
-- `execution-contract.md` is the formal handoff layer between planning and implementation
-
-## Installation Philosophy
-
-This plugin is designed to be self-contained.
-
-- It does **not** require runtime installation of OpenSpec.
-- It does **not** require runtime installation of Superpowers.
-- It may borrow their ideas, structures, and proven workflow patterns.
-- It keeps runtime control inside one plugin so there is one workflow owner.
 
 ## Install
 
