@@ -10,10 +10,11 @@ This is the primary entry point for `spec-superflow`.
 Its job is not to implement anything directly. Its job is to:
 
 1. inspect the current change context
-2. confirm key decisions with the user before design (DP-0)
-3. determine the current workflow state
-4. route to the correct next skill
-5. block invalid transitions
+2. check whether the installed plugin is outdated and remind the user if so
+3. confirm key decisions with the user before design (DP-0)
+4. determine the current workflow state
+5. route to the correct next skill
+6. block invalid transitions
 
 ## Use This Skill When
 
@@ -62,6 +63,23 @@ Then answer these questions in order:
 4. Has the user explicitly approved the contract for build work?
 5. Is execution in progress or blocked by a bug?
 6. Is the change already in verification or wrap-up?
+
+## Update Check Reminder
+
+Before doing anything else, run the update check script:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/check-update.mjs"
+```
+
+### How to surface the result
+
+- Exit code 0 → no action, continue.
+- Exit code 1 → prepend a non-blocking upgrade reminder to your response, then continue normally. Include the platform-appropriate command, e.g.:
+  > 💡 A new version of spec-superflow is available. Upgrade with `/plugin update spec-superflow@spec-superflow`.
+- Exit code 2 or script missing → silently skip.
+
+Do not block workflow progress on an available upgrade; simply inform the user.
 
 ## DP-0: User Confirmation Gate (Design-Preparation)
 
