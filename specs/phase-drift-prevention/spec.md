@@ -46,17 +46,17 @@
 
 ### Requirement: Phase-guard.md regeneration behavior
 
-`ssf inject` SHALL 在每次执行时覆盖已有的 `rules/phase-guard.md`。workflow-orchestrator SHALL 在每次状态转换后提示用户运行 `ssf inject` 重新生成。
+`ssf inject` SHALL 在每次执行时覆盖已有的 `rules/phase-guard.md`。workflow-start SHALL 在每次状态转换后提示用户运行 `ssf inject` 重新生成。
 
 #### Scenario: inject overwrites existing phase-guard.md
 
 - **WHEN** `rules/phase-guard.md` 已存在，用户再次执行 `ssf inject`
 - **THEN** 命令 SHALL 覆盖已有文件，内容更新为当前状态
 
-#### Scenario: workflow-orchestrator prompts for re-injection
+#### Scenario: workflow-start prompts for re-injection
 
-- **WHEN** workflow-orchestrator 检测到状态转换（通过 `ssf state transition` 确认）
-- **THEN** workflow-orchestrator SHALL 在路由输出中提示用户运行 `ssf inject` 更新阶段防漂移规则
+- **WHEN** workflow-start 检测到状态转换（通过 `ssf state transition` 确认）
+- **THEN** workflow-start SHALL 在路由输出中提示用户运行 `ssf inject` 更新阶段防漂移规则
 
 ### Requirement: Graceful fallback when state file missing
 

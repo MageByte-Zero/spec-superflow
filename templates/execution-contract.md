@@ -44,7 +44,7 @@
 
 ## Execution Mode
 
-- **模式**：`TDD` | `SDD`
+- **模式**：`Inline` | `Batch Inline` | `SDD`
 - **选择理由**：
 
 ## Verification Dimensions

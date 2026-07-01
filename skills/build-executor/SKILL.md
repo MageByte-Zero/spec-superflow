@@ -103,8 +103,12 @@ Before starting implementation, determine the execution mode:
 
 1. Count total tasks in the execution contract's task batches
 2. Analyze cross-module dependencies (does any task modify files in > 2 modules?)
-3. Decision:
+3. Analyze risk indicators:
+   - Does any task introduce a new public API, schema, or configuration change?
+   - Are there open questions or dependencies on unimplemented behavior?
+4. Decision:
    - Tasks ≤ 3 AND no cross-module dependencies → **Inline mode**
+   - Tasks > 3 AND all tasks within the same module AND no risk indicators AND total estimated effort ≤ 15 minutes → **Batch Inline mode**
    - Otherwise → **SDD mode** (default)
 
 ### Reporting
@@ -113,11 +117,47 @@ Before executing the first task, report to the user:
 - Selected mode and reasoning
 - Total task count
 - Cross-module dependency analysis (if any)
-- Offer user override: "You can override this by saying 'use SDD' or 'use inline'"
+- Risk indicators that prevent Batch Inline (if any)
+- Offer user override: "You can override this by saying 'use SDD', 'use inline', or 'use batch inline'"
 
 ### User Override
 
 If the user explicitly requests a mode, use it regardless of automatic selection. Record the override in the progress ledger.
+
+## Batch Inline Execution
+
+Batch Inline is for low-risk, same-module tasks where the overhead of one subagent per task outweighs the value. The current agent executes the batch directly, but the TDD Iron Law still applies.
+
+### When to use Batch Inline
+
+- Total tasks > 3 but the entire batch stays within one module or directory
+- No task introduces a new public API, schema, or configuration change
+- No open questions or dependencies on unimplemented behavior
+- Total estimated effort ≤ 15 minutes
+
+### Batch Inline Procedure
+
+1. **Announce the mode** and the task range being batched.
+2. **Write or update the failing test** for the first code change in the batch.
+3. **Run the test** and confirm it fails for the expected reason.
+4. **Implement the minimal changes** across the batch to make tests pass.
+5. **Run the full relevant test suite** and confirm green.
+6. **Refactor** if needed while keeping tests green.
+7. **Run a lightweight checkpoint** before moving to the next batch or closure:
+   - All declared files exist and are non-empty.
+   - No placeholder markers remain.
+   - At least one relevant test passed.
+   - No unintended files were modified.
+8. **Report checkpoint result** to the user.
+
+### Batch Inline Boundaries
+
+If any task in the planned batch:
+- touches more than one module,
+- involves schema, API, or configuration changes, or
+- has open questions or unimplemented dependencies,
+
+downgrade to **Inline** or **SDD** and report the reason.
 
 ## Subagent-Driven Development (SDD) Workflow
 

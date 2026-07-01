@@ -4,11 +4,11 @@
 
 ### Requirement: Enhanced Task Granularity
 
-spec-forger SHALL generate tasks.md where each task step is a 2-5 minute atomic operation with explicit TDD phases (write failing test → confirm fail → implement → confirm green → commit).
+spec-writer SHALL generate tasks.md where each task step is a 2-5 minute atomic operation with explicit TDD phases (write failing test → confirm fail → implement → confirm green → commit).
 
 #### Scenario: Task step granularity enforcement
 
-- **WHEN** spec-forger generates a tasks.md artifact
+- **WHEN** spec-writer generates a tasks.md artifact
 - **THEN** every task step SHALL be completable in 2-5 minutes of focused work
 - **AND** no task step SHALL contain vague instructions like "implement the module" or "add appropriate tests"
 
@@ -43,9 +43,9 @@ tasks.md SHALL NOT contain any placeholder language including "TBD", "TODO", "im
 
 #### Scenario: Placeholder scan
 
-- **WHEN** spec-forger completes tasks.md generation
+- **WHEN** spec-writer completes tasks.md generation
 - **THEN** the artifact SHALL be scanned for placeholder patterns
-- **AND** any detected placeholder SHALL be resolved before handoff to bridge-contract
+- **AND** any detected placeholder SHALL be resolved before handoff to contract-builder
 
 ### Requirement: File Structure Section
 
@@ -53,6 +53,6 @@ tasks.md SHALL include a File Structure section listing all files to be created 
 
 #### Scenario: File structure presence
 
-- **WHEN** spec-forger generates tasks.md
+- **WHEN** spec-writer generates tasks.md
 - **THEN** the artifact MUST begin with a `## File Structure` section
 - **AND** every file referenced in any task MUST appear in the File Structure section with its responsibility

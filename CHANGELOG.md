@@ -4,6 +4,20 @@ All notable changes to `spec-superflow` will be documented in this file.
 
 The format loosely follows Keep a Changelog.
 
+## [0.8.0] - 2026-07-01
+
+### Added
+
+- **Intuitive skill names** — All 9 skills renamed to action-object style: `workflow-start`, `need-explorer`, `spec-writer`, `contract-builder`, `build-executor`, `bug-investigator`, `code-reviewer`, `release-archivist`, `spec-merger`.
+- **Batch Inline execution mode** — `build-executor` now supports `Batch Inline` for low-risk, same-module tasks, reducing subagent dispatch overhead for small changes like issue #5.
+- **User confirmation gate (DP-0)** — `workflow-start` confirms key decisions with the user before routing to `spec-writer`; `spec-writer` honors confirmed constraints and pauses on unconfirmed decisions.
+- **Migration guide** — Added `docs/skill-rename-v0.8.0.md` with old→new mapping and per-platform refresh instructions.
+
+### Changed
+
+- **Documentation sync** — `README.md`, `INSTALL.md`, `CLAUDE.md`, `docs/state-machine.md`, `docs/decision-points.md`, `GEMINI.md`, main `specs/`, `templates/`, and plugin manifests updated to use the new skill names and v0.8.0 install instructions.
+- **Version sync** — `ssf version` now also updates `.codex-plugin/plugin.json`; `ssf doctor` checks all 7 manifests.
+
 ## [0.7.1] - 2026-06-30
 
 ### Fixed

@@ -4,11 +4,11 @@
 
 ### Requirement: Three-Dimensional Verification
 
-closure-archivist SHALL verify implementation quality across three orthogonal dimensions: Completeness, Correctness, and Coherence.
+release-archivist SHALL verify implementation quality across three orthogonal dimensions: Completeness, Correctness, and Coherence.
 
 #### Scenario: Completeness verification
 
-- **WHEN** closure-archivist runs the Completeness dimension
+- **WHEN** release-archivist runs the Completeness dimension
 - **THEN** it SHALL verify that every task in tasks.md has a corresponding code change
 - **AND** every SHALL/MUST requirement in specs/ has at least one implementation artifact
 - **AND** every delta spec operation (ADDED/MODIFIED/REMOVED/RENAMED) is reflected in the code changes
@@ -16,7 +16,7 @@ closure-archivist SHALL verify implementation quality across three orthogonal di
 
 #### Scenario: Correctness verification
 
-- **WHEN** closure-archivist runs the Correctness dimension
+- **WHEN** release-archivist runs the Correctness dimension
 - **THEN** it SHALL verify that all tests pass with zero failures
 - **AND** boundary conditions identified in specs are covered by test cases
 - **AND** error handling paths specified in design.md are implemented
@@ -25,7 +25,7 @@ closure-archivist SHALL verify implementation quality across three orthogonal di
 
 #### Scenario: Coherence verification
 
-- **WHEN** closure-archivist runs the Coherence dimension
+- **WHEN** release-archivist runs the Coherence dimension
 - **THEN** it SHALL verify that design.md decisions are visible in the code (naming, patterns, architecture)
 - **AND** naming conventions are consistent across implementation and specs
 - **AND** no "say one thing, do another" patterns exist (spec describes behavior X but code implements Y)
@@ -33,12 +33,12 @@ closure-archivist SHALL verify implementation quality across three orthogonal di
 
 ### Requirement: Verification Dimension Report
 
-closure-archivist SHALL produce a structured verification report with per-dimension results and an overall verdict.
+release-archivist SHALL produce a structured verification report with per-dimension results and an overall verdict.
 
 #### Scenario: Report structure
 
 - **WHEN** all three dimensions have been verified
-- **THEN** closure-archivist SHALL produce a report containing:
+- **THEN** release-archivist SHALL produce a report containing:
   - Per-dimension status: PASS / FAIL / WARN
   - Per-dimension findings list (issue level + description)
   - Overall verdict: PASS (all dimensions PASS), CONDITIONAL (WARN only), FAIL (any CRITICAL)

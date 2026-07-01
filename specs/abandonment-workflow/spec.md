@@ -9,15 +9,15 @@ The workflow state machine SHALL include `abandoned` as a terminal state paralle
 #### Scenario: Transition to abandoned
 
 - **WHEN** the user explicitly requests to abandon a change
-- **OR** systematic-debugger escalates after 3+ failed fix attempts
+- **OR** bug-investigator escalates after 3+ failed fix attempts
 - **OR** scope change during specifying makes the change no longer worthwhile
-- **THEN** workflow-orchestrator SHALL transition the state to `abandoned`
+- **THEN** workflow-start SHALL transition the state to `abandoned`
 - **AND** SHALL NOT allow any further state transitions from `abandoned`
 
 #### Scenario: Abandoned blocks further execution
 
 - **WHEN** the current state is `abandoned`
-- **THEN** workflow-orchestrator SHALL block all skill invocations except reading the abandonment summary
+- **THEN** workflow-start SHALL block all skill invocations except reading the abandonment summary
 - **AND** SHALL inform the user that the change is abandoned and suggest starting a new change
 
 ### Requirement: Abandonment Summary Generation
@@ -64,5 +64,5 @@ An abandoned change SHALL NOT merge its delta specs into the main spec base.
 #### Scenario: Spec sync blocked
 
 - **WHEN** a change is in the `abandoned` state
-- **THEN** spec-syncer SHALL refuse to process any delta specs from this change
+- **THEN** spec-merger SHALL refuse to process any delta specs from this change
 - **AND** SHALL report that abandoned changes cannot be synced
