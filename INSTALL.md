@@ -7,7 +7,7 @@ Source lineage:
 - [Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec)
 - [obra/superpowers](https://github.com/obra/superpowers)
 
-Current release: `v0.8.0`. This repo tracks `spec-superflow` versions, not runtime dependency versions for the upstream projects.
+Current release: `v0.8.1`. This repo tracks `spec-superflow` versions, not runtime dependency versions for the upstream projects.
 
 ## Claude Code
 
@@ -19,6 +19,16 @@ Current release: `v0.8.0`. This repo tracks `spec-superflow` versions, not runti
 ```
 
 两行命令搞定。零拷贝、零配置。
+
+### 升级到最新版
+
+如果已经安装过，使用 update 命令升级到最新版：
+
+```
+/plugin update spec-superflow@spec-superflow
+```
+
+每次启动 workflow 时，`workflow-start` 也会检查版本并提示是否需要升级。
 
 ### 本地安装
 
@@ -36,19 +46,30 @@ git clone https://github.com/MageByte-Zero/spec-superflow.git
 
 Cursor 不会自动加载 `.cursor-plugin/plugin.json` 中的 `skills`，需要通过本地部署方式安装。
 
-### 自动部署（推荐）
+### 自动部署最新版（推荐）
+
+下载并运行安装脚本，它会自动从 GitHub latest release 拉取最新版并部署到 `.cursor/`：
+
+```bash
+# 下载脚本到临时目录并执行
+curl -fsSL https://raw.githubusercontent.com/MageByte-Zero/spec-superflow/main/scripts/install-cursor.mjs -o /tmp/install-cursor.mjs
+node /tmp/install-cursor.mjs
+```
+
+脚本会完成：
+- 从 GitHub latest release 下载 spec-superflow
+- 把 `skills/` 复制到 `.cursor/skills/`
+- 生成 `.cursor/rules/phase-guard.mdc`（alwaysApply）
+
+`.cursor/` 是本地生成目录，已加入 `.gitignore`，不需要提交到仓库。
+
+### 从本地仓库部署（开发/测试）
 
 ```bash
 git clone https://github.com/MageByte-Zero/spec-superflow.git
 cd your-project
-node /absolute/path/to/spec-superflow/scripts/install-cursor.mjs
+node /absolute/path/to/spec-superflow/scripts/install-cursor.mjs --local /absolute/path/to/spec-superflow
 ```
-
-脚本会完成：
-- 把 `spec-superflow/skills/` 复制到 `.cursor/skills/`
-- 生成 `.cursor/rules/phase-guard.mdc`（alwaysApply）
-
-`.cursor/` 是本地生成目录，已加入 `.gitignore`，不需要提交到仓库。
 
 ### 手动部署
 

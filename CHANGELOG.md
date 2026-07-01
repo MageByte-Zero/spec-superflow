@@ -4,6 +4,17 @@ All notable changes to `spec-superflow` will be documented in this file.
 
 The format loosely follows Keep a Changelog.
 
+## [0.8.1] - 2026-07-01
+
+### Added
+
+- **Auto-latest Cursor install** — `scripts/install-cursor.mjs` now downloads and deploys the latest GitHub release by default. Use `--local <path>` to deploy from a local repo.
+- **Update check reminder** — New `scripts/check-update.mjs` compares the installed version with npm latest. `workflow-start` runs it on startup and surfaces a non-blocking upgrade reminder when behind.
+
+### Changed
+
+- **INSTALL.md** now documents `/plugin update spec-superflow@spec-superflow` as the Claude Code upgrade path and provides a curl one-liner for Cursor auto-deployment.
+
 ## [0.8.0] - 2026-07-01
 
 ### Added
