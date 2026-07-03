@@ -310,3 +310,9 @@ You understand 1,2,3,6. Unclear on 4,5.
 Verify. Question. Then implement.
 
 No performative agreement. Technical rigor always.
+
+## Exception Handling
+
+- **Parse failures**: If the review diff or task brief cannot be parsed, report the specific file and request a regenerated review package. Do not review from incomplete data.
+- **Missing files**: If the review package file is missing, run `scripts/review-package` to regenerate it. If the diff is empty, report that there is nothing to review.
+- **User interruption**: Review findings are reported immediately. On resume, re-read the review report and continue from the next unreviewed batch.

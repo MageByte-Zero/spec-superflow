@@ -95,6 +95,10 @@ describe('cmd-state: transition', () => {
   before(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-state-trans-'));
     writeFileSync(join(tempDir, 'proposal.md'), '## Why\nTest proposal for state transition validation, meeting the minimum length requirement.\n## What Changes\n- Add feature');
+    writeFileSync(join(tempDir, 'design.md'), '# Design\n## Context\nTest.\n## Goals\nTest.\n## Decisions\n### D1\n- Choice: Test\n- Rationale: Test\n\n## Risks And Trade-Offs\nNone.');
+    writeFileSync(join(tempDir, 'tasks.md'), '# Tasks\n- [x] Task 1');
+    mkdirSync(join(tempDir, 'specs'));
+    writeFileSync(join(tempDir, 'specs', 'test.md'), '## ADDED Requirements\n### Requirement: Test\nSHALL work.\n#### Scenario: Test\n- **WHEN** test\n- **THEN** test');
   });
 
   after(() => {
@@ -112,21 +116,23 @@ describe('cmd-state: transition', () => {
     // Re-init to ensure we start from exploring
     rmSync(join(tempDir, '.spec-superflow.yaml'), { force: true });
     ssf(`state init ${tempDir}`);
-    const result = ssf(`state transition ${tempDir} approved-for-build --json`);
+    // exploring→specifying is the next legal mainline transition
+    const result = ssf(`state transition ${tempDir} specifying --json`);
     const parsed = JSON.parse(result.stdout);
     assert.equal(parsed.ok, true);
     assert.equal(parsed.from, 'exploring');
-    assert.equal(parsed.to, 'approved-for-build');
+    assert.equal(parsed.to, 'specifying');
   });
 
   it('persists state across invocations', () => {
     ssf(`state init ${tempDir}`);
-    ssf(`state transition ${tempDir} executing`);
+    // Legal transition: exploring → specifying
+    ssf(`state transition ${tempDir} specifying`);
 
     // Check state persisted
     const result = ssf(`state check ${tempDir} --json`);
     const parsed = JSON.parse(result.stdout);
-    assert.equal(parsed.state, 'executing');
+    assert.equal(parsed.state, 'specifying');
   });
 });
 

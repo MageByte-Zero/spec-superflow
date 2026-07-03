@@ -271,7 +271,7 @@ After debugging completes, route back to `build-executor` to resume the executin
 - multiple changes have accumulated unsynced delta specs
 - the user asks about spec consistency
 
-### Route to `abandonment` when:
+### Route to abandoned state when:
 
 - the user explicitly requests to abandon the change
 - bug-investigator has escalated after 3+ consecutive fix failures AND the user chooses to abandon
@@ -367,3 +367,9 @@ Reference: `docs/decision-points.md`
 - Keep the user on one visible workflow.
 - Avoid making them choose between upstream mental models.
 - Treat OpenSpec ideas as planning inputs and Superpowers ideas as execution discipline, but keep `spec-superflow` as the only workflow owner.
+
+## Exception Handling
+
+- **Parse failures**: If `.spec-superflow.yaml` is malformed, fall back to content-level detection (read artifact files directly). If artifacts themselves cannot be parsed, report the specific file and suggest running `spec-writer` or `contract-builder`.
+- **Missing files**: If the change directory exists but critical files are missing, route to the skill that generates the missing files (e.g., missing `proposal.md` → route to `need-explorer` or `spec-writer`).
+- **User interruption**: On session resume, re-inspect the change directory content (not cached state) to determine actual state. The content-level detection approach is designed to survive incomplete sessions.

@@ -224,3 +224,10 @@ When handing off, report:
 1. which artifacts were created or modified
 2. validation results (pass/fail for each artifact)
 3. a one-sentence summary of what the change does
+
+## Exception Handling
+
+- **Parse failures**: If templates cannot be read or an artifact file is malformed, report the specific file and error. Do not generate artifacts from corrupted templates.
+- **Missing files**: If a required template is missing from `templates/`, fall back to the artifact structure defined in this skill's "Required Artifacts" section.
+- **User interruption**: Artifact files on disk serve as the recovery checkpoint. On resume, re-read all existing artifacts and continue from the first missing or incomplete one.
+- **Validation failure**: If `ssf validate` fails on generated artifacts, fix the validation errors BEFORE handing off. Do not hand off artifacts that fail validation.

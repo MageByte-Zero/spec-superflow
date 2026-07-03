@@ -163,6 +163,24 @@ After drafting or refreshing the contract:
 
 Only after explicit approval may the workflow move to `build-executor`.
 
+### DP-3 Record
+
+After the user explicitly approves the execution contract:
+
+```bash
+ssf state set <change-dir> dp_3_result "approved: <one-line summary>"
+ssf state set <change-dir> dp_3_timestamp $(date -u +%Y-%m-%dT%H:%M:%SZ)
+```
+
+DP-3 is a hard gate — implementation SHALL NOT begin without this record.
+
+## Exception Handling
+
+- **Parse failures**: If any planning artifact (`proposal.md`, `specs/`, `design.md`, `tasks.md`) cannot be parsed or has malformed sections, report the specific file and section. Suggest running `spec-writer` to regenerate the problematic artifact.
+- **Missing files**: List every missing artifact explicitly. Do not generate incomplete contracts — route back to `spec-writer` for missing planning artifacts.
+- **User interruption**: The contract file itself serves as the recovery checkpoint. On resume, re-read all planning artifacts and check if the existing contract is stale (content comparison, not timestamp).
+- **Validation failure**: If the generated contract fails cross-check (unmapped requirements), flag them explicitly in the contract's Escalation Rules section and in the approval summary. Do not silently drop requirements.
+
 ## Stale Contract Detection
 
 Refresh the contract if any of the following are true:

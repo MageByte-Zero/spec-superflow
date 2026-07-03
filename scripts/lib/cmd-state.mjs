@@ -105,7 +105,9 @@ export async function run(args) {
 
       // Run guard before allowing transition (H-2: enforce guard)
       const guardScript = join(__dirname, '..', 'guard', 'guard.mjs');
-      const workflow = state.workflow || 'full';
+      const rawWorkflow = state.workflow || 'full';
+      // Normalize: guard only accepts full/hotfix/tweak, not "auto"
+      const workflow = rawWorkflow === 'auto' ? 'full' : rawWorkflow;
       const guardResult = spawnSync('node', [guardScript, 'check', changeDir, fromState, toState, '--json', '--workflow', workflow], {
         cwd: join(__dirname, '..', '..'),
         timeout: 10_000,
