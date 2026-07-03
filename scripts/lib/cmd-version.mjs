@@ -17,8 +17,8 @@ const MANIFESTS = [
 ];
 
 // ── Text files with regex patterns (first capture group = version to replace) ──
+// Note: CLAUDE.md is intentionally gitignored (project-local AI instructions).
 const TEXT_FILES = [
-  { file: 'CLAUDE.md',              pattern: /(Current version: `)0\.\d+\.\d+(`\.)/g,            replacement: '$10.%MINOR%.%PATCH%$2' },
   { file: 'README.md',              pattern: /(当前版本：`v?)0\.\d+\.\d+(`?)/g,                   replacement: '$10.%MINOR%.%PATCH%$2' },
   { file: 'INSTALL.md',             pattern: /(当前发布版本：\*\*v)0\.\d+\.\d+(\*\*)/g,            replacement: '$10.%MINOR%.%PATCH%$2' },
   { file: 'docs/README_en.md',      pattern: /(Current: `v)0\.\d+\.\d+(`)/g,                     replacement: '$10.%MINOR%.%PATCH%$2' },

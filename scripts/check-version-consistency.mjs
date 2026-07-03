@@ -57,8 +57,8 @@ for (const check of JSON_CHECKS) {
 // ── Text files (extraction-pattern check) ──
 // Each entry has a regex that extracts ONLY the declared version (capture group 1),
 // not historical references like "v0.6.0 起支持".
+// Note: CLAUDE.md is intentionally gitignored (project-local AI instructions).
 const TEXT_CHECKS = [
-  { file: 'CLAUDE.md',              extract: /Current version: `(\d+\.\d+\.\d+)`\./ },
   { file: 'README.md',              extract: /当前版本：`v(\d+\.\d+\.\d+)`/ },
   { file: 'INSTALL.md',             extract: /当前发布版本：\*\*v(\d+\.\d+\.\d+)\*\*/ },
   { file: 'docs/README_en.md',      extract: /Current: `v(\d+\.\d+\.\d+)`/ },
