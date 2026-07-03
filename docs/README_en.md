@@ -100,7 +100,7 @@ npm install -g spec-superflow
 
 ### Version
 
-- Current: `v0.8.5`
+- Current: `v0.8.6`
 - Self-contained — no OpenSpec or Superpowers runtime required
 - Upstream: [Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec), [obra/superpowers](https://github.com/obra/superpowers)
 - Changelog: [CHANGELOG.md](../CHANGELOG.md)

@@ -5,6 +5,9 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Project-local AI instructions (not for public repo)
+CLAUDE.md
+
 # Client-local generated deploy directories
 .cursor/
 
@@ -12,6 +15,10 @@ Thumbs.db
 *.tmp
 *.swp
 *.swo
+
+# Session working directories (stray artifacts from skill execution)
+workflow-start-workspace/
+opt-results/
 
 # Dependencies
 node_modules/

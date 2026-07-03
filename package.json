@@ -12,7 +12,10 @@
   "scripts": {
     "build": "tsc",
     "test": "node --test --experimental-strip-types tests/e2e.test.ts tests/lib/*.test.*",
-    "validate": "node scripts/validate-artifacts"
+    "validate": "node scripts/validate-artifacts",
+    "version": "node scripts/spec-superflow.mjs version $npm_new_version && node scripts/check-version-consistency.mjs",
+    "check-versions": "node scripts/check-version-consistency.mjs",
+    "setup-hooks": "node scripts/install-git-hooks.mjs"
   },
   "keywords": [
     "spec-driven-development",

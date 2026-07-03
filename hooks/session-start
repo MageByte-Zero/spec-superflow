@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SessionStart hook for spec-superflow plugin
-# v0.8.5: conditional injection (~80 tokens). Only requests workflow-start
+# v0.8.6: conditional injection (~80 tokens). Only requests workflow-start
 # when spec-superflow artifacts are detected. The full skill is loaded on demand.
 session_context="<EXTREMELY_IMPORTANT>\nYou have spec-superflow installed. Use /spec-superflow:workflow-start ONLY when you detect an active spec-superflow change in the workspace (look for \`.spec-superflow.yaml\`, \`proposal.md\`, \`execution-contract.md\`, or \`specs/\` directories), OR when the user explicitly invokes it by name. For ordinary coding tasks without spec-superflow artifacts, do NOT invoke workflow-start — just handle the request directly.\n</EXTREMELY_IMPORTANT>"
 

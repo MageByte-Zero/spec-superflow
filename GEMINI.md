@@ -10,7 +10,7 @@ The workflow is self-contained and does not require OpenSpec or Superpowers at r
 <!-- spec-superflow-phase-guard-start -->
 # Phase Guard
 
-**当前阶段**: exploring | **工作流**: auto
+**当前阶段**: exploring | **工作流**: auto | **版本**: v0.8.6
 
 ## ✅ 允许操作
 - 澄清需求、比较方案

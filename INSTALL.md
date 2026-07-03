@@ -200,8 +200,8 @@ Copilot CLI 从仓库根目录的 `plugin.json` 和 `.claude-plugin/marketplace.
 ### 安装
 
 ```bash
-copilot plugin marketplace add MageByte-Zero/spec-superflow
-copilot plugin install spec-superflow@spec-superflow
+copilot plugin marketplace add MageByte-Zero/spec-superflow-marketplace
+copilot plugin install spec-superflow@spec-superflow-marketplace
 ```
 
 ### 升级

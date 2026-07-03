@@ -1,4 +1,4 @@
-# Phase Guard: v0.8.1-auto-latest-install
+# Phase Guard: v0.8.6
 
 **当前阶段**: exploring | **工作流**: auto
 

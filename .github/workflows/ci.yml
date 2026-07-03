@@ -24,6 +24,8 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
+      - name: Check version consistency
+        run: node scripts/check-version-consistency.mjs
 
   release:
     name: Release
@@ -42,6 +44,8 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
+      - name: Check version consistency
+        run: node scripts/check-version-consistency.mjs
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

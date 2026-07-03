@@ -1,24 +1,30 @@
 # spec-superflow
 
 ## Overview
-spec-superflow is a self-contained workflow integration plugin for Claude Code and Trae. It merges spec-driven planning artifacts (proposal, specs, design, tasks) with disciplined execution guardrails (TDD, review gates, controlled handoff) into one unified workflow.
+spec-superflow is a self-contained workflow integration plugin for Claude Code, Cursor, Gemini CLI, Copilot CLI, Codex, OpenCode, and Trae. It merges spec-driven planning artifacts (proposal, specs, design, tasks) with disciplined execution guardrails (TDD, review gates, controlled handoff) into one unified workflow.
+
+Current version: v0.8.6.
 
 ## Key Documents
 - README.md: Chinese homepage with full usage guide and FAQ
 - docs/README_en.md: English documentation
-- INSTALL.md: Installation guide for Claude Code and Trae
+- INSTALL.md: Multi-platform installation guide
 - docs/state-machine.md: Workflow state machine (exploring -> specifying -> bridging -> approved-for-build -> executing -> closing)
 - docs/artifact-contract.md: Artifact mapping from planning to execution contract
+- docs/decision-points.md: Standard decision-point protocol
 - CHANGELOG.md: Version history
 - CONTRIBUTING.md: Contribution guidelines
 
 ## Core Skills (in skills/)
-- workflow-orchestrator: Entry point, inspects state and routes to correct skill
-- spec-explorer: Clarifies intent, scope, constraints, and success criteria
-- spec-forger: Generates proposal, specs, design, and tasks
-- bridge-contract: Converts planning artifacts into execution-contract.md
-- execution-governor: Enforces TDD, review gates, and contract-first implementation
-- closure-archivist: Verifies, summarizes, and prepares for archive
+- workflow-start: Entry point, content-level state detection, 8-state routing, blocks illegal transitions
+- need-explorer: Clarifies intent, scope, constraints, and success criteria
+- spec-writer: Generates proposal, specs, design, and tasks with Schema validation
+- contract-builder: Parses 4 artifacts and compresses into execution-contract.md
+- build-executor: Enforces TDD, SDD subagent execution, and Review Gates
+- bug-investigator: 4-phase root cause analysis, escalates after repeated failures
+- code-reviewer: Structured review with Critical / Important / Minor severity
+- release-archivist: Verification-before-completion, archiving, risk summary
+- spec-merger: Merges delta specs into main specs with conflict detection
 
 ## Templates (in templates/)
 - proposal.md: Change proposal template
@@ -32,7 +38,11 @@ spec-superflow is a self-contained workflow integration plugin for Claude Code a
 - refactor-auth-boundary: Brownfield backend refactor example (auth layer)
 
 ## Installation
-Copy the six skill directories from skills/ to ~/.claude/skills/ or ~/.trae/skills/. See INSTALL.md for details.
+See INSTALL.md for platform-specific instructions. Quick install for Claude Code:
+```
+/plugin marketplace add MageByte-Zero/spec-superflow
+/plugin install spec-superflow@spec-superflow
+```
 
 ## Usage
-Start from workflow-orchestrator. The workflow inspects current artifacts and routes to the correct stage automatically.
+Start from workflow-start. The workflow inspects current artifacts and routes to the correct stage automatically.
