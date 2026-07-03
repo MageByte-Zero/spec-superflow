@@ -198,3 +198,9 @@ After syncing:
 - Invoked by `release-archivist` after verification completes
 - Can be invoked by `workflow-start` if stale main specs are detected
 - Specs synced here become the new baseline for future `need-explorer` and `spec-writer` work
+
+## Exception Handling
+
+- **Parse failures**: If delta specs or main specs cannot be parsed, report the specific file and section. Do not attempt partial merges.
+- **Missing files**: If the change directory has no delta specs (no ADDED/MODIFIED/REMOVED/RENAMED sections), report that there is nothing to merge and exit cleanly.
+- **User interruption**: Merges are atomic operations on spec files. On resume, check if any spec file has merge conflict markers and resolve before proceeding.

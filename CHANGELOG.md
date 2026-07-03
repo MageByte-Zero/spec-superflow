@@ -4,6 +4,28 @@ All notable changes to `spec-superflow` will be documented in this file.
 
 The format loosely follows Keep a Changelog.
 
+## [0.8.7] - 2026-07-03
+
+### Added
+
+- **Skill lint framework**: `scripts/lint/lint-skills.mjs` with 5 rules for static analysis of skill instruction quality.
+- **Guard transition tests**: 43 regression tests covering all 21 legal transitions and 8 illegal rejections.
+- **Exception handling**: All 9 skills now include guidance for parse failures, missing files, and user interruption recovery.
+
+### Fixed (Bug)
+
+- **Parser bilingual support**: `parseChangeMarkdown` now correctly extracts sections from bilingual headings (e.g., `## 背景（Why）`). Previously it used English-only exact matching, silently returning empty strings.
+- **Guard workflow normalization**: `ssf state transition` no longer silently skips guard checks when workflow is `auto`. The `auto` mode is now normalized to `full` before guard invocation.
+- **Guard error handling**: Terminal states (`abandoned`, `closing`) now correctly reject further transitions instead of allowing them through.
+
+### Changed
+
+- **build-executor**: Added DP-4 and DP-5 record commands.
+- **contract-builder**: Added DP-3 record command and exception handling guidance.
+- **release-archivist**: Added DP-6/DP-7 record commands and DP gap detection.
+- **workflow-start**: Fixed "Route to abandonment" → "Route to abandoned state".
+- All 9 skills: Added standardized exception handling sections.
+
 ## [0.8.6] - 2026-07-03
 
 ### Fixed (Bug)

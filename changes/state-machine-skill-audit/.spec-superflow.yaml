@@ -1,0 +1,40 @@
+# .spec-superflow.yaml — lightweight state machine
+# Derived data. Always rebuildable from artifacts. Lost/corrupt → fall back to content-level detection.
+
+# === Core state ===
+state: specifying
+workflow: auto
+
+# === Hashes (fast staleness detection) ===
+artifacts_hash: sha256:1af0fba4a1ae147282094e62cfa760ab3190f3a505810caa43e625991e672d55
+contract_hash: sha256:4972e1c446b5688d11e06636cfea199d9a906cac244caf60e3c30328642bfefd
+
+# === Execution progress ===
+execution_mode: sdd
+batches_completed: 0
+test_result: null
+
+# === Metadata ===
+change_name: state-machine-skill-audit
+last_transition: 2026-07-03T14:06:36.305Z
+last_transition_from: executing
+last_transition_to: specifying
+
+# === Decision points ===
+dp_0_decisions: 先脑暴再定版本; 允许破坏性变更; 合并已知问题; 逐步确认
+dp_0_confirmed: true
+dp_0_timestamp: 2026-07-03T13:46:04Z
+dp_1_result: confirmed: 方案3维度驱动 — D1状态机转换+D2 Skill指令质量+D3决策点协议；全部修复+回归测试
+dp_1_timestamp: 2026-07-03T13:46:04Z
+dp_2_result: approved: proposal scope + 3 specs + 4 design decisions + 9 batches all confirmed
+dp_2_timestamp: 2026-07-03T13:57:37Z
+dp_3_result: approved: execution contract confirmed — 14 requirements mapped, SDD mode, 9 batches, 4 review gates
+dp_3_timestamp: 2026-07-03T14:00:03Z
+dp_4_result: SDD mode confirmed
+dp_4_timestamp: 2026-07-03T14:04:26Z
+dp_5_result: null
+dp_5_timestamp: null
+dp_6_result: null
+dp_6_timestamp: null
+dp_7_result: null
+dp_7_timestamp: null

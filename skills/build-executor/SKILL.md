@@ -325,6 +325,30 @@ When workflow is `tweak`, build-executor operates in direct edit mode:
 
 Reference: `docs/decision-points.md` → DP-4, DP-5
 
+### DP-4 Record
+
+After execution mode is confirmed by the user:
+
+```bash
+ssf state set <change-dir> dp_4_result "<mode>: <rationale>"
+ssf state set <change-dir> dp_4_timestamp $(date -u +%Y-%m-%dT%H:%M:%SZ)
+```
+
+### DP-5 Record
+
+If bug-investigator is invoked during execution:
+
+```bash
+ssf state set <change-dir> dp_5_result "<resolution>"
+ssf state set <change-dir> dp_5_timestamp $(date -u +%Y-%m-%dT%H:%M:%SZ)
+```
+
+## Exception Handling
+
+- **Parse failures**: If `execution-contract.md` or `tasks.md` cannot be parsed, stop and report the exact line/format issue. Route back to `contract-builder`.
+- **Missing files**: If any required artifact (`proposal.md`, `specs/`, `design.md`, `tasks.md`, `execution-contract.md`) is missing, route back to the appropriate upstream skill. Do not guess.
+- **User interruption**: The progress ledger (`.superpowers/sdd/progress.md`) enables recovery. On resume, check the ledger and continue from the next incomplete batch.
+
 ## Completion Standard
 
 Do not report completion until:

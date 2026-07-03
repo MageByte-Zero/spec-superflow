@@ -165,6 +165,35 @@ This generates `changes/<change-dir>/decision-point-audit.md` from `.spec-superf
 - If the audit report is missing, prompt the user to run `ssf audit <change-dir>` before DP-7 confirmation.
 - The audit command is read-only and safe to run multiple times.
 
+### DP-6 Record (Verification Outcome)
+
+After presenting the verification report to the user:
+
+```bash
+ssf state set <change-dir> dp_6_result "<pass|conditional|fail>: <summary>"
+ssf state set <change-dir> dp_6_timestamp $(date -u +%Y-%m-%dT%H:%M:%SZ)
+```
+
+If DP-6 is "fail", do NOT proceed to DP-7 — route back to `build-executor` or ask the user whether to abandon.
+
+### DP-7 Record (Archive Confirmation)
+
+After the user confirms the archive:
+
+```bash
+ssf state set <change-dir> dp_7_result "confirmed: <archive summary>"
+ssf state set <change-dir> dp_7_timestamp $(date -u +%Y-%m-%dT%H:%M:%SZ)
+```
+
+Before DP-7, verify that all required DPs (DP-0 through DP-6) are recorded. If any are missing, flag them to the user.
+
+## Exception Handling
+
+- **Parse failures**: If `execution-contract.md` or any artifact cannot be parsed for verification, report the exact file and section.
+- **Missing files**: If `decision-point-audit.md` cannot be generated, run `ssf audit` manually and report any errors.
+- **User interruption**: The change state in `.spec-superflow.yaml` enables recovery. On resume, re-run verification from the beginning.
+- **DP gap detection**: If any required DP (DP-0 through DP-6) is missing from `.spec-superflow.yaml`, flag it during DP-6 and ask the user whether to proceed or return to the missing DP's phase.
+
 ## Output
 
 1. Verification report table (three dimensions with status and findings)

@@ -282,3 +282,9 @@ From debugging sessions:
 - Random fixes approach: 2-3 hours of thrashing
 - First-time fix rate: 95% vs 40%
 - New bugs introduced: Near zero vs common
+
+## Exception Handling
+
+- **Parse failures**: If error logs, stack traces, or test output cannot be parsed, report the raw output and ask the user for clarification. Do not guess at error causes.
+- **Missing files**: If the failing test file or source file is missing, escalate immediately — this is not a normal debugging scenario.
+- **User interruption**: The 4-phase analysis is documented in the investigation report. On resume, re-read the report and continue from the last completed phase.

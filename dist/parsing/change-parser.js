@@ -4,7 +4,9 @@ function normalizeLineEndings(content) {
 function extractSection(content, heading) {
     const normalized = normalizeLineEndings(content);
     const lines = normalized.split('\n');
-    const headingRegex = new RegExp(`^##\\s+${heading.replace(/\s+/g, '\\s+')}\\s*$`, 'i');
+    // Match headings that contain the English keyword — supports both
+    // "## Why" and "## 背景（Why）" style bilingual headings.
+    const headingRegex = new RegExp(`^##\\s+.*\\b${heading.replace(/\s+/g, '\\s+')}\\b.*$`, 'i');
     const idx = lines.findIndex((l) => headingRegex.test(l));
     if (idx === -1)
         return '';

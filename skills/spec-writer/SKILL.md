@@ -116,6 +116,30 @@ Must be ordered, verifiable, and small enough to become execution batches later.
 - The dependency chain is explicit: "Depends on: Batch N"
 - Every batch ends with a commit step
 
+## Incremental Generation Rule
+
+**Generate artifacts one at a time. Confirm each before proceeding to the next.**
+
+This prevents scope drift — if proposal.md has errors, all downstream artifacts built on it are wrong.
+
+### Required Cadence
+
+1. Generate `proposal.md` → present summary → **wait for user confirmation**
+2. Generate `specs/` → present requirement list → **wait for user confirmation**
+3. Generate `design.md` → present key decisions → **wait for user confirmation**
+4. Generate `tasks.md` → present batch breakdown → **wait for user confirmation**
+
+**Do not generate all four artifacts in one pass.** Each artifact depends on the confirmed content of the previous one. Generating ahead creates rework when the user corrects an earlier artifact.
+
+### Confirmation Format
+
+After each artifact, present:
+- What was created/modified (file paths)
+- Key content summary (2-3 bullets)
+- Explicit ask: "Does this look correct? (yes / needs change)"
+
+If the user requests changes, revise ONLY that artifact and re-confirm before moving to the next.
+
 ## Quality Bar
 
 The artifact set must be internally aligned:
@@ -217,6 +241,25 @@ Do not start implementation after writing planning artifacts.
 
 Once the artifacts are stable, validated, and DP-2 is recorded, hand off to `contract-builder`.
 
+## Document Map
+
+After all artifacts are generated and confirmed, output a **Document Map** showing the relationship between files and recommended reading order:
+
+```
+proposal.md          ← 第 1 步：大图（Why + What + Scope）
+    │
+    ▼
+specs/*/spec.md      ← 第 2 步：精确行为（每条 requirement 怎么验证）
+    │
+    ▼
+design.md            ← 第 3 步：技术理由（为什么这样设计而不是那样）
+    │
+    ▼
+tasks.md             ← 第 4 步：实现拆分（谁做什么、依赖什么）
+```
+
+Include a one-line description of what each file contains and why that order matters.
+
 ## Output Standard
 
 When handing off, report:
@@ -224,3 +267,11 @@ When handing off, report:
 1. which artifacts were created or modified
 2. validation results (pass/fail for each artifact)
 3. a one-sentence summary of what the change does
+4. the Document Map showing reading order and file relationships
+
+## Exception Handling
+
+- **Parse failures**: If templates cannot be read or an artifact file is malformed, report the specific file and error. Do not generate artifacts from corrupted templates.
+- **Missing files**: If a required template is missing from `templates/`, fall back to the artifact structure defined in this skill's "Required Artifacts" section.
+- **User interruption**: Artifact files on disk serve as the recovery checkpoint. On resume, re-read all existing artifacts and continue from the first missing or incomplete one.
+- **Validation failure**: If `ssf validate` fails on generated artifacts, fix the validation errors BEFORE handing off. Do not hand off artifacts that fail validation.

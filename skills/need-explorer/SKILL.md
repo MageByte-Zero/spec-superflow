@@ -150,3 +150,9 @@ Before handing off to `spec-writer`, perform a self-review:
 3. **Scope check**: Can you draw a bright line between what's in and what's out? If a developer read this, would they know where to stop?
 
 If any of these checks fail, stay in exploration until they pass.
+
+## Exception Handling
+
+- **Parse failures**: If project context files cannot be read or parsed, report the specific file and proceed with available information. Do not block exploration on file read errors.
+- **Missing files**: If essential project files (CLAUDE.md, package.json, etc.) are absent, note this as a constraint and continue. Exploration does not require a complete codebase.
+- **User interruption**: Exploration is stateless — on resume, re-ask the current question. No state needs recovery.
