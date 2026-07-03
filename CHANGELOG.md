@@ -4,6 +4,24 @@ All notable changes to `spec-superflow` will be documented in this file.
 
 The format loosely follows Keep a Changelog.
 
+## [0.8.8] - 2026-07-03
+
+### Changed
+
+- **Token efficiency optimization**: Compressed all prompt injection surfaces by 60.3% (from ~24,387 estimated tokens to ~9,669).
+  - `hooks/session-start`: 23→15 lines, comments compressed, platform branches share message variable.
+  - 9 skill SKILL.md files: 2,461→750 lines total (−69.5%). Each skill ≤250 lines, 0 token lint issues.
+  - Phase guard files (`.claude/always/phase-guard.md`, `GEMINI.md`): 14→3 lines each, reference state machine instead of enumerating operations.
+  - `workflow-start` initialization simplified: deferred non-critical checks to target skills.
+
+### Added
+
+- **Token baseline tool** (`scripts/token-baseline.mjs`): Measures lines, characters, and estimated tokens for all injection components. Supports `--compare` for pre/post compression analysis.
+- **Token lint rules** (`scripts/lint/rules/token-rules.mjs`): 4 rules — max lines, max chars, emphasis marker limits, code block length limits. Banned markers: `EXTREMELY_IMPORTANT`, `CRITICAL`.
+- **`--include token`** support in `lint-skills.mjs` for token-specific linting.
+- **CI token lint step**: Warning-only check in both build-and-test and release jobs.
+- **Phase guard files** now included in version consistency checks.
+
 ## [0.8.7] - 2026-07-03
 
 ### Added

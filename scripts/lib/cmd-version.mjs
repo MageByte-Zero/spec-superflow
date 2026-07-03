@@ -24,8 +24,8 @@ const TEXT_FILES = [
   { file: 'docs/README_en.md',      pattern: /(Current: `v)0\.\d+\.\d+(`)/g,                     replacement: '$10.%MINOR%.%PATCH%$2' },
   { file: 'hooks/session-start',    pattern: /(# v)0\.\d+\.\d+(: conditional injection)/g,       replacement: '$10.%MINOR%.%PATCH%$2' },
   { file: 'llms.txt',               pattern: /(Current version: v)0\.\d+\.\d+(\.)/g,             replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: '.claude/always/phase-guard.md', pattern: /(# Phase Guard: v)0\.\d+\.\d+(\n?)/g,       replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'GEMINI.md',              pattern: /(\*\*版本\*\*: v)0\.\d+\.\d+/g,                    replacement: '$10.%MINOR%.%PATCH%' },
+  { file: '.claude/always/phase-guard.md', pattern: /(# spec-superflow v)0\.\d+\.\d+( \|)/g,      replacement: '$10.%MINOR%.%PATCH%$2' },
+  { file: 'GEMINI.md',              pattern: /(# spec-superflow v)0\.\d+\.\d+( \|)/g,              replacement: '$10.%MINOR%.%PATCH%$2' },
 ];
 
 function getNestedValue(obj, pathParts) {

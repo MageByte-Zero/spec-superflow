@@ -64,6 +64,8 @@ const TEXT_CHECKS = [
   { file: 'docs/README_en.md',      extract: /Current: `v(\d+\.\d+\.\d+)`/ },
   { file: 'hooks/session-start',    extract: /# v(\d+\.\d+\.\d+): conditional injection/ },
   { file: 'llms.txt',               extract: /Current version: v(\d+\.\d+\.\d+)\./ },
+  { file: '.claude/always/phase-guard.md', extract: /# spec-superflow v(\d+\.\d+\.\d+) \|/ },
+  { file: 'GEMINI.md',              extract: /# spec-superflow v(\d+\.\d+\.\d+) \|/ },
 ];
 
 for (const check of TEXT_CHECKS) {
