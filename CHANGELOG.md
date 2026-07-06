@@ -4,6 +4,12 @@ All notable changes to `spec-superflow` will be documented in this file.
 
 The format loosely follows Keep a Changelog.
 
+## [0.8.12] - 2026-07-06
+
+### Fixed
+
+- **Workflow mode inference** — hotfix/tweak auto-detection now recognizes common non-JavaScript source files, including Java, Go, Python, Rust, Kotlin, Swift, C/C++, C#, Ruby, PHP, and shell scripts, so multi-task code changes are no longer misclassified as config/doc-only tweaks.
+
 ## [0.8.11] - 2026-07-06
 
 ### Fixed
