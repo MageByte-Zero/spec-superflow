@@ -22,7 +22,7 @@
     "codex"
   ],
   "skills": "./skills/",
-  "hooks": {},
+  "hooks": "./hooks/hooks.json",
   "interface": {
     "displayName": "spec-superflow",
     "shortDescription": "Spec-first workflow with guarded execution.",

@@ -98,6 +98,18 @@ describe('cmd-doctor: checkHooks()', () => {
     assert.equal(result.pass, true);
   });
 
+  it('fails when hooks.json contains extra top-level keys', () => {
+    mkdirSync(join(tempDir, 'hooks'), { recursive: true });
+    writeFileSync(join(tempDir, 'hooks', 'hooks.json'), JSON.stringify({
+      description: 'extra metadata',
+      hooks: { SessionStart: [{ command: 'bash hooks/session-start' }] },
+    }));
+
+    const result = checkHooks(tempDir);
+    assert.equal(result.pass, false);
+    assert.ok(result.message.includes('invalid top-level keys'));
+  });
+
   it('fails when hooks.json has array format (legacy)', () => {
     writeFileSync(join(tempDir, 'hooks', 'hooks.json'), JSON.stringify({
       hooks: [{ event: 'SessionStart', command: 'bash hooks/session-start' }],
@@ -137,7 +149,7 @@ describe('cmd-doctor: checkCodexManifest()', () => {
     assert.ok(result.message.includes('not found'));
   });
 
-  it('fails when hooks is absent because Codex auto-discovers hooks/hooks.json', () => {
+  it('fails when hooks is absent', () => {
     mkdirSync(join(tempDir, '.codex-plugin'), { recursive: true });
     writeFileSync(join(tempDir, '.codex-plugin', 'plugin.json'), JSON.stringify({
       interface: { category: 'Developer Tools' },
@@ -145,12 +157,12 @@ describe('cmd-doctor: checkCodexManifest()', () => {
 
     const result = checkCodexManifest(tempDir);
     assert.equal(result.pass, false);
-    assert.ok(result.message.includes('hooks to {}'));
+    assert.ok(result.message.includes('hooks to ./hooks/hooks.json'));
   });
 
   it('fails when category is not Developer Tools', () => {
     writeFileSync(join(tempDir, '.codex-plugin', 'plugin.json'), JSON.stringify({
-      hooks: {},
+      hooks: './hooks/hooks.json',
       interface: { category: 'Productivity' },
     }));
 
@@ -159,9 +171,9 @@ describe('cmd-doctor: checkCodexManifest()', () => {
     assert.ok(result.message.includes('Developer Tools'));
   });
 
-  it('passes when hooks are explicitly suppressed and category is Developer Tools', () => {
+  it('passes when hooks are wired and category is Developer Tools', () => {
     writeFileSync(join(tempDir, '.codex-plugin', 'plugin.json'), JSON.stringify({
-      hooks: {},
+      hooks: './hooks/hooks.json',
       interface: { category: 'Developer Tools' },
     }));
 

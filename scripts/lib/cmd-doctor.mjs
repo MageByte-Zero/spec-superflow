@@ -52,6 +52,10 @@ function checkHooks(root) {
   }
   try {
     const hooks = JSON.parse(readFileSync(hooksPath, 'utf-8'));
+    const keys = Object.keys(hooks);
+    if (keys.length !== 1 || keys[0] !== 'hooks') {
+      return { pass: false, message: `invalid top-level keys (${keys.join(', ') || 'none'})` };
+    }
     if (hooks.hooks && typeof hooks.hooks === 'object' && !Array.isArray(hooks.hooks)) {
       return { pass: true, message: 'valid format' };
     }
@@ -67,16 +71,16 @@ function checkCodexManifest(root) {
   if (!manifest) {
     return { pass: false, message: '.codex-plugin/plugin.json not found' };
   }
-  if (JSON.stringify(manifest.hooks) !== '{}') {
+  if (manifest.hooks !== './hooks/hooks.json') {
     return {
       pass: false,
-      message: 'Codex manifest must set hooks to {} to suppress hooks/hooks.json auto-discovery',
+      message: 'Codex manifest must set hooks to ./hooks/hooks.json',
     };
   }
   if (manifest.interface?.category !== 'Developer Tools') {
     return { pass: false, message: 'Codex category should be Developer Tools' };
   }
-  return { pass: true, message: 'hooks suppressed, category Developer Tools' };
+  return { pass: true, message: 'hooks wired, category Developer Tools' };
 }
 
 function checkSkills(root) {
