@@ -6,13 +6,13 @@
   },
   "metadata": {
     "description": "Spec-first workflow plugins and skills for AI coding agents.",
-    "version": "0.8.13"
+    "version": "0.8.14"
   },
   "plugins": [
     {
       "name": "spec-superflow",
       "description": "Spec-first workflow with planning artifacts, execution contracts, TDD, review gates, systematic debugging, and delta spec sync.",
-      "version": "0.8.13",
+      "version": "0.8.14",
       "source": ".",
       "author": {
         "name": "MageByte",

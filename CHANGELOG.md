@@ -4,6 +4,20 @@ All notable changes to `spec-superflow` will be documented in this file.
 
 The format loosely follows Keep a Changelog.
 
+## [0.8.14] - 2026-07-06
+
+### Fixed
+
+- **WorkBuddy 安装器重构** — `ssf install-workbuddy` 现在部署为标准 marketplace 插件，修复了 v0.8.13 中存在的三个缺陷：
+  - **运行时依赖缺失** — 旧安装器不复制 `scripts/`、`docs/`、`templates/`、`dist/`、`hooks/`，导致 skill 中引用的脚本和模板无法解析。现在全部复制到插件根目录。
+  - **`${CLAUDE_PLUGIN_ROOT}` 未重写** — 旧安装器直接复制 SKILL.md 而不重写路径变量，导致所有脚本引用断裂。现在重写为 marketplace 插件绝对路径。
+  - **插件结构错误** — 旧安装器为每个 skill 创建独立的 marketplace 插件目录（9 个插件 × 9 个 enabledPlugins 键）。现在部署为单个 `spec-superflow` 插件，包含 `skills/` 子目录、`.codebuddy-plugin/plugin.json` 清单、`rules/phase-guard.md` 规则，settings.json 中仅需 `spec-superflow@cb_teams_marketplace` 单个启用键。旧安装产生的 per-skill 键会在升级时自动清理。
+
+### Added
+
+- WorkBuddy 安装器新增 `--dry-run` 预览模式和 `--tag` 指定版本安装。
+- WorkBuddy 平台现在有 phase-guard 规则（`rules/phase-guard.md`，WorkBuddy 自动加载为常驻上下文）。
+
 ## [0.8.13] - 2026-07-06
 
 ### Added

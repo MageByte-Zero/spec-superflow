@@ -5,7 +5,7 @@
   },
   "metadata": {
     "description": "Spec-first workflow plugin marketplace for Cursor",
-    "version": "0.8.13"
+    "version": "0.8.14"
   },
   "plugins": [
     {
