@@ -128,7 +128,7 @@ npx spec-superflow list          # 或通过 npx 使用
 | `ssf inject <dir>` | 生成多平台 phase-guard 产物 |
 | `ssf audit <dir>` | 生成决策点审计报告 |
 | `ssf install-cursor` | 部署到 Cursor `.cursor/` 目录 |
-| `ssf install-workbuddy` | 部署到 WorkBuddy marketplace 并启用技能 |
+| `ssf install-workbuddy` | 部署到 WorkBuddy marketplace 插件（含 skills/rules/runtime） |
 | `ssf install-cline` | 部署到 Cline `.cline/` + `.clinerules/` |
 | `ssf install-kiro` | 部署到 Kiro `.kiro/` + `.kiro/steering/` |
 | `ssf install-windsurf` | 部署到 Windsurf `.windsurf/` + `.windsurf/rules/` |
@@ -140,7 +140,7 @@ npx spec-superflow list          # 或通过 npx 使用
 
 ### 版本
 
-- 当前版本：`v0.8.13`
+- 当前版本：`v0.8.14`
 - 自包含插件，不需要运行时安装 OpenSpec 或 Superpowers
 - 上游来源：[Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec) 和 [obra/superpowers](https://github.com/obra/superpowers)
 - 版本历史见 [CHANGELOG.md](CHANGELOG.md)

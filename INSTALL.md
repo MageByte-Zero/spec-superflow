@@ -7,7 +7,7 @@
 - [Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec) — 规划引擎（Schema 验证、Delta Spec、工件解析）
 - [obra/superpowers](https://github.com/obra/superpowers) — 执行纪律（TDD 铁律、SDD、系统化调试、代码审查）
 
-当前发布版本：**v0.8.13**。
+当前发布版本：**v0.8.14**。
 
 ---
 
@@ -321,7 +321,7 @@ rm -rf your-project/.agents/skills
 
 ## WorkBuddy
 
-WorkBuddy 把 Skill 作为插件管理：Skill 文件需要进入 WorkBuddy marketplace 的 `plugins/` 目录，并在 `~/.workbuddy/settings.json` 中启用。安装器默认写入 `cb_teams_marketplace`。
+WorkBuddy 把 Skill 作为 marketplace 插件管理。安装器把 spec-superflow 部署为单个插件，包含 9 个 skill、运行时依赖（scripts/docs/templates/dist/hooks）、phase-guard 规则和 `.codebuddy-plugin/plugin.json` 清单，写入 `~/.workbuddy/plugins/marketplaces/<marketplace>/plugins/spec-superflow/`。
 
 ### 安装（推荐：一键脚本）
 
@@ -335,25 +335,46 @@ npx spec-superflow@latest install-workbuddy
 node /absolute/path/to/spec-superflow/scripts/spec-superflow.mjs install-workbuddy --local /absolute/path/to/spec-superflow
 ```
 
+`--dry-run` 预览部署计划：
+
+```bash
+ssf install-workbuddy --dry-run
+```
+
+### 部署结构
+
+```text
+~/.workbuddy/plugins/marketplaces/cb_teams_marketplace/plugins/spec-superflow/
+├── .codebuddy-plugin/plugin.json   ← 插件清单（name, version, skills[]）
+├── skills/                         ← 9 个 skill（${CLAUDE_PLUGIN_ROOT} 已重写）
+├── rules/phase-guard.md            ← phase-guard 规则（WorkBuddy 自动加载）
+├── scripts/  docs/  templates/     ← 运行时依赖
+├── dist/  hooks/
+```
+
+`~/.workbuddy/settings.json` 中启用键为 `spec-superflow@cb_teams_marketplace`（单个键，非每 skill 一个）。
+
 ### 升级
 
-重新运行安装命令即可覆盖旧技能并保留已有 `enabledPlugins` 配置。
+重新运行安装命令即可覆盖旧插件并保留已有 `enabledPlugins` 配置。
 
 ### 卸载
 
-删除 WorkBuddy marketplace 中的 spec-superflow skill 目录，并从 `~/.workbuddy/settings.json` 的 `enabledPlugins` 中移除对应键：
-
-```text
-workflow-start@cb_teams_marketplace
-need-explorer@cb_teams_marketplace
-spec-writer@cb_teams_marketplace
-contract-builder@cb_teams_marketplace
-build-executor@cb_teams_marketplace
-bug-investigator@cb_teams_marketplace
-code-reviewer@cb_teams_marketplace
-release-archivist@cb_teams_marketplace
-spec-merger@cb_teams_marketplace
+```bash
+rm -rf ~/.workbuddy/plugins/marketplaces/cb_teams_marketplace/plugins/spec-superflow
 ```
+
+然后从 `~/.workbuddy/settings.json` 的 `enabledPlugins` 中移除 `spec-superflow@cb_teams_marketplace`。
+
+### 验证
+
+```bash
+ls ~/.workbuddy/plugins/marketplaces/cb_teams_marketplace/plugins/spec-superflow/skills   # 应有 9 个 skill 目录
+cat ~/.workbuddy/plugins/marketplaces/cb_teams_marketplace/plugins/spec-superflow/rules/phase-guard.md
+cat ~/.workbuddy/plugins/marketplaces/cb_teams_marketplace/plugins/spec-superflow/.codebuddy-plugin/plugin.json
+```
+
+重启 WorkBuddy 后，在对话中输入「用 workflow-start 开始」即可启动工作流。
 
 ---
 
