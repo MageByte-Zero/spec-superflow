@@ -1,0 +1,37 @@
+# .spec-superflow.yaml — lightweight state machine
+# Derived data. Always rebuildable from artifacts. Lost/corrupt → fall back to content-level detection.
+
+# === Core state ===
+state: archived
+workflow: full
+
+# === Hashes (fast staleness detection) ===
+artifacts_hash: sha256:adb78a6123ccc2b872f747d2437517f2c71dd24b3e7328b3f3a93c33b4ff6b14
+contract_hash: sha256:432a64232c7c9c8f871952c043b29b61f673558b4a609b16eec8a407097cb59a
+
+# === Execution progress ===
+execution_mode: null
+batches_completed: 0
+test_result: pass
+
+# === Metadata ===
+change_name: s8-fhi-core-logic
+last_transition: 2026-07-08T08:38:08.475Z
+last_transition_from: closing
+last_transition_to: archived
+
+# === Decision points ===
+dp_1_result: null
+dp_1_timestamp: null
+dp_2_result: null
+dp_2_timestamp: null
+dp_3_result: approved
+dp_3_timestamp: 2026-07-07T08:19:00.000Z
+dp_4_result: null
+dp_4_timestamp: null
+dp_5_result: null
+dp_5_timestamp: null
+dp_6_result: pass
+dp_6_timestamp: 2026-07-08T08:36:00.000Z
+dp_7_result: approved
+dp_7_timestamp: 2026-07-08T08:36:00.000Z
