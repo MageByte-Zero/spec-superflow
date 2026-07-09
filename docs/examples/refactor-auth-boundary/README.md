@@ -7,7 +7,7 @@ The scenario is a codebase where authentication checks have drifted across contr
 Included artifacts:
 
 - `proposal.md`
-- `specs/auth-boundary.md`
+- `specs/auth-boundary/spec.md`
 - `design.md`
 - `tasks.md`
 - `execution-contract.md`

@@ -5,7 +5,7 @@ This example demonstrates a complete `spec-superflow` change set for a dark mode
 Included artifacts:
 
 - `proposal.md`
-- `specs/ui-theme.md`
+- `specs/ui-theme/spec.md`
 - `design.md`
 - `tasks.md`
 - `execution-contract.md`

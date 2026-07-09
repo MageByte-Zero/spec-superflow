@@ -6,26 +6,10 @@
 //   - proposal.md (change content validation)
 //   - specs/*/spec.md (delta spec validation)
 
-import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
 import { join, basename } from 'path';
 import { Validator } from '../dist/index.js';
-
-function findFiles(dir, pattern) {
-  const results = [];
-  if (!existsSync(dir)) return results;
-
-  const entries = readdirSync(dir);
-  for (const entry of entries) {
-    const full = join(dir, entry);
-    const st = statSync(full);
-    if (st.isDirectory()) {
-      results.push(...findFiles(full, pattern));
-    } else if (st.isFile() && pattern.test(entry)) {
-      results.push(full);
-    }
-  }
-  return results;
-}
+import { validateSpecPathLayout, relativeSpecPath } from './lib/spec-paths.mjs';
 
 function printReport(label, report) {
   console.log(`\n  📋 ${label}`);
@@ -80,19 +64,21 @@ function main() {
 
   const specsDir = join(changeDir, 'specs');
   if (existsSync(specsDir)) {
-    const specFiles = findFiles(specsDir, /^spec\.md$/);
-    if (specFiles.length === 0) {
-      console.log(`\n  ⚠️  No spec.md files found in specs/`);
+    const specLayout = validateSpecPathLayout(changeDir, { requireSpecs: true });
+    for (const failure of specLayout.failures) {
+      console.log(`\n  ❌ ${failure}`);
+      hasErrors = true;
     }
-    for (const specFile of specFiles) {
+
+    for (const specFile of specLayout.specFiles) {
       try {
         const content = readFileSync(specFile, 'utf-8');
         const report = validator.validateDeltaSpec(content);
-        const relative = specFile.replace(changeDir + '/', '');
+        const relative = relativeSpecPath(changeDir, specFile);
         printReport(`${relative} (delta spec)`, report);
         if (!report.valid) hasErrors = true;
       } catch (e) {
-        const relative = specFile.replace(changeDir + '/', '');
+        const relative = relativeSpecPath(changeDir, specFile);
         console.log(`\n  📋 ${relative}`);
         console.log(`     ❌ Error reading file: ${e instanceof Error ? e.message : 'Unknown error'}`);
         hasErrors = true;

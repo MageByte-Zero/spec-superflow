@@ -1,23 +1,12 @@
 // ssf validate <dir> — validate artifacts in a change directory
-import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
-import { join, basename, relative } from 'node:path';
+import { readFileSync, existsSync, statSync } from 'node:fs';
+import { join, basename } from 'node:path';
 import { loadConfig } from './config-loader.mjs';
+import { validateSpecPathLayout, relativeSpecPath } from './spec-paths.mjs';
 
 async function getValidator() {
   const mod = await import('../../dist/index.js');
   return new mod.Validator(false);
-}
-
-function findFiles(dir, pattern) {
-  const results = [];
-  if (!existsSync(dir)) return results;
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    const st = statSync(full);
-    if (st.isDirectory()) results.push(...findFiles(full, pattern));
-    else if (st.isFile() && pattern.test(entry)) results.push(full);
-  }
-  return results;
 }
 
 function printReport(label, report) {
@@ -66,11 +55,20 @@ export async function run(args) {
   // Validate specs/*/spec.md
   const specsDir = join(changeDir, 'specs');
   if (existsSync(specsDir)) {
-    const specFiles = findFiles(specsDir, /^spec\.md$/);
-    for (const specFile of specFiles) {
+    const specLayout = validateSpecPathLayout(changeDir, { requireSpecs: true });
+    for (const failure of specLayout.failures) {
+      printReport('specs/', {
+        valid: false,
+        issues: [{ level: 'ERROR', path: 'specs/', message: failure }],
+        summary: { errors: 1, warnings: 0, info: 0 },
+      });
+      hasErrors = true;
+    }
+
+    for (const specFile of specLayout.specFiles) {
       const content = readFileSync(specFile, 'utf-8');
       const report = validator.validateDeltaSpec(content);
-      const rel = relative(changeDir, specFile);
+      const rel = relativeSpecPath(changeDir, specFile);
       printReport(rel, report);
       if (!report.valid) hasErrors = true;
     }

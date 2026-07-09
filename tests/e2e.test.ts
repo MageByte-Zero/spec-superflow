@@ -21,7 +21,7 @@ function readExample(...parts: string[]): string {
 
 describe('parseDeltaSpec', () => {
   it('parses add-dark-mode spec with 3 ADDED requirements', () => {
-    const content = readExample('add-dark-mode', 'specs', 'ui-theme.md');
+    const content = readExample('add-dark-mode', 'specs', 'ui-theme', 'spec.md');
     const plan = parseDeltaSpec(content);
 
     assert.equal(plan.added.length, 3);
@@ -37,7 +37,7 @@ describe('parseDeltaSpec', () => {
   });
 
   it('parses refactor-auth-boundary spec with 3 MODIFIED requirements', () => {
-    const content = readExample('refactor-auth-boundary', 'specs', 'auth-boundary.md');
+    const content = readExample('refactor-auth-boundary', 'specs', 'auth-boundary', 'spec.md');
     const plan = parseDeltaSpec(content);
 
     assert.equal(plan.added.length, 0);
@@ -81,7 +81,7 @@ describe('Validator.validateDeltaSpec', () => {
   const validator = new Validator();
 
   it('validates add-dark-mode delta spec structure', () => {
-    const content = readExample('add-dark-mode', 'specs', 'ui-theme.md');
+    const content = readExample('add-dark-mode', 'specs', 'ui-theme', 'spec.md');
     const report = validator.validateDeltaSpec(content);
 
     // Delta specs should have deltas (ADDED/MODIFIED/REMOVED/RENAMED)
@@ -91,7 +91,7 @@ describe('Validator.validateDeltaSpec', () => {
   });
 
   it('validates refactor-auth-boundary delta spec structure', () => {
-    const content = readExample('refactor-auth-boundary', 'specs', 'auth-boundary.md');
+    const content = readExample('refactor-auth-boundary', 'specs', 'auth-boundary', 'spec.md');
     const report = validator.validateDeltaSpec(content);
 
     assert.equal(report.valid, true, `Expected valid but got issues: ${JSON.stringify(report.issues, null, 2)}`);
