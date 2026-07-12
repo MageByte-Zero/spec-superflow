@@ -20,7 +20,7 @@ export function createPlan(changeDir, input) {
     artifacts_hash: computeArtifactsHash(changeDir),
     contract_hash: computeContractHash(changeDir),
     workflow: state.workflow,
-    revision: state.revision ?? 0,
+    revision: input?.revision ?? state.revision ?? 1,
   };
   const failures = validateStructure(plan);
   if (failures.length > 0) throw new Error(`Invalid execution plan: ${failures.join('; ')}`);

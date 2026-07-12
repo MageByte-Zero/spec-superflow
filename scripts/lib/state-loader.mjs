@@ -10,6 +10,8 @@ const BUILTIN_DEFAULTS = {
   artifacts_hash: null,
   contract_hash: null,
   execution_mode: null,
+  execution_plan_hash: null,
+  execution_plan_revision: null,
   batches_completed: 0,
   test_result: null,
   spec_merged: false,
@@ -71,6 +73,8 @@ export function writeState(changeDir, state) {
   lines.push('');
   lines.push('# === Execution progress ===');
   lines.push(`execution_mode: ${state.execution_mode ?? 'null'}`);
+  lines.push(`execution_plan_hash: ${state.execution_plan_hash ?? 'null'}`);
+  lines.push(`execution_plan_revision: ${state.execution_plan_revision ?? 'null'}`);
   lines.push(`batches_completed: ${state.batches_completed ?? 0}`);
   lines.push(`test_result: ${state.test_result ?? 'null'}`);
   lines.push(`spec_merged: ${state.spec_merged ?? false}`);

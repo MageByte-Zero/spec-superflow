@@ -303,6 +303,13 @@ describe('cmd-state: set', () => {
       `Expected 'not settable' in output but got stdout: "${result.stdout}" stderr: "${result.stderr}"`);
   });
 
+  it('rejects manual edits to execution DP-4 fields', () => {
+    ssf(`state init ${tempDir}`);
+    const result = ssf(`state set ${tempDir} dp_4_result "forged execution approval"`);
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr || result.stdout, /not settable/);
+  });
+
   it('rejects unknown fields', () => {
     ssf(`state init ${tempDir}`);
     const result = ssf(`state set ${tempDir} nonexistent_field value`);
