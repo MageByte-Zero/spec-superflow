@@ -73,6 +73,7 @@ uncommitted:
 - `.superpowers/`
 - `docs/superpowers/`
 - `contest-2026/`
+- `scripts/sdd-workspace/`
 
 ### 5. Prefer operational wording
 
