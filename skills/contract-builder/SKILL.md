@@ -5,7 +5,7 @@ description: Convert approved planning artifacts into an execution contract. Inv
 
 # Contract Builder
 
-Converts planning artifacts into a single execution handshake: `execution-contract.md`. Use `templates/execution-contract.md` as the baseline structure.
+Converts planning artifacts into a single execution handshake: `execution-contract.md`. Use `../../templates/execution-contract.md` (project-level `templates/`) as the baseline structure.
 
 Read before generating: `proposal.md`, `specs/`, `design.md`, `tasks.md`, `docs/artifact-contract.md`.
 
