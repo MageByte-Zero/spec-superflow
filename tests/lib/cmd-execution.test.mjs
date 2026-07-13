@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -178,6 +178,25 @@ describe('ssf execution', () => {
 
     const reviewed = runSsf(['execution', 'review', changeDir, '--wave', 'wave-1',
       '--base', gitRefs.base, '--head', gitRefs.head, '--report', outsideReport, '--verdict', 'pass']);
+
+    assert.notEqual(reviewed.exitCode, 0);
+    assert.match(reviewed.stderr, /overlay|review/i);
+  });
+
+  it('rejects a report reached through a nested review-directory symlink', () => {
+    const planned = runSsf(['execution', 'plan', changeDir, '--mode', 'sdd', '--reason', 'full workflow default',
+      '--wave', 'wave-1:serial:1.1']);
+    assert.equal(planned.exitCode, 0, planned.stderr);
+    const outsideDir = join(changeDir, 'reports');
+    mkdirSync(outsideDir, { recursive: true });
+    writeFileSync(join(outsideDir, 'escaped.md'), 'Review completed without blocking findings.\n');
+    const reviewsDir = join(changeDir, '.superpowers', 'sdd', 'reviews');
+    mkdirSync(reviewsDir, { recursive: true });
+    symlinkSync(outsideDir, join(reviewsDir, 'linked'), 'dir');
+
+    const reviewed = runSsf(['execution', 'review', changeDir, '--wave', 'wave-1',
+      '--base', gitRefs.base, '--head', gitRefs.head,
+      '--report', '.superpowers/sdd/reviews/linked/escaped.md', '--verdict', 'pass']);
 
     assert.notEqual(reviewed.exitCode, 0);
     assert.match(reviewed.stderr, /overlay|review/i);

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { computeArtifactsHash, computeContractHash } from './hash.mjs';
 import { getOverlayPaths } from './sdd-overlay.mjs';
@@ -191,6 +191,12 @@ function validateReviewReportEvidence(changeDir, report) {
   }
   if (metadata.size === 0) {
     throw new Error('Review report evidence must be non-empty');
+  }
+  const realReviewsDir = realpathSync(reviewsDir);
+  const realReportPath = realpathSync(reportPath);
+  const realOverlayRelativePath = relative(realReviewsDir, realReportPath);
+  if (realOverlayRelativePath === '' || realOverlayRelativePath === '..' || realOverlayRelativePath.startsWith(`..${sep}`) || isAbsolute(realOverlayRelativePath)) {
+    throw new Error('Review report evidence must resolve inside the change review overlay');
   }
   return relative(changeDir, reportPath);
 }
