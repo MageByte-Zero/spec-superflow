@@ -25,6 +25,8 @@ Subagent (general-purpose):
     **Base:** [BASE_SHA]
     **Head:** [HEAD_SHA]
 
+    **Planned wave ID:** [WAVE_ID]
+
     ```bash
     git diff --stat [BASE_SHA]..[HEAD_SHA]
     git diff [BASE_SHA]..[HEAD_SHA]
@@ -85,6 +87,19 @@ Subagent (general-purpose):
 
     ## Output Format
 
+    Write your full verdict to [REVIEW_REPORT_FILE]. This review report path
+    must point to a non-empty, persisted review report before the controller
+    records a receipt. Include the wave ID, base SHA, head SHA, and that review
+    report path. End with the exact receipt command:
+
+    ```bash
+    ssf execution review <change-dir> --wave [WAVE_ID] --base [BASE_SHA] --head [HEAD_SHA] --report [REVIEW_REPORT_FILE] --verdict <pass|fail>
+    ```
+
+    Use `fail` when any Critical or Important finding remains. A repair needs
+    a fresh review and replacement `pass` receipt before any dependent wave or
+    closing transition.
+
     ### Strengths
     [What's well done? Be specific.]
 
@@ -136,6 +151,8 @@ Subagent (general-purpose):
 - `[PLAN_OR_REQUIREMENTS]` — what it should do (execution-contract.md file path, spec file path, or requirements)
 - `[BASE_SHA]` — starting commit
 - `[HEAD_SHA]` — ending commit
+- `[WAVE_ID]` — planned execution wave under review
+- `[REVIEW_REPORT_FILE]` — REQUIRED: distinct, persisted, non-empty review report path stored in the execution receipt
 
 **Reviewer returns:** Strengths, Issues (Critical / Important / Minor), Recommendations, Assessment
 

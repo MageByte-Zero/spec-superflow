@@ -22,6 +22,7 @@ Do NOT invoke for: general coding tasks outside spec-superflow changes, casual q
 1. **Update check**: Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/check-update.mjs"`. Exit 0 → continue. Exit 1 → non-blocking upgrade reminder. Exit 2 → skip.
 2. **Inspect change folder**: Check for `proposal.md`, `specs/`, `design.md`, `tasks.md`, `execution-contract.md`. Answer: Is the change fuzzy? Artifacts missing/unstable? Contract exist? User approved contract? Execution in progress or blocked? In verification/wrap-up?
 3. **Overlay recovery scan**: Run `ssf handoff list <change-dir> --json` and `ssf checkpoint list <change-dir> --json`. A `result-ready` handoff requires explicit review and `ssf handoff resolve` before resuming the affected work. An `active` handoff is non-blocking side work. Show a non-stale checkpoint as recovery context; show a stale checkpoint only as historical evidence.
+4. **Execution-control recovery scan**: For `approved-for-build`, `executing`, `debugging`, or `closing`, run `ssf execution show <change-dir> --json`. Treat only `current: true` plus `waves[].eligible: true` as permission to start a wave; report plan revision, mode, next eligible wave, and every wave's receipt/blockers. A missing, invalid, or stale plan blocks implementation and routes to `build-executor`; do not infer progress from chat history.
 
 ## DP-0: User Confirmation Gate
 
@@ -57,13 +58,13 @@ Guard: `node "${CLAUDE_PLUGIN_ROOT}/scripts/guard/guard.mjs" check <dir> explori
 Guard: `... check <dir> specifying bridging --json` → fail = BLOCK. Artifacts exist, implementation requested, contract missing/stale. Include `DP-3: 契约批准`.
 
 ### Route to build-executor
-Guard: `... check <dir> approved-for-build executing --json` → fail = BLOCK. Contract exists and approved, contract matches artifacts. Include `DP-4: 执行模式选择`.
+Contract exists and approved, contract matches artifacts. Include `DP-4: 执行模式选择`. Before the first implementation edit, `build-executor` must run `ssf execution plan <change-dir> ...`, then `ssf execution show <change-dir> --json`; report the saved revision, selected mode, ordered waves, and actual concurrent-dispatch capability. Do not transition to `executing` until `show` reports `current: true`; then run `... check <dir> approved-for-build executing --json` → fail = BLOCK.
 
 ### Route to bug-investigator
 Execution hit blockage: test failure, unexpected behavior, build error, task cannot proceed. After debugging, route back to build-executor.
 
 ### Route to code-reviewer
-Batch completed, batch ready for spec-compliance + code-quality verification.
+The current planned wave is implemented and ready for spec-compliance + code-quality verification. A reviewer must write an `ssf execution review <change-dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict <pass|fail>` receipt before any dependent wave or closing transition.
 
 ### Route to release-archivist
 Guard: `... check <dir> executing closing --json` → fail = BLOCK. Implementation complete, verification complete/nearly complete. Include `DP-7: 归档确认`.
@@ -93,7 +94,7 @@ or internal-refactor work. Never pass `--force` to `ssf isolate` for prototype
 work.
 
 ### Fast-Path Routing
-- **Hotfix**: Route to contract-builder (minimal), skip need-explorer + spec-writer, guard check `exploring bridging --workflow hotfix`, then `bridging -> approved-for-build`, after DP-3 → build-executor (inline), after → release-archivist (lightweight). Hotfix may skip `proposal.md`, `design.md`, `tasks.md`, and `specs/`, but it still requires a fresh minimal `execution-contract.md` and DP-3 approval before build
+- **Hotfix**: Route to contract-builder (minimal), skip need-explorer + spec-writer, guard check `exploring bridging --workflow hotfix`, then `bridging -> approved-for-build`, after DP-3 → build-executor (default SDD plan), after → release-archivist (lightweight). Hotfix may skip `proposal.md`, `design.md`, `tasks.md`, and `specs/`, but it still requires a fresh minimal `execution-contract.md`, DP-3 approval, and a current execution plan before build
 - **Tweak**: Route to build-executor (direct edit), skip need-explorer + spec-writer + contract-builder, guard check `exploring approved-for-build --workflow tweak`, after → release-archivist (lightweight)
 
 Post-transition: 💡 `node "${CLAUDE_PLUGIN_ROOT}/scripts/spec-superflow.mjs" inject <change-dir>` to update phase-guard artifacts.
@@ -111,10 +112,11 @@ Use content inspection, not timestamps.
 ## Guardrails
 
 - No implementation before planning artifacts or contract exist
+- No implementation for full/hotfix without a current `ssf execution plan`; no state transition based on an unverified DP-4 string
 - No "continue" without state inspection
 - No implementation past stale contract
 - No implementation past bug without investigation
-- No closure without code review
+- No closure without all planned wave review receipts recorded as `pass`
 - No closure with unsynced delta specs
 - No transitions from `abandoned` (terminal)
 - No transition to `abandoned` from `closing` or `abandoned`

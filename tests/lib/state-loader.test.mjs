@@ -26,6 +26,9 @@ describe('state-loader: readState()', () => {
     assert.equal(state.state, 'exploring');
     assert.equal(state.workflow, 'auto');
     assert.equal(state.batches_completed, 0);
+    assert.equal(state.execution_mode, null);
+    assert.equal(state.execution_plan_hash, null);
+    assert.equal(state.execution_plan_revision, null);
   });
 
   it('infers change_name from directory when no state file', () => {
@@ -145,6 +148,8 @@ describe('state-loader: writeState()', () => {
     assert.ok(content.includes('artifacts_hash: sha256:def456'));
     assert.ok(content.includes('contract_hash: null'));
     assert.ok(content.includes('batches_completed: 2'));
+    assert.ok(content.includes('execution_plan_hash: null'));
+    assert.ok(content.includes('execution_plan_revision: null'));
     assert.ok(content.includes('change_name: test-change'));
     assert.ok(content.includes('dp_0_confirmed: true'));
   });

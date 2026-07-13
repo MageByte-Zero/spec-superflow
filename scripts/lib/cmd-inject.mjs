@@ -59,29 +59,34 @@ const PHASE_TEMPLATES = {
 **当前阶段**: {{state}} | **工作流**: {{workflow}}
 
 ## ✅ 允许操作
-- 选择执行模式（TDD 或 SDD）
+- 选择执行模式（默认 SDD 或用户明确 override）
+- 运行 ssf execution plan <change-dir> ... 生成 execution plan
+- 运行 ssf execution show <change-dir> --json 核对 current、revision、mode、waves[].eligible 和 receipts
 - 准备执行环境
 
 ## ⛔ 禁止操作
+- full/hotfix 没有 current execution plan 时不得开始实现或转换到 executing；tweak 免除此 plan/receipt gate
 - 修改 execution-contract.md（需回退到 bridging）
 - 修改 proposal.md, specs/, design.md, tasks.md
 
 ## 🔔 决策点
-- DP-4: 执行模式选择 — 用户选择 TDD 或 SDD`,
+- DP-4: full/hotfix 默认 SDD；Inline/Batch Inline 仅限用户明确 override。仅当 execution show 报告 current: true 后才可转换到 executing；tweak 免除此 plan/receipt gate`,
 
   'executing': `# Phase Guard: {{change_name}}
 
 **当前阶段**: {{state}} | **工作流**: {{workflow}}
 
 ## ✅ 允许操作
-- 按 execution-contract.md 执行任务
+- 按 execution-contract.md 和 current execution plan 的 wave 执行任务
 - 运行测试
 - 提交代码（按 batch 提交）
+- full/hotfix 每个完成 wave 后记录 wave review 的 review receipt（pass 或 fail）；tweak 免除此 plan/receipt gate
 
 ## ⛔ 禁止操作
 - 修改 proposal.md, specs/, design.md（需先回退到 specifying）
 - 修改 execution-contract.md（需先回退到 bridging）
 - 跳过测试步骤
+- full/hotfix 不得跳过 wave review；没有所有 pass review receipts 不得进入 closing；tweak 免除此 plan/receipt gate
 
 ## 🔔 决策点
 - DP-5: 调试升级 — 3+ 修复失败后需用户决定`,

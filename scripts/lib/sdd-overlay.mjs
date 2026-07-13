@@ -19,6 +19,8 @@ export function getOverlayPaths(changeDir) {
     root,
     checkpoints: join(root, 'checkpoints'),
     handoffs: join(root, 'handoffs'),
+    executionPlan: join(root, 'execution-plan.json'),
+    reviews: join(root, 'reviews'),
   };
 }
 

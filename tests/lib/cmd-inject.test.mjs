@@ -55,11 +55,15 @@ describe('cmd-inject: generatePhaseGuard()', () => {
     const result = generatePhaseGuard({ state: 'approved-for-build', change_name: 'test' });
     assert.ok(result.includes('执行模式'));
     assert.ok(result.includes('DP-4'));
+    assert.match(result, /execution plan/);
+    assert.match(result, /不得开始实现/);
   });
 
   it('generates executing phase with test prohibition', () => {
     const result = generatePhaseGuard({ state: 'executing', change_name: 'test' });
     assert.ok(result.includes('跳过测试'));
+    assert.match(result, /wave review/);
+    assert.match(result, /review receipt/);
   });
 
   it('generates debugging phase with root cause analysis', () => {

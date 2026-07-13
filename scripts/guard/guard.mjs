@@ -10,6 +10,8 @@ import { check as checkDpGate } from './checks/dp-gate-passed.mjs';
 import { checkSpecsMerged } from './checks/specs-merged.mjs';
 import { checkContractCurrent } from './checks/contract-current.mjs';
 import { checkDp3Approved } from './checks/dp3-approved.mjs';
+import { checkExecutionPlanReady } from './checks/execution-plan-ready.mjs';
+import { checkExecutionReviewsPassed } from './checks/execution-reviews-passed.mjs';
 
 // Transition matrix: <from>:<to> → required check dimensions
 const TRANSITION_CHECKS = {
@@ -17,12 +19,12 @@ const TRANSITION_CHECKS = {
   'exploring:specifying':           ['artifacts-exist'],
   'specifying:bridging':            ['artifacts-exist', 'schema-valid'],
   'bridging:approved-for-build':    ['artifacts-exist', 'schema-valid', 'contract-fresh', 'dp-gate-passed'],
-  'approved-for-build:executing':   ['artifacts-exist', 'contract-fresh', 'dp-gate-passed'],
-  'executing:closing':              ['tasks-complete', 'tests-passing', 'specs-merged'],
+  'approved-for-build:executing':   ['artifacts-exist', 'contract-fresh', 'dp-gate-passed', 'execution-plan-ready'],
+  'executing:closing':              ['tasks-complete', 'tests-passing', 'specs-merged', 'execution-plan-ready', 'execution-reviews-passed'],
 
   // Debugging side-path
   'executing:debugging':            [],
-  'debugging:executing':            ['contract-fresh'],
+  'debugging:executing':            ['contract-fresh', 'execution-plan-ready'],
 
   // Fast-path transitions are workflow-gated; full workflow must reject them explicitly.
   'exploring:bridging':             [],
@@ -50,10 +52,15 @@ const WORKFLOW_TRANSITION_CHECKS = {
   hotfix: {
     'exploring:bridging': [],
     'bridging:approved-for-build': ['contract-current', 'dp3-approved'],
-    'approved-for-build:executing': ['contract-current', 'dp3-approved'],
+    'approved-for-build:executing': ['contract-current', 'dp3-approved', 'execution-plan-ready'],
   },
   tweak: {
     'exploring:approved-for-build': [],
+    // Tweak remains a low-risk fast path: it is intentionally exempt from
+    // execution-plan and per-wave review receipt requirements.
+    'approved-for-build:executing': ['artifacts-exist', 'contract-fresh', 'dp-gate-passed'],
+    'executing:closing': ['tasks-complete', 'tests-passing', 'specs-merged'],
+    'debugging:executing': ['contract-fresh'],
   },
 };
 
@@ -154,6 +161,8 @@ async function main() {
     'specs-merged': (dir) => checkSpecsMerged(dir),
     'dp-gate-passed': (dir) => checkDpGate(dir, fromState, toState),
     'dp3-approved': (dir) => checkDp3Approved(dir),
+    'execution-plan-ready': (dir) => checkExecutionPlanReady(dir),
+    'execution-reviews-passed': (dir) => checkExecutionReviewsPassed(dir),
   };
 
   const checks = [];

@@ -14,6 +14,7 @@ import { dirname } from 'node:path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
 const GUARD = join(ROOT, 'scripts', 'guard', 'guard.mjs');
+const CLI = join(ROOT, 'scripts', 'spec-superflow.mjs');
 
 function makeChangeDir(withDelta) {
   const dir = mkdtempSync(join(tmpdir(), 'ssf-specs-merged-'));
@@ -35,10 +36,17 @@ function cleanup(dir) {
 
 function runClosingGuard(dir, extraState = '') {
   try {
+    rmSync(join(dir, '.superpowers'), { recursive: true, force: true });
     writeFileSync(
       join(dir, '.spec-superflow.yaml'),
       `state: executing\nworkflow: full\nchange_name: test\ndp_6_result: pass: ok\n${extraState}`,
     );
+    const report = join(dir, 'close-review.md');
+    writeFileSync(report, 'review passed\n');
+    execFileSync('node', [CLI, 'execution', 'plan', dir, '--mode', 'sdd',
+      '--reason', 'closing guard regression fixture', '--wave', 'close:serial:1.1'], { stdio: 'pipe', timeout: 5000 });
+    execFileSync('node', [CLI, 'execution', 'review', dir, '--wave', 'close',
+      '--base', 'base', '--head', 'head', '--report', report, '--verdict', 'pass'], { stdio: 'pipe', timeout: 5000 });
     execFileSync('node', [GUARD, 'check', dir, 'executing', 'closing', '--json'], { stdio: 'pipe', timeout: 5000 });
     return { ok: true, out: '' };
   } catch (e) {

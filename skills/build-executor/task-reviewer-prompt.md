@@ -27,13 +27,15 @@ Subagent (general-purpose):
 
     ## What the Implementer Claims They Built
 
-    Read the implementer's report: [REPORT_FILE]
+    Read the implementer's report: [IMPLEMENTER_REPORT_FILE]
 
     ## Diff Under Review
 
     **Base:** [BASE_SHA]
     **Head:** [HEAD_SHA]
     **Diff file:** [DIFF_FILE]
+
+    **Planned wave:** [WAVE_ID]
 
     Read the diff file once — it contains the commit list, a stat summary,
     and the full diff with surrounding context, and it is your view of the
@@ -138,6 +140,18 @@ Subagent (general-purpose):
 
     ## Output Format
 
+    Write your full review to [REVIEW_REPORT_FILE]. This distinct review report
+    path must point to a non-empty, persisted review report before the
+    controller records a receipt. After the verdict, provide the exact receipt
+    command for the controller:
+
+    ```bash
+    ssf execution review <change-dir> --wave [WAVE_ID] --base [BASE_SHA] --head [HEAD_SHA] --report [REVIEW_REPORT_FILE] --verdict <pass|fail>
+    ```
+
+    Use `fail` for any Critical/Important finding. A repair must be re-reviewed
+    and recorded with a replacement `pass` receipt before a dependent wave may start.
+
     ### Spec Compliance
 
     - ✅ Spec compliant | ❌ Issues found: [what's missing/extra/misunderstood,
@@ -169,10 +183,12 @@ Subagent (general-purpose):
 - `[MODEL]` — REQUIRED: reviewer model per build-executor Model Selection
 - `[BRIEF_FILE]` — REQUIRED: the task brief file (`scripts/task-brief PLAN N` prints the path; same file the implementer worked from)
 - `[GLOBAL_CONSTRAINTS]` — the binding requirements copied verbatim from the plan's Global Constraints section or the spec: exact values, formats, and stated relationships between components (not process rules — those are already in this template)
-- `[REPORT_FILE]` — REQUIRED: the file the implementer wrote its detailed report to
+- `[IMPLEMENTER_REPORT_FILE]` — REQUIRED: the file the implementer wrote its detailed report to
+- `[REVIEW_REPORT_FILE]` — REQUIRED: a distinct, persisted, non-empty file where the reviewer writes this review; this exact path is stored in the receipt
 - `[BASE_SHA]` — commit before this task
 - `[HEAD_SHA]` — current commit
 - `[DIFF_FILE]` — REQUIRED: the path the controller wrote the review package to (`scripts/review-package BASE HEAD` prints the unique path it wrote; the package never enters the controller's context)
+- `[WAVE_ID]` — REQUIRED: the execution-plan wave being reviewed
 
 **Reviewer returns:** Spec Compliance verdict (✅/❌/⚠️), Strengths, Issues (Critical/Important/Minor), Task quality verdict
 

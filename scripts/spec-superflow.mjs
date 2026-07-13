@@ -17,6 +17,7 @@ const COMMANDS = {
   checkpoint:     () => import('./lib/cmd-checkpoint.mjs'),
   handoff:        () => import('./lib/cmd-handoff.mjs'),
   isolate:        () => import('./lib/cmd-isolate.mjs'),
+  execution:      () => import('./lib/cmd-execution.mjs'),
   'install-cursor': () => import('./lib/cmd-install-cursor.mjs'),
   'install-workbuddy': () => import('./lib/cmd-install-workbuddy.mjs'),
   'install-cline':    () => import('./lib/cmd-install-cline.mjs'),
@@ -59,6 +60,14 @@ Commands:
                         Validate a handoff result
   handoff resolve <change-dir> <id> --decision <accept|reject|defer>
                         Record the explicit handoff decision
+  execution plan <change-dir> --mode <mode> --reason <text> --wave <id>:<strategy>:<task,...> [--override]
+                        Record a guarded execution plan (SDD is the default)
+  execution show <change-dir> [--json]
+                        Show and validate the current execution plan
+  execution revise <change-dir> --mode sdd --reason <text> --wave <id>:<strategy>:<task,...>
+                        Upgrade inline/batch to SDD, or replan existing SDD waves, as a new revision
+  execution review <change-dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict pass|fail
+                        Record one review receipt for a planned wave
   install-cursor        Deploy skills/scripts/docs to .cursor/ (local Cursor setup)
   install-workbuddy     Deploy skills to WorkBuddy marketplace and enable them
   install-cline         Deploy to .cline/ + .clinerules/ (Cline)

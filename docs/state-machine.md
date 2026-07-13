@@ -30,7 +30,7 @@
 
 - the execution contract exists
 - the user has approved it
-- implementation can now begin
+- full/hotfix still require a current execution plan before implementation can begin
 
 ### `executing`
 
@@ -38,6 +38,24 @@
 - TDD, SDD (subagent-driven), review gates, and escalation rules apply
 - `build-executor` is active
 - `code-reviewer` invoked after each execution batch
+
+## Execution Plan Control Plane
+
+For full/hotfix, DP-4 is the persisted execution plan created by `ssf execution
+plan` at `<change>/.superpowers/sdd/execution-plan.json`, not an arbitrary
+state value or content stored in `execution-contract.md`. SDD is the default. `inline` and
+`batch-inline` require an explicit user override; Batch Inline remains serial
+and is never an automatic default or a substitute for parallel execution.
+`tweak` is exempt from execution-plan and review-receipt requirements.
+
+The plan names ordered execution waves, dependencies, and parallel/serial
+strategy. `ssf execution show <change-dir> --json` reports which current waves
+are eligible. Each completed wave must have a current
+`pass` review receipt, recorded with `ssf execution review`, before a dependent
+wave or `closing` can proceed. `ssf execution revise` retains or upgrades an
+existing plan as `sdd`; that new revision invalidates old review receipts and
+does not permit a downgrade. #47 recovery/switch/save
+slash commands are not implemented; do not assume `/ssf:*` commands exist.
 
 ### `debugging`
 
@@ -112,6 +130,8 @@ The workflow must move back to `specifying` or `bridging` when:
 - a key design assumption is wrong
 - current artifacts no longer define the intended behavior
 - `execution-contract.md` intent lock no longer matches `proposal.md` scope
+- the execution plan is stale, its mode no longer matches state, or its waves
+  need different dependencies
 
 ## Debugging State
 

@@ -13,8 +13,6 @@ Read: `execution-contract.md`, `tasks.md`, relevant `specs/`, relevant `design.m
 
 Check workflow mode first: `node "${CLAUDE_PLUGIN_ROOT}/scripts/spec-superflow.mjs" state get <change-dir> workflow`. If `tweak` → direct edit mode. If `hotfix` or `full` → standard contract-first discipline.
 
-Config check: `bash "${CLAUDE_PLUGIN_ROOT}/scripts/get-config" execution.inlineThreshold` (default: 3).
-
 Branch/worktree preflight before ANY implementation edit (mandatory — do not skip):
 1. Run the isolation check:
    ```bash
@@ -47,19 +45,30 @@ Return to `specifying` or `bridging` if: new behavior appears, interfaces change
 
 ## Execution Mode Selection
 
-Auto-selection based on: task count, cross-module dependencies, risk indicators (new API/schema/config, open questions, unimplemented dependencies).
+For `full`/`hotfix`, **SDD is the default execution mode**. Generate a machine-backed plan before deciding who edits code:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/scripts/spec-superflow.mjs" execution plan <change-dir> \
+  --mode sdd --reason "full/hotfix default SDD" \
+  --wave <wave-id>:<parallel|serial>:<task,...>[:<depends-on,...>]
+node "${CLAUDE_PLUGIN_ROOT}/scripts/spec-superflow.mjs" execution show <change-dir> --json
+```
+
+The optional fourth `--wave` segment names prerequisite wave IDs. `execution show --json` reports `current`, plus each wave's `depends_on`, `receipt`, `blockers`, `retryable`, and `eligible` status. A wave with `retryable: true` has a current `fail` receipt and is eligible only for its focused repair and re-review; its dependents remain blocked until its replacement `pass` receipt. Report the saved plan revision, selected mode, ordered waves, dependencies, and whether every `parallel` wave can actually be dispatched concurrently on the current platform. If concurrency is unavailable, state the capability and reason plainly; retain the planned `parallel` strategy and do not silently execute it as a serial or Batch Inline plan.
+
+`inline` and `batch-inline` are available only through an **explicit user override**. Record that request with `--override`; task count, module locality, estimated effort, or `execution.inlineThreshold` never auto-selects either mode.
 
 | Mode | Criteria |
 |------|----------|
-| **Inline** | ≤3 tasks, no cross-module deps |
-| **Batch Inline** | >3 tasks, same module, no risk indicators, ≤15 min effort |
-| **SDD** (default) | Everything else |
+| **SDD** (default for full/hotfix) | Generated unless the user explicitly overrides it |
+| **Inline** | Explicit user override for a small, sequential task set |
+| **Batch Inline** | Explicit user override for a bounded batch; it remains serial and is never presented as parallel |
 
-Report mode + reasoning before executing. User can override: "use SDD", "use inline", or "use batch inline".
+Do not transition to `executing` until `execution show` reports `current: true` and the phase guard passes. A revised plan must use `ssf execution revise`; it creates a new revision and invalidates receipts from the prior revision.
 
 ## Batch Inline Execution
 
-For low-risk, same-module tasks. Current agent executes directly. TDD Iron Law still applies.
+Only when the user explicitly selects `batch-inline`. Current agent executes directly and serially. TDD Iron Law still applies.
 
 Procedure: announce mode → write failing test → confirm failure → implement → run suite → refactor → lightweight checkpoint (files exist, no placeholders, test passed, no unintended changes) → report.
 
@@ -67,13 +76,25 @@ Boundaries: if any task touches >1 module, involves schema/API/config changes, o
 
 ## SDD Workflow
 
-For changes with multiple execution batches. Dispatch implementer subagent per task, review each task, final broad review after all batches.
+For full/hotfix by default. Dispatch according to the persisted plan, review each planned wave, and run a final broad review after all waves.
+
+### Planned-Wave Loop
+1. Read the current plan with `ssf execution show <change-dir> --json`; only waves shown with `current: true` and `eligible: true` may start. A `retryable: true` wave may only be repaired and re-reviewed; do not dispatch its dependents until its replacement receipt is `pass`. The CLI encodes dependencies in `--wave <id>:<strategy>:<tasks>[:<depends-on,...>]` and rejects a review receipt for a wave whose prerequisites lack current `pass` receipts.
+2. A `parallel` wave may dispatch independent tasks simultaneously only when the platform supports concurrent dispatch. If it does not, disclose the unavailable capability and execute the same wave one task at a time without changing its stored strategy.
+3. A `serial` wave dispatches one task at a time in listed order.
+4. After every wave, write a non-empty persisted regular-file review report (separate from the implementer's report), then record exactly one receipt that names that review report:
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/spec-superflow.mjs" execution review <change-dir> \
+     --wave <wave-id> --base <sha> --head <sha> --report <review-report-path> --verdict <pass|fail>
+   ```
+   Do not begin a dependent wave until its predecessor receipt is `pass`.
+5. Critical/Important findings require a `fail` receipt, a focused repair, re-review, then a replacement `pass` receipt. Never advance or close with a missing or failed receipt.
 
 ### Per-Task Loop
 1. **Dispatch implementer**: Use `${CLAUDE_PLUGIN_ROOT}/skills/build-executor/implementer-prompt.md` template. Extract task brief with `scripts/task-brief PLAN_FILE N`. Include: where task fits, brief path, interfaces from prior tasks, report file path.
 2. **Handle response**: DONE → generate review package + dispatch reviewer. DONE_WITH_CONCERNS → assess. NEEDS_CONTEXT → provide context. BLOCKED → re-dispatch with better model or escalate.
-3. **Review**: Use `skills/build-executor/task-reviewer-prompt.md`. Reviewer returns spec compliance + code quality verdicts.
-4. **Fix**: If Critical or Important issues, dispatch fix subagent, re-review.
+3. **Review**: Use `skills/build-executor/task-reviewer-prompt.md`. Reviewer returns spec compliance + code quality verdicts with the wave ID, git range, report path, and `pass`/`fail` receipt command.
+4. **Fix**: If Critical or Important issues, write the `fail` receipt, dispatch fix subagent, re-review, and write the replacement `pass` receipt.
 5. **Mark complete**: Append to `.superpowers/sdd/progress.md`: `Task N: complete (commits <base7>..<head7>, review clean)`
 
 ### Model Selection
@@ -97,7 +118,7 @@ Track in `.superpowers/sdd/progress.md`. Check for existing ledger — completed
 
 ## Inline Execution Mode
 
-For ≤3 tasks, no cross-module deps. Executes in current session.
+Only after an explicit user override recorded by `ssf execution plan --override`. Executes in the current session and still writes one review receipt per planned wave.
 
 Per-task: extract brief → write failing test → confirm failure → implement → confirm green → checkpoint review (done-when criteria, SHALL/MUST verification) → commit → save a task-level recovery checkpoint when another task remains → append to progress ledger.
 
@@ -123,12 +144,12 @@ Skip TDD. Apply changes directly. Verify file integrity (exists, non-empty, vali
 
 ## DP Records
 
-DP-4 (execution mode): `node "${CLAUDE_PLUGIN_ROOT}/scripts/spec-superflow.mjs" state set <change-dir> dp_4_result "<mode>: <rationale>"` + timestamp.
+DP-4 is written by `ssf execution plan`; do not write it with raw `state set`.
 DP-5 (debug escalation): `node "${CLAUDE_PLUGIN_ROOT}/scripts/spec-superflow.mjs" state set <change-dir> dp_5_result "<resolution>"` + timestamp.
 
 ## Completion Standard
 
-Don't report completion until: tests pass, contract obligations satisfied, review blockers resolved, all batches reviewed (per-task + final), workflow ready for `release-archivist`.
+Don't report completion until: tests pass, contract obligations satisfied, review blockers resolved, every planned wave has a current `pass` receipt, final review is complete, and workflow is ready for `release-archivist`.
 
 ## Exception Handling
 

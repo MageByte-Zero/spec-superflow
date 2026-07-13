@@ -15,12 +15,11 @@ const VALID_STATES = [
 ];
 
 const SETTABLE_FIELDS = [
-  'workflow', 'execution_mode', 'test_result', 'batches_completed', 'spec_merged',
+  'workflow', 'test_result', 'batches_completed', 'spec_merged',
   'dp_0_decisions', 'dp_0_confirmed', 'dp_0_timestamp', 'dp_0_result',
   'dp_1_result', 'dp_1_timestamp', 'dp_1_decisions', 'dp_1_confirmed',
   'dp_2_result', 'dp_2_timestamp', 'dp_2_decisions', 'dp_2_confirmed',
   'dp_3_result', 'dp_3_timestamp', 'dp_3_decisions', 'dp_3_confirmed',
-  'dp_4_result', 'dp_4_timestamp', 'dp_4_decisions', 'dp_4_confirmed',
   'dp_5_result', 'dp_5_timestamp', 'dp_5_decisions', 'dp_5_confirmed',
   'dp_6_result', 'dp_6_timestamp', 'dp_6_decisions', 'dp_6_confirmed',
   'dp_7_result', 'dp_7_timestamp', 'dp_7_decisions', 'dp_7_confirmed',
