@@ -202,6 +202,28 @@ describe('ssf execution', () => {
     assert.match(reviewed.stderr, /overlay|review/i);
   });
 
+  it('rejects a report when the reviews overlay root is a symlink', () => {
+    const planned = runSsf(['execution', 'plan', changeDir, '--mode', 'sdd', '--reason', 'full workflow default',
+      '--wave', 'wave-1:serial:1.1']);
+    assert.equal(planned.exitCode, 0, planned.stderr);
+    const outsideReviewsDir = mkdtempSync(join(tmpdir(), 'ssf-external-reviews-'));
+    const reviewsDir = join(changeDir, '.superpowers', 'sdd', 'reviews');
+
+    try {
+      writeFileSync(join(outsideReviewsDir, 'wave-1.md'), 'Review completed without blocking findings.\n');
+      symlinkSync(outsideReviewsDir, reviewsDir, 'dir');
+
+      const reviewed = runSsf(['execution', 'review', changeDir, '--wave', 'wave-1',
+        '--base', gitRefs.base, '--head', gitRefs.head,
+        '--report', '.superpowers/sdd/reviews/wave-1.md', '--verdict', 'pass']);
+
+      assert.notEqual(reviewed.exitCode, 0);
+      assert.match(reviewed.stderr, /overlay|review|symbolic/i);
+    } finally {
+      rmSync(outsideReviewsDir, { recursive: true, force: true });
+    }
+  });
+
   it('rejects a receipt range containing a nonexistent Git commit', () => {
     const planned = runSsf(['execution', 'plan', changeDir, '--mode', 'sdd', '--reason', 'full workflow default',
       '--wave', 'wave-1:serial:1.1']);

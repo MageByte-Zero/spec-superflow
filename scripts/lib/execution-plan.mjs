@@ -173,12 +173,8 @@ function validateReviewReportEvidence(changeDir, report) {
     throw new Error('Review report evidence path is unsafe');
   }
 
-  const reviewsDir = getOverlayPaths(changeDir).reviews;
-  const reportPath = isAbsolute(report) ? resolve(report) : resolve(changeDir, report);
-  const overlayRelativePath = relative(reviewsDir, reportPath);
-  if (overlayRelativePath === '' || overlayRelativePath === '..' || overlayRelativePath.startsWith(`..${sep}`) || isAbsolute(overlayRelativePath)) {
-    throw new Error('Review report evidence must be inside the change review overlay');
-  }
+  const { changeRoot, reviewsDir } = getPhysicalReviewsDirectory(changeDir);
+  const reportPath = isAbsolute(report) ? resolve(report) : resolve(changeRoot, report);
 
   let metadata;
   try {
@@ -192,13 +188,36 @@ function validateReviewReportEvidence(changeDir, report) {
   if (metadata.size === 0) {
     throw new Error('Review report evidence must be non-empty');
   }
-  const realReviewsDir = realpathSync(reviewsDir);
   const realReportPath = realpathSync(reportPath);
-  const realOverlayRelativePath = relative(realReviewsDir, realReportPath);
+  const realOverlayRelativePath = relative(reviewsDir, realReportPath);
   if (realOverlayRelativePath === '' || realOverlayRelativePath === '..' || realOverlayRelativePath.startsWith(`..${sep}`) || isAbsolute(realOverlayRelativePath)) {
     throw new Error('Review report evidence must resolve inside the change review overlay');
   }
-  return relative(changeDir, reportPath);
+  return relative(changeRoot, realReportPath);
+}
+
+function getPhysicalReviewsDirectory(changeDir) {
+  let changeRoot;
+  try {
+    changeRoot = realpathSync(changeDir);
+  } catch (error) {
+    throw new Error(`Review report evidence cannot resolve the change directory: ${error.message}`);
+  }
+
+  let directory = changeRoot;
+  for (const component of ['.superpowers', 'sdd', 'reviews']) {
+    directory = join(directory, component);
+    let metadata;
+    try {
+      metadata = lstatSync(directory);
+    } catch (error) {
+      throw new Error(`Review report evidence cannot read the ${component} overlay directory: ${error.message}`);
+    }
+    if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
+      throw new Error('Review report evidence requires physical .superpowers/sdd/reviews overlay directories');
+    }
+  }
+  return { changeRoot, reviewsDir: directory };
 }
 
 function validateReviewRange(changeDir, base, head) {
