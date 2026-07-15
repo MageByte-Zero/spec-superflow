@@ -11,6 +11,7 @@ Use this checklist before publishing a new version of `spec-superflow`.
 - `LICENSE` is present
 - `ssf version <semver>` covers all manifests (JSON) + documentation (Markdown/shell)
 - `node scripts/check-version-consistency.mjs` passes (also runs in CI)
+- Verify all eight runtime-dependent canonical skills use the exact release version, and local installer output rewrites them to its bundled `scripts/spec-superflow.mjs`.
 - Verify `.github/plugin/marketplace.json` and `.claude-plugin/marketplace.json` versions match
 
 ## Workflow Integrity
@@ -46,6 +47,7 @@ For each example in `docs/examples/`:
 - `node scripts/check-version-consistency.mjs` — exits 0
 - `node scripts/spec-superflow.mjs --help` — all subcommands listed
 - `node scripts/spec-superflow.mjs install-workbuddy --dry-run` — finds all 9 skills and target paths
+- In a temporary HOME/CODEX_HOME with no global `ssf` or plugin-root environment variable, run the canonical runtime and a representative installer smoke test.
 - `spec-superflow.config.json` absence still works (backward compatible defaults)
 - `package.json` `bin` field points to correct entry script
 
@@ -74,6 +76,7 @@ For each example in `docs/examples/`:
 
 ## Publishing Checks
 
+- Release preparation does not authorize `git tag`, `npm publish`, GitHub Release creation, marketplace publication, issue closure, or external issue comments. Perform those only after the maintainer explicitly authorizes publication.
 - there are no stray `TODO` or `TBD` markers
 - links and referenced paths are still valid
 - no local-only junk files are included

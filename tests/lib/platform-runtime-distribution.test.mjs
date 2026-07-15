@@ -46,11 +46,29 @@ describe('canonical skill runtime protocol', () => {
     assert.match(content, /runtime asset read skills\/build-executor\/task-reviewer-prompt\.md/);
   });
 
-  it('keeps code-reviewer explicitly free of portable runtime commands', () => {
+  it('uses the portable CLI for code-review receipts without requiring a plugin-root variable', () => {
     const content = skill('code-reviewer');
 
     assert.doesNotMatch(content, /\$\{CLAUDE_PLUGIN_ROOT\}|\$\{PLUGIN_ROOT\}/);
-    assert.doesNotMatch(content, /spec-superflow@\d+\.\d+\.\d+/);
+    assert.match(content, new RegExp(PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  });
+
+  it('does not leave bare ssf commands in runtime instructions or reviewer templates', () => {
+    const files = [
+      ...RUNTIME_SKILLS.map(name => join(ROOT, 'skills', name, 'SKILL.md')),
+      join(ROOT, 'skills', 'code-reviewer', 'SKILL.md'),
+      join(ROOT, 'skills', 'build-executor', 'implementer-prompt.md'),
+      join(ROOT, 'skills', 'build-executor', 'task-reviewer-prompt.md'),
+      join(ROOT, 'skills', 'code-reviewer', 'code-reviewer-prompt.md'),
+    ];
+
+    for (const file of files) {
+      const content = readFileSync(file, 'utf8');
+      assert.doesNotMatch(content, /`ssf\s+(?:handoff|checkpoint|execution|state|runtime|validate|doctor|config|version)\b/,
+        `${file} contains a bare ssf command`);
+      assert.doesNotMatch(content, /^\s*ssf\s+(?:handoff|checkpoint|execution|state|runtime|validate|doctor|config|version)\b/m,
+        `${file} contains an unprefixed ssf command line`);
+    }
   });
 });
 

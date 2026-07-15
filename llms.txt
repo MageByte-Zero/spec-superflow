@@ -3,7 +3,7 @@
 ## Overview
 spec-superflow is a self-contained workflow integration plugin for Claude Code, Cursor, OpenAI Codex CLI/App, GitHub Copilot CLI, Gemini CLI, OpenCode, WorkBuddy, and Trae. It merges spec-driven planning artifacts (proposal, specs, design, tasks) with disciplined execution guardrails (TDD, review gates, controlled handoff) into one unified workflow.
 
-Current version: v0.9.0.
+Current version: v0.9.1.
 
 ## Key Documents
 - README.md: Chinese homepage with full usage guide and FAQ

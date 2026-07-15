@@ -160,7 +160,7 @@ npx spec-superflow list          # 或通过 npx 使用
 
 ### 版本
 
-- 当前版本：`v0.9.0`
+- 当前版本：`v0.9.1`
 - v0.9.0 highlights：支持 Node 20/22、model profiles 只读解析，以及 code-reviewer 的最小性审查；详见 [CHANGELOG.md](CHANGELOG.md)
 - 自包含插件，不需要运行时安装 OpenSpec 或 Superpowers
 - 上游来源：[Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec) 和 [obra/superpowers](https://github.com/obra/superpowers)

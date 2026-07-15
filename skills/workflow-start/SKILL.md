@@ -15,14 +15,14 @@ Do NOT invoke for: general coding tasks outside spec-superflow changes, casual q
 
 ## States
 
-`exploring` → `specifying` → `bridging` → `approved-for-build` → `executing` → `closing`, with `debugging` side-path from `executing`, and `abandoned` as terminal. If a transition is ambiguous, run `npx --yes --package spec-superflow@0.9.0 ssf runtime asset read docs/state-machine.md`.
+`exploring` → `specifying` → `bridging` → `approved-for-build` → `executing` → `closing`, with `debugging` side-path from `executing`, and `abandoned` as terminal. If a transition is ambiguous, run `npx --yes --package spec-superflow@0.9.1 ssf runtime asset read docs/state-machine.md`.
 
 ## Initialization
 
-1. **Update check**: Run `npx --yes --package spec-superflow@0.9.0 ssf runtime check-update`. Exit 0 → continue. Exit 1 → non-blocking upgrade reminder. Exit 2 → skip.
+1. **Update check**: Run `npx --yes --package spec-superflow@0.9.1 ssf runtime check-update`. Exit 0 → continue. Exit 1 → non-blocking upgrade reminder. Exit 2 → skip.
 2. **Inspect change folder**: Check for `proposal.md`, `specs/`, `design.md`, `tasks.md`, `execution-contract.md`. Answer: Is the change fuzzy? Artifacts missing/unstable? Contract exist? User approved contract? Execution in progress or blocked? In verification/wrap-up?
-3. **Overlay recovery scan**: Run `ssf handoff list <change-dir> --json` and `ssf checkpoint list <change-dir> --json`. A `result-ready` handoff requires explicit review and `ssf handoff resolve` before resuming the affected work. An `active` handoff is non-blocking side work. Show a non-stale checkpoint as recovery context; show a stale checkpoint only as historical evidence.
-4. **Execution-control recovery scan**: For `approved-for-build`, `executing`, `debugging`, or `closing`, run `ssf execution show <change-dir> --json`. Treat only `current: true` plus `waves[].eligible: true` as permission to start a wave; report plan revision, mode, next eligible wave, and every wave's receipt/blockers. A missing, invalid, or stale plan blocks implementation and routes to `build-executor`; do not infer progress from chat history.
+3. **Overlay recovery scan**: Run `npx --yes --package spec-superflow@0.9.1 ssf handoff list <change-dir> --json` and `npx --yes --package spec-superflow@0.9.1 ssf checkpoint list <change-dir> --json`. A `result-ready` handoff requires explicit review and `npx --yes --package spec-superflow@0.9.1 ssf handoff resolve` before resuming the affected work. An `active` handoff is non-blocking side work. Show a non-stale checkpoint as recovery context; show a stale checkpoint only as historical evidence.
+4. **Execution-control recovery scan**: For `approved-for-build`, `executing`, `debugging`, or `closing`, run `npx --yes --package spec-superflow@0.9.1 ssf execution show <change-dir> --json`. Treat only `current: true` plus `waves[].eligible: true` as permission to start a wave; report plan revision, mode, next eligible wave, and every wave's receipt/blockers. A missing, invalid, or stale plan blocks implementation and routes to `build-executor`; do not infer progress from chat history.
 
 ## DP-0: User Confirmation Gate
 
@@ -32,17 +32,17 @@ Ask: change name + one-sentence intent, known constraints, related optimizations
 
 After confirmation:
 ```bash
-npx --yes --package spec-superflow@0.9.0 ssf state set <change-dir> dp_0_decisions "<summary>"
-npx --yes --package spec-superflow@0.9.0 ssf state set <change-dir> dp_0_result confirmed
-npx --yes --package spec-superflow@0.9.0 ssf state set <change-dir> dp_0_confirmed true
-npx --yes --package spec-superflow@0.9.0 ssf state set <change-dir> dp_0_timestamp $(date -u +%Y-%m-%dT%H:%M:%SZ)
+npx --yes --package spec-superflow@0.9.1 ssf state set <change-dir> dp_0_decisions "<summary>"
+npx --yes --package spec-superflow@0.9.1 ssf state set <change-dir> dp_0_result confirmed
+npx --yes --package spec-superflow@0.9.1 ssf state set <change-dir> dp_0_confirmed true
+npx --yes --package spec-superflow@0.9.1 ssf state set <change-dir> dp_0_timestamp $(date -u +%Y-%m-%dT%H:%M:%SZ)
 ```
 
 Config-aware routing: check `artifacts.order` and `artifacts.skip` from project config.
 
 ## Mode Detection
 
-If workflow is `auto`/`null`/unset: run `npx --yes --package spec-superflow@0.9.0 ssf runtime infer <change-dir>`. Inference: **hotfix** (≤2 tasks, ≤2 files, no schema/API/new modules), **tweak** (≤4 tasks, config/doc only), **full** (anything larger). Persist with `npx --yes --package spec-superflow@0.9.0 ssf state set <dir> workflow <mode>`.
+If workflow is `auto`/`null`/unset: run `npx --yes --package spec-superflow@0.9.1 ssf runtime infer <change-dir>`. Inference: **hotfix** (≤2 tasks, ≤2 files, no schema/API/new modules), **tweak** (≤4 tasks, config/doc only), **full** (anything larger). Persist with `npx --yes --package spec-superflow@0.9.1 ssf state set <dir> workflow <mode>`.
 
 Validate mode against artifact content. If hotfix/tweak criteria not met → upgrade to `full` and output reason. Don't overwrite explicit mode unless user asks.
 
@@ -52,19 +52,19 @@ Validate mode against artifact content. If hotfix/tweak criteria not met → upg
 Change is fuzzy, scope unclear, comparing options, no stable change name.
 
 ### Route to spec-writer
-Guard: `npx --yes --package spec-superflow@0.9.0 ssf runtime guard check <dir> exploring specifying --json` → fail = BLOCK. User knows what they want, artifacts missing/incomplete.
+Guard: `npx --yes --package spec-superflow@0.9.1 ssf runtime guard check <dir> exploring specifying --json` → fail = BLOCK. User knows what they want, artifacts missing/incomplete.
 
 ### Route to contract-builder
 Guard: `... check <dir> specifying bridging --json` → fail = BLOCK. Artifacts exist, implementation requested, contract missing/stale. Include `DP-3: 契约批准`.
 
 ### Route to build-executor
-Contract exists and approved, contract matches artifacts. Include `DP-4: 执行模式选择`. Before the first implementation edit, `build-executor` must run `ssf execution plan <change-dir> ...`, then `ssf execution show <change-dir> --json`; report the saved revision, selected mode, ordered waves, and actual concurrent-dispatch capability. Do not transition to `executing` until `show` reports `current: true`; then run `... check <dir> approved-for-build executing --json` → fail = BLOCK.
+Contract exists and approved, contract matches artifacts. Include `DP-4: 执行模式选择`. Before the first implementation edit, `build-executor` must run `npx --yes --package spec-superflow@0.9.1 ssf execution plan <change-dir> ...`, then `npx --yes --package spec-superflow@0.9.1 ssf execution show <change-dir> --json`; report the saved revision, selected mode, ordered waves, and actual concurrent-dispatch capability. Do not transition to `executing` until `show` reports `current: true`; then run `... check <dir> approved-for-build executing --json` → fail = BLOCK.
 
 ### Route to bug-investigator
 Execution hit blockage: test failure, unexpected behavior, build error, task cannot proceed. After debugging, route back to build-executor.
 
 ### Route to code-reviewer
-The current planned wave is implemented and ready for spec-compliance + code-quality verification. A reviewer must write an `ssf execution review <change-dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict <pass|fail>` receipt before any dependent wave or closing transition.
+The current planned wave is implemented and ready for spec-compliance + code-quality verification. A reviewer must write an `npx --yes --package spec-superflow@0.9.1 ssf execution review <change-dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict <pass|fail>` receipt before any dependent wave or closing transition.
 
 ### Route to release-archivist
 Guard: `... check <dir> executing closing --json` → fail = BLOCK. Implementation complete, verification complete/nearly complete. Include `DP-7: 归档确认`.
@@ -83,10 +83,10 @@ uncertainty. Do not create a prototype handoff or enter a prototype worktree
 until the user confirms. After confirmation:
 
 ```bash
-npx --yes --package spec-superflow@0.9.0 ssf handoff create <change-dir> \
+npx --yes --package spec-superflow@0.9.1 ssf handoff create <change-dir> \
   --type prototype --objective "<confirmed objective>" \
   --expected-output "<expected evidence>" --acceptance "<completion criterion>"
-npx --yes --package spec-superflow@0.9.0 ssf isolate <change-dir> prototype-<handoff-id>
+npx --yes --package spec-superflow@0.9.1 ssf isolate <change-dir> prototype-<handoff-id>
 ```
 
 Never suggest or enter this route automatically for backend, CLI, configuration,
@@ -97,7 +97,7 @@ work.
 - **Hotfix**: Route to contract-builder (minimal), skip need-explorer + spec-writer, guard check `exploring bridging --workflow hotfix`, then `bridging -> approved-for-build`, after DP-3 → build-executor (default SDD plan), after → release-archivist (lightweight). Hotfix may skip `proposal.md`, `design.md`, `tasks.md`, and `specs/`, but it still requires a fresh minimal `execution-contract.md`, DP-3 approval, and a current execution plan before build
 - **Tweak**: Route to build-executor (direct edit), skip need-explorer + spec-writer + contract-builder, guard check `exploring approved-for-build --workflow tweak`, after → release-archivist (lightweight)
 
-Post-transition: 💡 `npx --yes --package spec-superflow@0.9.0 ssf inject <change-dir>` to update phase-guard artifacts.
+Post-transition: 💡 `npx --yes --package spec-superflow@0.9.1 ssf inject <change-dir>` to update phase-guard artifacts.
 
 ## Staleness Detection
 
@@ -112,7 +112,7 @@ Use content inspection, not timestamps.
 ## Guardrails
 
 - No implementation before planning artifacts or contract exist
-- No implementation for full/hotfix without a current `ssf execution plan`; no state transition based on an unverified DP-4 string
+- No implementation for full/hotfix without a current `npx --yes --package spec-superflow@0.9.1 ssf execution plan`; no state transition based on an unverified DP-4 string
 - No "continue" without state inspection
 - No implementation past stale contract
 - No implementation past bug without investigation
