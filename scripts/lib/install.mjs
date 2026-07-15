@@ -101,8 +101,12 @@ async function copySkillsWithRoot(sourceSkills, targetSkills, pluginRootAbs) {
     let content = readFileSync(filePath, 'utf-8');
     if (content.includes('${CLAUDE_PLUGIN_ROOT}')) {
       content = content.replace(/\$\{CLAUDE_PLUGIN_ROOT\}/g, pluginRootAbs);
-      writeFileSync(filePath, content, 'utf-8');
     }
+    content = content.replace(
+      /npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf/g,
+      `node "${join(pluginRootAbs, 'scripts', 'spec-superflow.mjs')}"`,
+    );
+    writeFileSync(filePath, content, 'utf-8');
   }
 
   for (const name of entries) {

@@ -102,8 +102,12 @@ async function copySkillsWithRoot(sourceSkills, targetSkills, pluginRootAbs) {
       let content = readFileSync(skillMd, 'utf-8');
       if (content.includes('${CLAUDE_PLUGIN_ROOT}')) {
         content = content.replace(/\$\{CLAUDE_PLUGIN_ROOT\}/g, pluginRootAbs);
-        writeFileSync(skillMd, content, 'utf-8');
       }
+      content = content.replace(
+        /npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf/g,
+        `node "${join(pluginRootAbs, 'scripts', 'spec-superflow.mjs')}"`,
+      );
+      writeFileSync(skillMd, content, 'utf-8');
     }
     // Also fix sub-prompt files (implementer-prompt.md, etc.)
     const subFiles = readdirSync(dst).filter(f => f.endsWith('.md') && f !== 'SKILL.md');
@@ -112,8 +116,12 @@ async function copySkillsWithRoot(sourceSkills, targetSkills, pluginRootAbs) {
       let content = readFileSync(subPath, 'utf-8');
       if (content.includes('${CLAUDE_PLUGIN_ROOT}')) {
         content = content.replace(/\$\{CLAUDE_PLUGIN_ROOT\}/g, pluginRootAbs);
-        writeFileSync(subPath, content, 'utf-8');
       }
+      content = content.replace(
+        /npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf/g,
+        `node "${join(pluginRootAbs, 'scripts', 'spec-superflow.mjs')}"`,
+      );
+      writeFileSync(subPath, content, 'utf-8');
     }
   }
 
