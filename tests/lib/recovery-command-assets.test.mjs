@@ -42,4 +42,29 @@ describe('SSF recovery command assets', () => {
     assert.match(content, /信息不足时先询问一次/);
     assert.match(content, /不要编造 verification 或 review 证据/);
   });
+
+  it('never expands raw arguments as shell command input', () => {
+    for (const name of ['resume', 'switch', 'save']) {
+      const content = read(`commands/ssf/${name}.md`);
+
+      assert.doesNotMatch(content, new RegExp(`ssf ${name} \\$ARGUMENTS(?:\\s|\\x60)`));
+    }
+  });
+
+  it('passes resume and switch targets as one quoted literal after validation', () => {
+    for (const name of ['resume', 'switch']) {
+      const content = read(`commands/ssf/${name}.md`);
+
+      assert.match(content, new RegExp(`ssf ${name} --json "\\$ARGUMENTS"`));
+      assert.match(content, /非空/);
+    }
+  });
+
+  it('extracts save fields and quotes each explicit CLI argument', () => {
+    const content = read('commands/ssf/save.md');
+
+    assert.match(content, /提取.*change.*task.*next/s);
+    assert.match(content, /ssf save "<change>" --task "<task-id>" --next "<next-step>".*--json/);
+    assert.doesNotMatch(content, /ssf save \$ARGUMENTS/);
+  });
 });
