@@ -110,19 +110,11 @@ const PHASE_TEMPLATES = {
 
 **当前阶段**: {{state}} | **工作流**: {{workflow}}
 
-## ✅ 允许操作
-- 运行验证（三维验证）
-- 归档变更
-- 合并 delta specs
-
-## ⛔ 禁止操作
-- 修改 execution-contract.md
-- 执行新任务
-- 修改 proposal.md, specs/, design.md
-
-## 🔔 决策点
-- DP-6: 验证失败 — 验证未通过时需用户决定
-- DP-7: 归档确认 — 需用户确认归档`,
+## ⛔ 终止状态
+- 此变更已成功关闭；验证、规范同步和归档确认均已完成
+- 不允许任何进一步操作或状态转换
+- 不得重跑实现、验证、归档或 delta spec 合并
+- 恢复时只报告 CLOSED；next skill 为 none`,
 
   'abandoned': `# Phase Guard: {{change_name}}
 

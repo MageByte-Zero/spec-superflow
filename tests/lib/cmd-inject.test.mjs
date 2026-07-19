@@ -72,10 +72,15 @@ describe('cmd-inject: generatePhaseGuard()', () => {
     assert.ok(result.includes('TDD 修复循环'));
   });
 
-  it('generates closing phase with verification', () => {
+  it('generates closing phase as a successful terminal state', () => {
     const result = generatePhaseGuard({ state: 'closing', change_name: 'test' });
-    assert.ok(result.includes('三维验证'));
-    assert.ok(result.includes('DP-7'));
+    assert.ok(result.includes('已成功关闭'));
+    assert.ok(result.includes('终止状态'));
+    assert.ok(result.includes('不允许任何进一步操作'));
+    assert.ok(!result.includes('三维验证'));
+    assert.ok(!result.includes('DP-6'));
+    assert.ok(!result.includes('DP-7'));
+    assert.ok(!result.includes('合并 delta specs'));
   });
 
   it('generates abandoned terminal state', () => {
