@@ -2,7 +2,7 @@
 // Tests for scripts/lib/cmd-install-workbuddy.mjs
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -125,6 +125,23 @@ describe('cmd-install-workbuddy', () => {
     assert.equal(existsSync(homeDir), false);
   });
 
+  it('rejects symbolic links in the canonical command tree before writing WorkBuddy home', async () => {
+    const pluginRoot = makePluginRoot();
+    const homeDir = join(tempDir, 'symlink-home');
+    const source = join(pluginRoot, 'commands', 'ssf', 'resume.md');
+    symlinkSync(source, join(pluginRoot, 'commands', 'ssf', 'linked-command.md'));
+
+    assert.throws(
+      () => planInstall({ pluginRoot, homeDir }),
+      /symbolic links are not allowed in command source/,
+    );
+    await assert.rejects(
+      installWorkBuddy({ pluginRoot, homeDir, marketplaceName: 'test' }),
+      /symbolic links are not allowed in command source/,
+    );
+    assert.equal(existsSync(homeDir), false);
+  });
+
   it('dry-run reports commands and does not write the requested home directory', () => {
     const pluginRoot = makePluginRoot();
     const homeDir = join(tempDir, 'dry-run-home');
@@ -140,6 +157,20 @@ describe('cmd-install-workbuddy', () => {
     assert.match(stdout, /Commands:\s+3 \(ssf:resume, ssf:save, ssf:switch\)/);
     assert.match(stdout, /Command dir:/);
     assert.equal(existsSync(homeDir), false);
+  });
+
+  it('reports the recursive command file count during installation', () => {
+    const pluginRoot = makePluginRoot();
+    const homeDir = join(tempDir, 'count-home');
+    const cli = join(process.cwd(), 'scripts', 'spec-superflow.mjs');
+    const stdout = execFileSync(process.execPath, [
+      cli,
+      'install-workbuddy',
+      '--local', pluginRoot,
+      '--home', homeDir,
+    ], { encoding: 'utf-8' });
+
+    assert.match(stdout, /commands\/.*\(3 entries, 3 commands\)/);
   });
 
   it('rebuilds the plugin directory so stale commands are removed', async () => {

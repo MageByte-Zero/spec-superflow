@@ -16,7 +16,7 @@
 // ${CLAUDE_PLUGIN_ROOT} rewrite, phase-guard rule) but targets the marketplace
 // plugin structure instead of a project-local `.platform/` directory.
 
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { cp, writeFile, mkdtemp } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
@@ -62,14 +62,27 @@ function walkMarkdown(dir) {
   return readdirSync(dir, { withFileTypes: true })
     .flatMap(entry => {
       const entryPath = join(dir, entry.name);
-      if (entry.isDirectory()) return walkMarkdown(entryPath);
-      return entry.isFile() && entry.name.endsWith('.md') ? [entryPath] : [];
+      const entryStat = lstatSync(entryPath);
+      if (entryStat.isSymbolicLink()) {
+        throw new Error(`symbolic links are not allowed in command source: ${entryPath}`);
+      }
+      if (entryStat.isDirectory()) return walkMarkdown(entryPath);
+      return entryStat.isFile() && entry.name.endsWith('.md') ? [entryPath] : [];
     })
     .sort();
 }
 
 function listCommandNames(commandsDir) {
-  if (!existsSync(commandsDir)) {
+  let commandsStat;
+  try {
+    commandsStat = lstatSync(commandsDir);
+  } catch {
+    throw new Error(`commands/ directory not found at ${commandsDir}`);
+  }
+  if (commandsStat.isSymbolicLink()) {
+    throw new Error(`symbolic links are not allowed in command source: ${commandsDir}`);
+  }
+  if (!commandsStat.isDirectory()) {
     throw new Error(`commands/ directory not found at ${commandsDir}`);
   }
   return walkMarkdown(commandsDir)
@@ -89,21 +102,27 @@ function assertCanonicalCommands(commandNames) {
 }
 
 /** Recursively copy a directory. */
-async function copyDir(src, dst) {
+async function copyDir(src, dst, { rejectSymlinks = false } = {}) {
   if (!existsSync(src)) return 0;
   ensureDir(dst);
   const entries = readdirSync(src);
+  let fileCount = 0;
   for (const name of entries) {
     const srcPath = join(src, name);
     const dstPath = join(dst, name);
-    const st = statSync(srcPath);
+    const sourceStat = lstatSync(srcPath);
+    if (sourceStat.isSymbolicLink() && rejectSymlinks) {
+      throw new Error(`symbolic links are not allowed in command source: ${srcPath}`);
+    }
+    const st = sourceStat.isSymbolicLink() ? statSync(srcPath) : sourceStat;
     if (st.isDirectory()) {
-      await copyDir(srcPath, dstPath);
+      fileCount += await copyDir(srcPath, dstPath, { rejectSymlinks });
     } else {
       await cp(srcPath, dstPath, { force: true });
+      fileCount += 1;
     }
   }
-  return entries.length;
+  return fileCount;
 }
 
 /**
@@ -292,7 +311,7 @@ async function installWorkBuddy({ pluginRoot, homeDir, marketplaceName }) {
   }
 
   // 2. Copy canonical recovery commands as complete Markdown assets.
-  const commandCount = await copyDir(plan.commandsDir, targetCommands);
+  const commandCount = await copyDir(plan.commandsDir, targetCommands, { rejectSymlinks: true });
   console.log(`   commands/ → ${targetCommands} (${commandCount} entries, ${commandNames.length} commands)`);
 
   // 3. Copy skills with ${CLAUDE_PLUGIN_ROOT} rewriting.
