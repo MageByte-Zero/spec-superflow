@@ -197,8 +197,8 @@ AI coding sessions fail in one of two ways:
 | 5 | `build-executor` | Executing | TDD Iron Law + SDD subagent-driven + Review Gates |
 | 6 | `bug-investigator` | Debugging | 4-phase root cause analysis; 3+ failures → escalate |
 | 7 | `code-reviewer` | Review | Structured review with 3-level severity classification |
-| 8 | `release-archivist` | Closing | Verification-before-completion + archive + risk summary |
-| 9 | `spec-merger` | Syncing | Delta spec → main spec merge with conflict detection |
+| 8 | `release-archivist` | Pre-closing within executing | Verification-before-completion + archive + risk summary |
+| 9 | `spec-merger` | Pre-closing within executing | Delta spec → main spec merge with conflict detection |
 
 ---
 
@@ -223,10 +223,12 @@ You: "add authorization to the API"
    executing          build-executor: TDD → SDD → Review Gate
        │
        ├──[bug]──→ debugging  → bug-investigator
+       │
        ▼
-   closing            release-archivist: verify + archive
+   pre-closing (a wrap-up step within executing, not a ninth state)
+       │ release-archivist verifies → spec-merger sync → archive confirmation
        ▼
-   syncing            spec-merger (delta specs → main specs)
+   closing            CLOSED successful terminal state (no next skill)
 ```
 
 **Hard constraints:** No `execution-contract.md` or no approval → implementation blocked. Requirements change mid-execution → forced rollback. Bug encountered → must enter debugging state, no ad-hoc fixes.

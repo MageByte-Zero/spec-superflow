@@ -85,4 +85,48 @@ describe('closing terminal lifecycle', () => {
     assert.match(closing, /successful terminal/i);
     assert.doesNotMatch(closing, /release-archivist.*active/i);
   });
+
+  it('documents pre-closing work before the terminal closing state', () => {
+    const chineseReadme = read('README.md');
+    const englishReadme = read('docs/README_en.md');
+    const chineseWorkflow = section(chineseReadme, '## 工作流');
+    const englishWorkflow = section(englishReadme, '## Workflow');
+
+    assert.match(chineseReadme,
+      /\| 8 \| `release-archivist` \| 执行内收尾 \|/);
+    assert.doesNotMatch(chineseReadme,
+      /\| 8 \| `release-archivist` \| 收口 \|/);
+    assert.match(englishReadme,
+      /\| 8 \| `release-archivist` \| Pre-closing within executing \|/);
+    assert.doesNotMatch(englishReadme,
+      /\| 8 \| `release-archivist` \| Closing \|/);
+
+    for (const [name, workflow, archivist, merger, archive] of [
+      ['Chinese README', chineseWorkflow, 'release-archivist 验证', 'spec-merger 同步', '归档确认'],
+      ['English README', englishWorkflow, 'release-archivist verifies', 'spec-merger sync', 'archive confirmation'],
+    ]) {
+      const archivistIndex = workflow.indexOf(archivist);
+      const mergerIndex = workflow.indexOf(merger);
+      const archiveIndex = workflow.indexOf(archive);
+      const closingIndex = workflow.indexOf('\n   closing');
+
+      assert.ok(archivistIndex !== -1 && archivistIndex < mergerIndex,
+        `${name} must describe release-archivist verification before spec sync`);
+      assert.ok(mergerIndex < archiveIndex && archiveIndex < closingIndex,
+        `${name} must describe spec sync and archive confirmation before closing`);
+      assert.doesNotMatch(workflow, /^\s*closing\s+.*release-archivist/im,
+        `${name} must not place release-archivist in closing`);
+      assert.match(workflow, /closing.*(?:CLOSED|terminal|终态)/i,
+        `${name} must describe closing as terminal`);
+    }
+  });
+
+  it('records the #64 terminal closing repair in the unreleased changelog', () => {
+    const changelog = read('CHANGELOG.md');
+    const unreleased = section(changelog, '## [Unreleased]');
+
+    assert.match(unreleased, /#64/);
+    assert.match(unreleased, /closing/i);
+    assert.match(unreleased, /终态/);
+  });
 });

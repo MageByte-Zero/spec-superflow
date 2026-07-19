@@ -6,6 +6,10 @@ The format loosely follows Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixed
+
+- **#64 — closing 终态生命周期对齐**：将 `release-archivist` 验证、`spec-merger` 同步和归档确认明确为 `executing` 内的 pre-closing 收尾步骤；`closing` 是 `CLOSED` 成功终态，且没有 next skill。
+
 ## [0.10.0] - 2026-07-16
 
 ### Added

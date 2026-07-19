@@ -276,8 +276,8 @@ command 尚未实现，不能据此假定存在 `/ssf:*` 命令。
 | 5 | `build-executor` | 执行 | TDD 铁律 + SDD 子代理驱动 + Review Gate |
 | 6 | `bug-investigator` | 调试 | 4 阶段根因分析，3+ 修复失败 → 质疑架构 |
 | 7 | `code-reviewer` | 审查 | 结构化审查，三级问题分级 |
-| 8 | `release-archivist` | 收口 | 验证前完成铁律 + 归档 + 风险总结 |
-| 9 | `spec-merger` | 同步 | Delta Spec → 主规范智能合并 |
+| 8 | `release-archivist` | 执行内收尾 | 验证前完成铁律 + 归档 + 风险总结 |
+| 9 | `spec-merger` | 执行内收尾 | Delta Spec → 主规范智能合并 |
 
 ---
 
@@ -302,10 +302,12 @@ command 尚未实现，不能据此假定存在 `/ssf:*` 命令。
    executing          build-executor: TDD → SDD → Review Gate
        │
        ├──[bug]──→ debugging  → bug-investigator
+       │
        ▼
-   closing            release-archivist 验证 + 归档
+   pre-closing（仍属于 executing 的收尾步骤，不是新增状态）
+       │ release-archivist 验证 → spec-merger 同步 → 归档确认
        ▼
-   syncing            spec-merger（delta spec → 主规范）
+   closing            CLOSED 成功终态（无 next skill）
 ```
 
 **关键约束：** 没有 `execution-contract.md` 或未被批准 → 不允许实现；full/hotfix 没有 current execution plan、或任一 wave 缺少 `pass` review receipt → 不允许推进；需求变更 → 强制回退；遇到 bug → 强制走 debugging，不允许"随便试试"。
