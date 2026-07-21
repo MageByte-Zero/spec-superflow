@@ -46,7 +46,9 @@ export async function run(args) {
   if (!['recommend', 'select', 'show'].includes(subcommand)) {
     return fail('Usage: ssf workflow <recommend|select|show> <change-dir>', 2);
   }
-  if (!changeDir) return fail('Usage: ssf workflow <recommend|select|show> <change-dir>', 2);
+  if (positionals.length !== 2 || !changeDir) {
+    return fail('Usage: ssf workflow <recommend|select|show> <change-dir>', 2);
+  }
 
   try {
     requireStateFile(changeDir);
@@ -134,7 +136,11 @@ function factsFrom(values) {
 function parseCount(value, name) {
   if (value === undefined) return null;
   if (!/^\d+$/.test(value)) throw new UsageError(`${name} must be a non-negative integer`);
-  return Number.parseInt(value, 10);
+  const count = Number.parseInt(value, 10);
+  if (!Number.isSafeInteger(count) || count < 0) {
+    throw new UsageError(`${name} must be a non-negative integer`);
+  }
+  return count;
 }
 
 function parseFact(value, name) {
@@ -169,6 +175,18 @@ function print(value, json) {
 function format(value) {
   if (value.status === 'needs-input') {
     return `More workflow facts are required: ${value.missing_facts.join(', ')}`;
+  }
+  if (value.status === 'ready') {
+    const record = value.record ?? value;
+    const observed = Object.entries(record.facts)
+      .map(([name, fact]) => `${name}=${fact}`)
+      .join(', ');
+    return [
+      `Observed: ${observed}`,
+      `Available: ${record.available_modes.join(', ')}`,
+      `Recommended: ${record.recommendation.mode}`,
+      `Why: ${record.recommendation.reasons.join(' ')}`,
+    ].join('\n');
   }
   if (value.status) return `Workflow status: ${value.status}.`;
   if (value.source === 'explicit-state') return `Workflow is explicitly set to ${value.workflow}.`;

@@ -37,6 +37,20 @@ function writeState(contents = 'state: exploring\nworkflow: auto\n') {
   writeFileSync(join(changeDir, '.spec-superflow.yaml'), contents);
 }
 
+function snapshotWorkflowFiles() {
+  const receiptPath = getOverlayPaths(changeDir).workflowSelection;
+  return {
+    state: readFileSync(join(changeDir, '.spec-superflow.yaml'), 'utf8'),
+    receipt: existsSync(receiptPath) ? readFileSync(receiptPath, 'utf8') : null,
+  };
+}
+
+function assertWorkflowFilesUnchanged(before) {
+  assert.equal(readFileSync(join(changeDir, '.spec-superflow.yaml'), 'utf8'), before.state);
+  const receiptPath = getOverlayPaths(changeDir).workflowSelection;
+  assert.equal(existsSync(receiptPath) ? readFileSync(receiptPath, 'utf8') : null, before.receipt);
+}
+
 function recommend(args = []) {
   return runSsf(['workflow', 'recommend', changeDir,
     '--task-count', '2', '--file-count', '2', '--config-doc-only', 'no',
@@ -60,11 +74,37 @@ describe('ssf workflow', () => {
     assert.equal(recommended.json.recommendation.mode, 'hotfix');
     assert.equal(readState(changeDir).workflow, 'auto');
 
+    const beforeUnconfirmed = snapshotWorkflowFiles();
+    const unconfirmed = runSsf(['workflow', 'select', changeDir, '--mode', 'hotfix',
+      '--reason', 'bounded code fix', '--json']);
+    assert.equal(unconfirmed.exitCode, 1);
+    assert.match(unconfirmed.stderr, /confirm/i);
+    assertWorkflowFilesUnchanged(beforeUnconfirmed);
+    assert.equal(readState(changeDir).dp_0_decisions, null);
+
     const selected = runSsf(['workflow', 'select', changeDir, '--mode', 'hotfix',
       '--confirm', '--reason', 'bounded code fix', '--json']);
     assert.equal(selected.exitCode, 0, selected.stderr);
     assert.equal(readState(changeDir).workflow, 'hotfix');
     assert.match(readState(changeDir).dp_0_decisions, /workflow_path=hotfix/);
+  });
+
+  it('shows complete ready recommendations in human-readable recommend and show output', () => {
+    const recommended = runSsf(['workflow', 'recommend', changeDir,
+      '--task-count', '2', '--file-count', '2', '--config-doc-only', 'no',
+      '--schema-api-change', 'no', '--new-module', 'no', '--uncertainty', 'low']);
+    assert.equal(recommended.exitCode, 0, recommended.stderr);
+    assert.match(recommended.stdout, /Observed:/);
+    assert.match(recommended.stdout, /Available:.*full.*hotfix.*tweak/);
+    assert.match(recommended.stdout, /Recommended: hotfix/);
+    assert.match(recommended.stdout, /Why:.*bounded code work/i);
+
+    const shown = runSsf(['workflow', 'show', changeDir]);
+    assert.equal(shown.exitCode, 0, shown.stderr);
+    assert.match(shown.stdout, /Observed:/);
+    assert.match(shown.stdout, /Available:.*full.*hotfix.*tweak/);
+    assert.match(shown.stdout, /Recommended: hotfix/);
+    assert.match(shown.stdout, /Why:.*bounded code work/i);
   });
 
   it('returns needs-input without changing auto workflow', () => {
@@ -103,6 +143,22 @@ describe('ssf workflow', () => {
     assert.equal(result.exitCode, 0, result.stderr);
     assert.equal(result.json.source, 'explicit-state');
     assert.equal(result.json.workflow, 'full');
+  });
+
+  it('rejects selection from a tampered receipt without mutating receipt or state', () => {
+    assert.equal(recommend().exitCode, 0);
+    const receiptPath = getOverlayPaths(changeDir).workflowSelection;
+    const tampered = JSON.parse(readFileSync(receiptPath, 'utf8'));
+    tampered.facts.file_count = 99;
+    writeFileSync(receiptPath, JSON.stringify(tampered));
+    const before = snapshotWorkflowFiles();
+
+    const result = runSsf(['workflow', 'select', changeDir, '--mode', 'hotfix',
+      '--confirm', '--reason', 'bounded code fix', '--json']);
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /hash mismatch/i);
+    assertWorkflowFilesUnchanged(before);
+    assert.equal(readState(changeDir).dp_0_decisions, null);
   });
 
   it('requires acknowledgement before accepting a non-recommended selection', () => {
@@ -178,6 +234,33 @@ describe('ssf workflow', () => {
       assert.equal(result.exitCode, 2, `${args.join(' ')}: ${result.stderr}`);
     }
     assert.equal(existsSync(getOverlayPaths(changeDir).workflowSelection), false);
+  });
+
+  it('rejects unsafe and overflowing counts without mutating receipt or state', () => {
+    assert.equal(recommend().exitCode, 0);
+    for (const count of ['9007199254740992', '9'.repeat(400)]) {
+      const before = snapshotWorkflowFiles();
+      const result = recommend(['--task-count', count]);
+      assert.equal(result.exitCode, 2, `${count}: ${result.stderr}`);
+      assert.match(result.stderr, /non-negative integer/i);
+      assertWorkflowFilesUnchanged(before);
+    }
+  });
+
+  it('rejects extra positionals without mutating receipt or state', () => {
+    let before = snapshotWorkflowFiles();
+    const malformedRecommend = runSsf(['workflow', 'recommend', changeDir, 'extra',
+      '--task-count', '2', '--file-count', '2', '--config-doc-only', 'no',
+      '--schema-api-change', 'no', '--new-module', 'no', '--uncertainty', 'low']);
+    assert.equal(malformedRecommend.exitCode, 2, malformedRecommend.stderr);
+    assertWorkflowFilesUnchanged(before);
+
+    assert.equal(recommend().exitCode, 0);
+    before = snapshotWorkflowFiles();
+    const malformedSelect = runSsf(['workflow', 'select', changeDir, '--mode', 'hotfix',
+      '--confirm', '--reason', 'bounded', 'code', 'fix', '--json']);
+    assert.equal(malformedSelect.exitCode, 2, malformedSelect.stderr);
+    assertWorkflowFilesUnchanged(before);
   });
 
   it('preserves scope and artifact language while replacing the workflow summary idempotently', () => {
