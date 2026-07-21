@@ -44,6 +44,25 @@ Run DP-0 when: change folder doesn't exist, planning artifacts missing/empty, or
 
 Ask: change name + one-sentence intent, known constraints, related optimizations (include or stay focused?), communication preference (ask per decision or draft for review).
 
+### Artifact Language Resolution
+
+Before the first planning artifact is generated, resolve one concrete artifact
+language in this priority order:
+
+1. explicit user language
+2. the conversation's primary language
+3. an explicit non-`auto` `execution.defaultLanguage`
+4. the primary language of existing planning artifacts in the current change
+5. the primary language of the project templates
+
+Treat `execution.defaultLanguage: auto` as a request to continue resolving, not
+as a language. Append `artifact_language=<concrete-language>` to
+`dp_0_decisions`, preserving its existing scope and constraint summary. Never
+persist `auto` as the resolved artifact language. If DP-0 was already confirmed
+but this field is absent, resolve and append it before routing to `spec-writer`.
+All later planning skills reuse this field so one change does not switch
+languages without an explicit user request.
+
 After confirmation:
 ```bash
 npx --yes --package spec-superflow@0.10.0 ssf state set <change-dir> dp_0_decisions "<summary>"
@@ -52,7 +71,8 @@ npx --yes --package spec-superflow@0.10.0 ssf state set <change-dir> dp_0_confir
 npx --yes --package spec-superflow@0.10.0 ssf state set <change-dir> dp_0_timestamp $(date -u +%Y-%m-%dT%H:%M:%SZ)
 ```
 
-Config-aware routing: check `artifacts.order` and `artifacts.skip` from project config.
+Config-aware routing: check `artifacts.order`, `artifacts.skip`, and
+`execution.defaultLanguage` from project config.
 
 ## Mode Detection
 

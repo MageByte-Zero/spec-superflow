@@ -7,7 +7,19 @@ description: Convert approved planning artifacts into an execution contract. Inv
 
 Converts planning artifacts into a single execution handshake: `execution-contract.md`. Load the baseline with `npx --yes --package spec-superflow@0.10.0 ssf runtime asset read templates/execution-contract.md`.
 
-Read before generating: `proposal.md`, `specs/`, `design.md`, `tasks.md`, then load `docs/artifact-contract.md` with `npx --yes --package spec-superflow@0.10.0 ssf runtime asset read docs/artifact-contract.md`.
+Read before generating: `.spec-superflow.yaml` (especially `dp_0_decisions`),
+`proposal.md`, `specs/`, `design.md`, `tasks.md`, then load
+`docs/artifact-contract.md` with `npx --yes --package spec-superflow@0.10.0 ssf runtime asset read docs/artifact-contract.md`.
+
+## Artifact Language
+
+Read `artifact_language=<concrete-language>` from `dp_0_decisions`. Generate
+`execution-contract.md` in the same language as that resolved value and the
+approved planning artifacts. Preserve required schema keywords and code
+identifiers verbatim; language consistency applies to explanatory prose and
+headings. If the concrete artifact language is missing or still `auto`, route
+back to `workflow-start` before writing the contract instead of guessing or
+silently defaulting to English.
 
 ## Artifact Mapping
 
