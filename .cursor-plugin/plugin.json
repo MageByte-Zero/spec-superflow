@@ -2,7 +2,7 @@
   "name": "spec-superflow",
   "displayName": "spec-superflow",
   "description": "Spec-first workflow: integrates OpenSpec planning engine + Superpowers execution discipline. 9 collaborative skills with embedded TDD, SDD, code review, debugging, and delta spec sync.",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "author": {
     "name": "MageByte",
     "url": "https://github.com/MageByte-Zero"

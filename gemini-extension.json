@@ -1,6 +1,6 @@
 {
   "name": "spec-superflow",
   "description": "Spec-first workflow plugin: clarified requirements → execution contract → disciplined implementation",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "contextFileName": "GEMINI.md"
 }
