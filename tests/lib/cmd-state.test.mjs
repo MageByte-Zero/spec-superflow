@@ -170,6 +170,20 @@ describe('cmd-state: transition', () => {
     assert.equal(check.stdout.trim(), 'exploring');
   });
 
+  it('accepts a direct quick receipt through the no-contract transition path', () => {
+    rmSync(join(tempDir, '.spec-superflow.yaml'), { force: true });
+    ssf(`state init ${tempDir}`);
+    const recommendation = ssf(`workflow recommend ${tempDir} --task-count 3 --file-count 3 --config-doc-only no --schema-api-change no --new-module no --uncertainty low`);
+    assert.equal(recommendation.exitCode, 0, recommendation.stderr);
+    const acceptance = ssf(`workflow accept ${tempDir} --source direct-request`);
+    assert.equal(acceptance.exitCode, 0, acceptance.stderr);
+
+    const approved = ssf(`state transition ${tempDir} approved-for-build`);
+    assert.equal(approved.exitCode, 0, approved.stderr);
+    const executing = ssf(`state transition ${tempDir} executing`);
+    assert.equal(executing.exitCode, 0, executing.stderr);
+  });
+
   it('rejects transition when guard output is not valid JSON', () => {
     rmSync(join(tempDir, '.spec-superflow.yaml'), { force: true });
     ssf(`state init ${tempDir}`);

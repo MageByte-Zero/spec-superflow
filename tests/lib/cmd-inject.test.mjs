@@ -59,6 +59,16 @@ describe('cmd-inject: generatePhaseGuard()', () => {
     assert.match(result, /不得开始实现/);
   });
 
+  it('generates a quick phase guard without plan, review, or DP approval language', () => {
+    const approved = generatePhaseGuard({ state: 'approved-for-build', workflow: 'quick', change_name: 'test' });
+    assert.match(approved, /direct receipt/i);
+    assert.match(approved, /不得要求 execution plan、wave review 或 DP-4/i);
+
+    const executing = generatePhaseGuard({ state: 'executing', workflow: 'quick', change_name: 'test' });
+    assert.match(executing, /定向测试/i);
+    assert.doesNotMatch(executing, /execution-contract\.md/);
+  });
+
   it('generates executing phase with test prohibition', () => {
     const result = generatePhaseGuard({ state: 'executing', change_name: 'test' });
     assert.ok(result.includes('跳过测试'));

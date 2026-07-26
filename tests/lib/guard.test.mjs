@@ -6,6 +6,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, rmSync, symlinkSyn
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
+import { acceptWorkflowRecommendation, saveWorkflowRecommendation } from '../../scripts/lib/workflow-recommendation.mjs';
 
 let tempDir;
 let gitRefs;
@@ -173,6 +174,73 @@ describe('guard: workflow mode behavior', () => {
   it('invalid workflow mode exits with error', () => {
     const result = runGuardWithMode('exploring', 'specifying', 'invalid-mode');
     assert.equal(result.exitCode, 2);
+  });
+});
+
+describe('guard: direct short paths', () => {
+  let dir;
+
+  before(() => {
+    dir = mkdtempSync(join(tmpdir(), 'ssf-direct-short-path-'));
+  });
+
+  after(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  });
+
+  function createDirectReceipt(workflow) {
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '.spec-superflow.yaml'), `state: exploring\nworkflow: ${workflow}\n`);
+    saveWorkflowRecommendation(dir, {
+      task_count: workflow === 'hotfix' ? 2 : 3,
+      file_count: workflow === 'hotfix' ? 2 : 3,
+      config_doc_only: 'no',
+      schema_api_change: 'no',
+      new_module: 'no',
+      uncertainty: 'low',
+      request_kind: workflow === 'hotfix' ? 'incident' : 'standard',
+    });
+    acceptWorkflowRecommendation(dir, { source: 'direct-request' });
+  }
+
+  function run(fromState, toState, workflow) {
+    try {
+      const stdout = runNodeScript(GUARD_PATH, ['check', dir, fromState, toState, '--json', '--workflow', workflow]);
+      return { exitCode: 0, output: JSON.parse(stdout.trim()) };
+    } catch (error) {
+      return { exitCode: error.status ?? 1, output: JSON.parse(error.stdout.toString().trim()) };
+    }
+  }
+
+  it('allows a direct quick path without planning artifacts or an execution plan', () => {
+    createDirectReceipt('quick');
+    let result = run('exploring', 'approved-for-build', 'quick');
+    assert.equal(result.exitCode, 0, JSON.stringify(result.output));
+    assert.deepEqual(result.output.checks.map(check => check.dimension), ['direct-short-path']);
+
+    result = run('approved-for-build', 'executing', 'quick');
+    assert.equal(result.exitCode, 0, JSON.stringify(result.output));
+    assert.deepEqual(result.output.checks.map(check => check.dimension), ['direct-short-path']);
+
+    writeFileSync(join(dir, '.spec-superflow.yaml'), 'state: executing\nworkflow: quick\ntest_result: pass: focused test\n');
+    result = run('executing', 'closing', 'quick');
+    assert.equal(result.exitCode, 0, JSON.stringify(result.output));
+    assert.deepEqual(result.output.checks.map(check => check.dimension), ['direct-short-path', 'tests-passing']);
+  });
+
+  it('allows only an incident-backed direct hotfix and keeps legacy hotfix guarded', () => {
+    createDirectReceipt('hotfix');
+    const direct = run('exploring', 'approved-for-build', 'hotfix');
+    assert.equal(direct.exitCode, 0, JSON.stringify(direct.output));
+    assert.deepEqual(direct.output.checks.map(check => check.dimension), ['direct-short-path']);
+
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '.spec-superflow.yaml'), 'state: exploring\nworkflow: hotfix\n');
+    const legacy = run('exploring', 'approved-for-build', 'hotfix');
+    assert.equal(legacy.exitCode, 1);
+    assert.match(legacy.output.checks[0].failures.join(' '), /direct receipt/i);
   });
 });
 
@@ -391,14 +459,14 @@ describe('guard: execution control records', () => {
     assert.match(planCheck.failures.join('\n'), /plan.*missing|execution plan/i);
   });
 
-  it('keeps a debugging return in tweak workflow limited to contract freshness', () => {
+  it('keeps a debugging return in tweak workflow free of contract checks', () => {
     prepareFreshFullState();
     setStateField('workflow', 'tweak');
 
     const result = run('debugging', 'executing', 'tweak');
 
     assert.equal(result.exitCode, 0, JSON.stringify(result.output));
-    assert.deepEqual(result.output.checks.map(check => check.dimension), ['contract-fresh']);
+    assert.deepEqual(result.output.checks, []);
   });
 
   it('rejects a debugging return when the execution plan is stale', () => {

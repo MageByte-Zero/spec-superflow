@@ -126,6 +126,46 @@ const PHASE_TEMPLATES = {
 - 不得从 abandoned 状态转换`,
 };
 
+const SHORT_PATH_TEMPLATES = {
+  'approved-for-build': `# Phase Guard: {{change_name}}
+
+**当前阶段**: {{state}} | **工作流**: {{workflow}}
+
+## ✅ 允许操作
+- 确认 {{authorization}}
+- 立即开始边界内实现
+
+## ⛔ 禁止操作
+- 不得要求 execution plan、wave review 或 DP-4
+- 发现第 4 个文件、接口/权限/依赖/数据迁移、新模块、高不确定性或验证失败时，停止并升级到 Full
+
+## 🔔 验证要求
+- 保持改动在已推荐的文件与任务边界内`,
+
+  'executing': `# Phase Guard: {{change_name}}
+
+**当前阶段**: {{state}} | **工作流**: {{workflow}}
+
+## ✅ 允许操作
+- 完成边界内实现并运行{{verification}}
+- 记录改动文件、验证命令与结果
+
+## ⛔ 禁止操作
+- 不得要求 execution plan、wave review、DP-6 或 DP-7
+- 不得扩大范围；触发升级条件时停止并改走 Full`,
+
+  'closing': `# Phase Guard: {{change_name}}
+
+**当前阶段**: {{state}} | **工作流**: {{workflow}}
+
+## ✅ 收口要求
+- 持久化 test_result: pass，并交付简短验证摘要（文件、命令、结果）
+
+## ⛔ 禁止操作
+- 不得要求 execution plan、wave review、DP-6 或 DP-7
+- 此变更关闭后不得继续实现`,
+};
+
 const SUPPORTED_PLATFORMS = ['claude', 'cursor', 'copilot', 'gemini'];
 const PHASE_GUARD_MARKERS = {
   start: '\n\n<!-- spec-superflow-phase-guard-start -->\n',
@@ -137,11 +177,21 @@ function unique(values) {
 }
 
 function generatePhaseGuard(state) {
-  const template = PHASE_TEMPLATES[state.state] || PHASE_TEMPLATES['exploring'];
+  const workflow = state.workflow || 'full';
+  const isShortPath = ['quick', 'hotfix', 'tweak'].includes(workflow);
+  const template = isShortPath && SHORT_PATH_TEMPLATES[state.state]
+    ? SHORT_PATH_TEMPLATES[state.state]
+    : (PHASE_TEMPLATES[state.state] || PHASE_TEMPLATES.exploring);
+  const authorization = workflow === 'tweak'
+    ? '已选择的 Tweak 路径'
+    : 'valid direct receipt（direct receipt）';
+  const verification = workflow === 'hotfix' ? '原症状回归验证' : '定向测试或语法/静态检查';
   return template
     .replace(/\{\{change_name\}\}/g, state.change_name || 'unknown')
     .replace(/\{\{state\}\}/g, state.state || 'exploring')
-    .replace(/\{\{workflow\}\}/g, state.workflow || 'full');
+    .replace(/\{\{workflow\}\}/g, workflow)
+    .replace(/\{\{authorization\}\}/g, authorization)
+    .replace(/\{\{verification\}\}/g, verification);
 }
 
 function toCursorMdc(base) {
