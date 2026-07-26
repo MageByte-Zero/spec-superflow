@@ -30,6 +30,15 @@ function skill(name) {
 }
 
 describe('canonical skill runtime protocol', () => {
+  it('publishes four-mode direct-path rules in generated Cursor and ZCODE assets', () => {
+    for (const path of ['scripts/install-cursor.mjs', 'scripts/install-zcode.mjs']) {
+      const content = readFileSync(join(ROOT, path), 'utf8');
+      assert.match(content, /Quick、direct Hotfix、tweak/);
+      assert.match(content, /Full 或 legacy Hotfix/);
+      assert.match(content, /test_result: pass/);
+    }
+  });
+
   it('uses the exact package-version prefix for every runtime-dependent skill', () => {
     for (const name of RUNTIME_SKILLS) {
       const content = skill(name);

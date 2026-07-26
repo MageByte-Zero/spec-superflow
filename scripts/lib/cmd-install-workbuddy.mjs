@@ -235,10 +235,10 @@ function phaseGuardContent() {
 
 ## 全局禁止
 
-- 没有 execution-contract.md 或未经用户明确批准，不得进入实现。
-- full/hotfix 必须先运行 ssf execution plan <change-dir> ...；没有 current execution plan 不得开始实现。
-- 只有 all pass review receipts 后才可 closing；不得把未审查的 wave 当作完成。
-- 上述 plan/receipt gates 仅适用于 full/hotfix；tweak 免除这些 gates (tweak exempt)。
+- Full 或 legacy Hotfix 没有 execution-contract.md 或未经用户明确批准，不得进入实现。
+- Full 或 legacy Hotfix 必须先运行 ssf execution plan <change-dir> ...；没有 current execution plan 不得开始实现。
+- 只有 Full/legacy Hotfix 的 all pass review receipts 后才可 closing；不得把未审查的 wave 当作完成。
+- Quick、direct Hotfix、tweak 不要求 contract、execution plan、review receipt 或 DP-3/DP-4；它们须在边界内验证并持久化 test_result: pass。direct Hotfix 必须验证原症状回归。
 - 执行过程中如果发现需求/范围变化，必须回退到 specifying 或 bridging，而不是直接改代码。
 - 不要直接调用执行类 skill（如 "/build-executor"），必须通过入口路由。
 
@@ -247,8 +247,7 @@ function phaseGuardContent() {
 - DP-0：设计前确认
 - DP-1：需求确认
 - DP-2：工件审查
-- DP-3：是否批准 execution contract？
-- DP-4：先运行 ssf execution recommend，展示可用模式与推荐；用户用 --confirm 确认，非推荐选择额外使用 --acknowledge-recommendation
+- DP-3/DP-4：仅 Full 或 legacy Hotfix 需要 contract 批准与执行模式确认。
 - DP-5：调试升级
 - DP-6：验证失败
 - DP-7：是否收口归档？

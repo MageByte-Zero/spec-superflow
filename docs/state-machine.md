@@ -14,7 +14,7 @@
 #### Workflow Path Intake
 
 At entry, `workflow-start` reads the persisted `workflow` selection first. An
-explicit `full`, `hotfix`, or `tweak` selection wins. Otherwise it runs `ssf
+explicit `full`, `hotfix`, `tweak`, or `quick` selection wins. Otherwise it runs `ssf
 workflow show`, asks only for `missing_facts`, runs `ssf workflow recommend`,
 and presents Observed, Available, Recommended, and Why. Recommendation does
 not change state or select a path: only an explicit `ssf workflow select
@@ -47,13 +47,11 @@ selection creates a ninth state or performs a phase transition.
 - ambiguity is compressed into explicit approved decisions
 - `contract-builder` is active
 - parsing engine auto-extracts intent/scope/test-obligations/constraints/batches
-- hotfix also passes through this state with a fresh minimal contract and DP-3 approval before build
+- legacy Hotfix passes through this state with a fresh minimal contract and DP-3 approval; direct Hotfix does not
 
 ### `approved-for-build`
 
-- the execution contract exists
-- the user has approved it
-- full/hotfix still require a current execution plan before implementation can begin
+- Full/legacy Hotfix have an approved execution contract and current plan; Quick/direct Hotfix/Tweak use their receipt-aware short path
 
 ### `executing`
 
@@ -65,7 +63,7 @@ selection creates a ninth state or performs a phase transition.
 
 ## Execution Plan Control Plane
 
-For full/hotfix, DP-4 is the persisted execution plan created by `ssf execution
+For Full/legacy Hotfix, DP-4 is the persisted execution plan created by `ssf execution
 plan` at `<change>/.superpowers/sdd/execution-plan.json`, not an arbitrary
 state value or content stored in `execution-contract.md`. Before planning, run
 `ssf execution recommend`; it lists applicable `inline`, `batch-inline`, and
@@ -75,7 +73,7 @@ accept only a receipt whose artifacts, contract, and waves still match. The user
 selected mode with `--confirm`; a non-recommended selection also requires
 `--acknowledge-recommendation`. Batch Inline remains serial and is never a
 substitute for parallel execution.
-`tweak` is exempt from execution-plan and review-receipt requirements.
+Quick, direct Hotfix, and Tweak are exempt from execution-plan and review-receipt requirements; each closes only with `test_result: pass`.
 
 The plan names ordered execution waves, dependencies, and parallel/serial
 strategy. `ssf execution show <change-dir> --json` reports which current waves
@@ -191,7 +189,6 @@ If the contract changed, the artifacts changed.
 
 ## Fast-Path Notes
 
-- `hotfix` follows `exploring -> bridging -> approved-for-build -> executing`.
-- `hotfix` may skip full planning artifacts such as `proposal.md`, `design.md`, `tasks.md`, and `specs/`.
-- `hotfix` still requires a fresh minimal `execution-contract.md` and explicit DP-3 approval before implementation.
-- `tweak` remains the only path that can jump directly from `exploring` to `approved-for-build`.
+- **direct Hotfix** (incident, ≤2 files/tasks) and **Quick** (≤3 files/tasks) follow `exploring -> approved-for-build -> executing` with a valid direct receipt; no artifacts, contract, plan, review receipt, or DP approval. Direct Hotfix proves the original symptom; Quick runs focused verification.
+- **legacy Hotfix** follows `exploring -> bridging -> approved-for-build -> executing` and retains its minimal contract and DP-3.
+- **Tweak** (≤4 configuration/doc files) also jumps directly from `exploring` to `approved-for-build`.
