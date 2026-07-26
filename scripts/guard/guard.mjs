@@ -13,7 +13,7 @@ import { checkDp3Approved } from './checks/dp3-approved.mjs';
 import { checkExecutionPlanReady } from './checks/execution-plan-ready.mjs';
 import { checkExecutionReviewsPassed } from './checks/execution-reviews-passed.mjs';
 import { readState } from '../lib/state-loader.mjs';
-import { readWorkflowSelection } from '../lib/workflow-recommendation.mjs';
+import { isDirectWorkflowReceipt, readWorkflowSelection } from '../lib/workflow-recommendation.mjs';
 
 // Transition matrix: <from>:<to> → required check dimensions
 const TRANSITION_CHECKS = {
@@ -67,7 +67,7 @@ const WORKFLOW_TRANSITION_CHECKS = {
 const DIRECT_SHORT_PATH_CHECKS = {
   'exploring:approved-for-build': ['direct-short-path'],
   'approved-for-build:executing': ['direct-short-path'],
-  'executing:closing': ['direct-short-path', 'tests-passing'],
+  'executing:closing': ['direct-short-path', 'direct-test-result'],
   'debugging:executing': ['direct-short-path'],
 };
 
@@ -101,12 +101,7 @@ function resolveDimensions(key, workflow, directShortPath) {
 }
 
 export function isDirectShortPath(record, state) {
-  const selection = record?.selection;
-  const mode = selection?.mode;
-  if (!['quick', 'hotfix'].includes(mode) || state?.workflow !== mode) return false;
-  if (record?.status !== 'ready' || record?.recommendation?.mode !== mode) return false;
-  if (selection.accepted_automatically !== true || selection.source !== 'direct-request') return false;
-  return mode !== 'hotfix' || record?.facts?.request_kind === 'incident';
+  return isDirectWorkflowReceipt(record, state);
 }
 
 function directShortPathCheck(changeDir, workflow) {
@@ -119,6 +114,17 @@ function directShortPathCheck(changeDir, workflow) {
     };
   }
   return { pass: true, failures: [] };
+}
+
+function directTestResultCheck(changeDir) {
+  const testResult = readState(changeDir).test_result;
+  if (typeof testResult === 'string' && testResult.trim().toLowerCase().startsWith('pass')) {
+    return { pass: true, failures: [] };
+  }
+  return {
+    pass: false,
+    failures: ['direct short-path closing requires test_result starting with pass; DP-6 is not a substitute'],
+  };
 }
 
 async function main() {
@@ -200,6 +206,7 @@ async function main() {
     'execution-plan-ready': (dir) => checkExecutionPlanReady(dir),
     'execution-reviews-passed': (dir) => checkExecutionReviewsPassed(dir),
     'direct-short-path': (dir) => directShortPathCheck(dir, workflow),
+    'direct-test-result': (dir) => directTestResultCheck(dir),
   };
 
   const checks = [];

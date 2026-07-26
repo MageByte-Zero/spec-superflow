@@ -226,7 +226,12 @@ describe('guard: direct short paths', () => {
     writeFileSync(join(dir, '.spec-superflow.yaml'), 'state: executing\nworkflow: quick\ntest_result: pass: focused test\n');
     result = run('executing', 'closing', 'quick');
     assert.equal(result.exitCode, 0, JSON.stringify(result.output));
-    assert.deepEqual(result.output.checks.map(check => check.dimension), ['direct-short-path', 'tests-passing']);
+    assert.deepEqual(result.output.checks.map(check => check.dimension), ['direct-short-path', 'direct-test-result']);
+
+    writeFileSync(join(dir, '.spec-superflow.yaml'), 'state: executing\nworkflow: quick\ndp_6_result: pass: insufficient for direct closing\n');
+    result = run('executing', 'closing', 'quick');
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.output.checks.find(check => check.dimension === 'direct-test-result').pass, false);
   });
 
   it('allows only an incident-backed direct hotfix and keeps legacy hotfix guarded', () => {

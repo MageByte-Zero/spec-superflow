@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { parseArgs } from 'node:util';
 import { readState } from './state-loader.mjs';
+import { isDirectWorkflowReceipt, readWorkflowSelection } from './workflow-recommendation.mjs';
 
 const PHASE_TEMPLATES = {
   'exploring': `# Phase Guard: {{change_name}}
@@ -176,9 +177,9 @@ function unique(values) {
   return [...new Set(values)];
 }
 
-function generatePhaseGuard(state) {
+function generatePhaseGuard(state, { directShortPath = false } = {}) {
   const workflow = state.workflow || 'full';
-  const isShortPath = ['quick', 'hotfix', 'tweak'].includes(workflow);
+  const isShortPath = workflow === 'tweak' || directShortPath;
   const template = isShortPath && SHORT_PATH_TEMPLATES[state.state]
     ? SHORT_PATH_TEMPLATES[state.state]
     : (PHASE_TEMPLATES[state.state] || PHASE_TEMPLATES.exploring);
@@ -331,7 +332,10 @@ export async function run(args) {
   const state = readState(changeDir);
 
   // Generate base phase-guard content
-  const base = generatePhaseGuard(state);
+  const receipt = readWorkflowSelection(changeDir);
+  const base = generatePhaseGuard(state, {
+    directShortPath: receipt.valid && isDirectWorkflowReceipt(receipt.record, state),
+  });
   const outputs = [];
 
   for (const platform of requested) {

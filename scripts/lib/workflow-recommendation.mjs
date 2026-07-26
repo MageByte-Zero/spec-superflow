@@ -166,6 +166,15 @@ export function acceptWorkflowRecommendation(changeDir, { source }) {
   return accepted;
 }
 
+export function isDirectWorkflowReceipt(record, state) {
+  const selection = record?.selection;
+  const mode = selection?.mode;
+  if (!['quick', 'hotfix'].includes(mode) || state?.workflow !== mode) return false;
+  if (record?.status !== 'ready' || record?.recommendation?.mode !== mode) return false;
+  if (selection.accepted_automatically !== true || selection.source !== 'direct-request') return false;
+  return mode !== 'hotfix' || record?.facts?.request_kind === 'incident';
+}
+
 function ready(base, mode, reason) {
   return { ...base, status: 'ready', recommendation: { mode, reasons: [reason] } };
 }
