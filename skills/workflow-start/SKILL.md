@@ -52,7 +52,7 @@ Quick is ≤3 tasks/files of low-risk code. Hotfix is an incident with a reprodu
 
 ## DP-0: User Confirmation Gate
 
-Run DP-0 when: change folder doesn't exist, planning artifacts are
+After Direct Short-Path Intake does not apply, run DP-0 when: change folder doesn't exist, planning artifacts are
 missing/empty, `dp_0_confirmed` is not `true`, or a legacy change still has an
 `auto`/empty workflow. Resolve the artifact language first, then complete the
 workflow path intake. Do not set `dp_0_confirmed=true` while path facts or the
@@ -77,7 +77,7 @@ but this field is absent, resolve and append it before routing to `spec-writer`.
 All later planning skills reuse this field so one change does not switch
 languages without an explicit user request.
 
-### Workflow Path Intake (Mode Detection)
+### Workflow Path Intake (Mode Detection, Full/Legacy)
 
 Workflow path selection is a DP-0 intake decision. It selects the planning path
 (`full`, `hotfix`, `tweak`, or `quick`); it is separate from DP-4, which later selects
@@ -133,7 +133,7 @@ Config-aware routing: check `artifacts.order`, `artifacts.skip`, and
 ### Route to need-explorer
 Change is fuzzy, scope unclear, comparing options, no stable change name.
 
-### Route to spec-writer
+### Route to spec-writer (Full only)
 Guard: `npx --yes --package spec-superflow@0.11.0 ssf runtime guard check <dir> exploring specifying --json` → fail = BLOCK. User knows what they want, artifacts missing/incomplete.
 
 ### Route to contract-builder
@@ -145,11 +145,11 @@ For Full or legacy Hotfix: contract exists and approved, contract matches artifa
 ### Route to bug-investigator
 Execution hit blockage: test failure, unexpected behavior, build error, task cannot proceed. After debugging, route back to build-executor.
 
-### Route to code-reviewer
-The current planned wave is implemented and ready for spec-compliance + code-quality verification. A reviewer must write an `npx --yes --package spec-superflow@0.11.0 ssf execution review <change-dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict <pass|fail>` receipt before any dependent wave or closing transition.
+### Route to code-reviewer (Full/legacy Hotfix only)
+The current planned wave is implemented and ready for spec-compliance + code-quality verification. A reviewer must write an `npx --yes --package spec-superflow@0.11.0 ssf execution review <change-dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict <pass|fail>` receipt before any dependent wave or closing transition. Quick, Tweak, and direct Hotfix use their verification summary instead.
 
 ### Route to release-archivist
-Only while the current state is `executing`: implementation is complete and verification is ready. Run the guard `... check <dir> executing closing --json` → fail = BLOCK. `release-archivist` completes verification, audit, and any required delta merge before the final transition. Include `DP-7: 归档确认`.
+Only while the current state is `executing`: implementation is complete and verification is ready. For Full/legacy Hotfix, run the guard and complete verification, audit, delta merge, and DP-7. For Quick, Tweak, and direct Hotfix, run the receipt-aware guard, persist `test_result: pass`, and produce the verification summary without audit or DP-7.
 
 ### Route to spec-merger
 Only while the current state is `executing`, before the final `executing → closing` transition: delta specs need merging with ADDED/MODIFIED/REMOVED/RENAMED specs. Never route a change already in `closing` to `spec-merger`.
@@ -193,13 +193,12 @@ Use content inspection, not timestamps.
 
 ## Guardrails
 
-- No implementation before planning artifacts or contract exist
+- Full/legacy Hotfix: no implementation before planning artifacts or contract exist
 - No implementation for Full or legacy Hotfix without a current `npx --yes --package spec-superflow@0.11.0 ssf execution plan`; no state transition based on an unverified DP-4 string
 - No "continue" without state inspection
-- No implementation past stale contract
+- Full/legacy Hotfix: no implementation past stale contract
 - No implementation past bug without investigation
-- No closure without all planned wave review receipts recorded as `pass`
-- No closure with unsynced delta specs
+- Full/legacy Hotfix: no closure without all planned wave review receipts recorded as `pass` or with unsynced delta specs
 - `closing` is a successful terminal state: next skill is none and recovery overlays do not run
 - No transitions from `abandoned` (terminal)
 - No transition to `abandoned` from `closing` or `abandoned`

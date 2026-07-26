@@ -32,16 +32,20 @@ Branch/worktree preflight before ANY implementation edit (mandatory — do not s
 ### Law 1: Contract First (Full and legacy Hotfix)
 For Full and legacy Hotfix, the execution contract is the approved handoff artifact, not chat history. Direct Quick and incident Hotfix use their valid direct receipt plus bounded verification instead; they must not create or require a contract.
 
-### Law 2: TDD Iron Law — No Production Code Without a Failing Test First
+### Law 2: TDD Iron Law — Full and legacy Hotfix
 RED (write test, see it fail) → GREEN (write minimal code, see it pass) → REFACTOR (clean up, suite stays green).
+
+Quick may use the closest targeted test or syntax/static check when no behavioral test is appropriate; direct Hotfix must run the original-symptom regression.
 
 **Red Flags**: "Quick implementation first, test later" / "Skip the test, manually verify" / "I already know it works" / "Just this one time without tests." ALL mean STOP and write the test first.
 
 ### Law 3: Review Before Drift
 Block on: logic defects, spec violations, missing required tests, unintended scope expansion.
 
-### Law 4: Rewind on Contract Break
+### Law 4: Rewind on Contract Break — Full and legacy Hotfix
 Return to `specifying` or `bridging` if: new behavior appears, interfaces change materially, design assumptions fail, artifacts no longer define intended implementation.
+
+For Quick/direct Hotfix, stop and route to Full instead of creating or rewinding a contract.
 
 ## Execution Mode Selection
 

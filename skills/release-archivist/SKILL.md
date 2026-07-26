@@ -22,7 +22,9 @@ be read → STOP and route through `workflow-start`; do not perform side effects
 
 For Quick, Tweak, or a valid direct incident Hotfix receipt, skip the Full verification, audit, delta merge, DP-6, and DP-7 sections below. Record changed files, the focused verification command and result, then persist `test_result: pass` and transition to closing. Quick requires a targeted test or syntax/static check; direct Hotfix requires an original-symptom regression. A legacy Hotfix stays on the Full checklist.
 
-## The Iron Law: Verification Before Completion
+## Full/Legacy Verification Before Completion
+
+The Full checklist below applies only to Full and legacy Hotfix. Direct Short-Path Closure above takes precedence for Quick, Tweak, and valid direct Hotfix.
 
 Claiming work is complete without verification is dishonesty, not efficiency. Before claiming any status:
 1. IDENTIFY the command that proves the claim
@@ -41,7 +43,7 @@ Claiming work is complete without verification is dishonesty, not efficiency. Be
 | Bug fixed | Original symptom passes | Code changed |
 | Requirements met | Line-by-line checklist | Tests passing |
 
-## Verification Steps
+## Full/Legacy Verification Steps
 
 ### Step 1: Test Suite
 Run full test suite. Record total/passed/failed/skipped. Zero failures = PASS.
@@ -68,7 +70,7 @@ Check for files modified outside scope fence, new dependencies not in design. Un
 - CONDITIONAL → present WARNs, proceed only with user acceptance
 - PASS → proceed to final checks
 
-## Final Checks
+## Full/Legacy Final Checks
 
 - Tests passing? (cite command and output)
 - All batches complete? (cite batch status)
@@ -77,7 +79,7 @@ Check for files modified outside scope fence, new dependencies not in design. Un
 - Delta specs exist that need merging?
 - Run `npx --yes --package spec-superflow@0.11.0 ssf audit <change-dir>` — include `decision-point-audit.md` in archive
 
-### DP-6 (Verification Outcome)
+### DP-6 (Verification Outcome, Full/legacy Hotfix)
 ```bash
 npx --yes --package spec-superflow@0.11.0 ssf state set <change-dir> dp_6_result "<pass|conditional|fail>: <summary>"
 npx --yes --package spec-superflow@0.11.0 ssf state set <change-dir> dp_6_timestamp $(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -91,18 +93,18 @@ After recording a PASS outcome, also record it as the verification gate so the
 npx --yes --package spec-superflow@0.11.0 ssf state set <change-dir> test_result pass
 ```
 
-### DP-7 (Archive Confirmation)
+### DP-7 (Archive Confirmation, Full/legacy Hotfix)
 ```bash
 npx --yes --package spec-superflow@0.11.0 ssf state set <change-dir> dp_7_result "confirmed: <archive summary>"
 npx --yes --package spec-superflow@0.11.0 ssf state set <change-dir> dp_7_timestamp $(date -u +%Y-%m-%dT%H:%M:%SZ)
 ```
 Verify DP-0 through DP-6 are recorded before DP-7.
 
-## Archive Rule
+## Archive Rule (Full/legacy Hotfix)
 
 If implementation diverged from the contract, return to `bridging` before closure.
 
-## Finalize While Executing
+## Finalize While Executing (Full/legacy Hotfix)
 
 Complete every release, delta-spec synchronization, and audit action while the
 state remains `executing`. If delta specs exist, invoke `spec-merger` and
