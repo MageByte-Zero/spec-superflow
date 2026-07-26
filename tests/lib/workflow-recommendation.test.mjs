@@ -1,8 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import {
   acceptWorkflowRecommendation,
   recommendWorkflowPath,
@@ -21,6 +22,17 @@ const base = {
   new_module: 'no',
   uncertainty: 'low',
 };
+
+function stableJson(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+}
+
+function hashRecord(record) {
+  const { hash, ...content } = record;
+  return `sha256:${createHash('sha256').update(stableJson(content)).digest('hex')}`;
+}
 
 describe('workflow path recommendation', () => {
   it('recommends quick for a bounded low-risk code change', () => {
@@ -43,6 +55,31 @@ describe('workflow path recommendation', () => {
       assert.equal(accepted.selection.mode, 'quick');
       assert.equal(accepted.selection.accepted_automatically, true);
       assert.equal(accepted.selection.source, 'direct-request');
+    } finally {
+      rmSync(changeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('reads a valid legacy receipt without request_kind as standard', () => {
+    const changeDir = mkdtempSync(join(tmpdir(), 'ssf-workflow-legacy-'));
+    try {
+      const legacy = {
+        schema_version: 1,
+        available_modes: ['full', 'hotfix', 'tweak'],
+        facts: { ...base },
+        missing_facts: [],
+        status: 'ready',
+        recommendation: { mode: 'hotfix', reasons: ['legacy bounded code work'] },
+        created_at: '2026-07-01T00:00:00.000Z',
+        selection: null,
+      };
+      legacy.hash = hashRecord(legacy);
+      const receiptPath = getOverlayPaths(changeDir).workflowSelection;
+      mkdirSync(dirname(receiptPath), { recursive: true });
+      writeFileSync(receiptPath, JSON.stringify(legacy), 'utf8');
+      const loaded = readWorkflowSelection(changeDir);
+      assert.equal(loaded.valid, true);
+      assert.equal(loaded.record.facts.request_kind, 'standard');
     } finally {
       rmSync(changeDir, { recursive: true, force: true });
     }

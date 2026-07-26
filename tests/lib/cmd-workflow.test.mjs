@@ -68,6 +68,13 @@ afterEach(() => {
 });
 
 describe('ssf workflow', () => {
+  it('advertises quick and direct acceptance in global help', () => {
+    const result = runSsf(['--help']);
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.match(result.stdout, /workflow select .*full\|hotfix\|tweak\|quick/);
+    assert.match(result.stdout, /workflow accept <change-dir> --source direct-request/);
+  });
+
   it('accepts a recommended quick path from a direct request without --confirm', () => {
     const recommended = recommend();
     assert.equal(recommended.exitCode, 0, recommended.stderr);

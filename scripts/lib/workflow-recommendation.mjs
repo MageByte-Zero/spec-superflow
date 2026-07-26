@@ -75,8 +75,9 @@ export function readWorkflowSelection(changeDir) {
     };
   }
   try {
-    const record = JSON.parse(readFileSync(path, 'utf8'));
-    const valid = record.hash === hashRecord(record);
+    const rawRecord = JSON.parse(readFileSync(path, 'utf8'));
+    const valid = rawRecord.hash === hashRecord(rawRecord);
+    const record = valid ? normalizeLegacyRecord(rawRecord) : rawRecord;
     return {
       exists: true,
       valid,
@@ -91,6 +92,16 @@ export function readWorkflowSelection(changeDir) {
       failures: [error.message],
     };
   }
+}
+
+function normalizeLegacyRecord(record) {
+  if (record?.facts && !Object.hasOwn(record.facts, 'request_kind')) {
+    return {
+      ...record,
+      facts: { ...record.facts, request_kind: 'standard' },
+    };
+  }
+  return record;
 }
 
 export function recordWorkflowSelection(changeDir, { mode, reason, confirmed, acknowledged }) {
