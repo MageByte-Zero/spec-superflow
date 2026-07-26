@@ -68,25 +68,69 @@ afterEach(() => {
 });
 
 describe('ssf workflow', () => {
-  it('does not set workflow until the user confirms a selection', () => {
+  it('advertises direct acceptance instead of selectable Quick in global help', () => {
+    const result = runSsf(['--help']);
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.match(result.stdout, /workflow select .*full\|hotfix\|tweak/);
+    assert.doesNotMatch(result.stdout, /workflow select .*quick/);
+    assert.match(result.stdout, /workflow accept <change-dir> --source direct-request/);
+  });
+
+  it('accepts a recommended quick path from a direct request without --confirm', () => {
     const recommended = recommend();
     assert.equal(recommended.exitCode, 0, recommended.stderr);
+    assert.equal(recommended.json.recommendation.mode, 'quick');
+
+    const accepted = runSsf(['workflow', 'accept', changeDir, '--source', 'direct-request', '--json']);
+    assert.equal(accepted.exitCode, 0, accepted.stderr);
+    assert.equal(readState(changeDir).workflow, 'quick');
+    assert.equal(accepted.json.record.selection.accepted_automatically, true);
+    assert.equal(accepted.json.record.selection.source, 'direct-request');
+
+    const guard = runSsf(['runtime', 'guard', 'check', changeDir, 'exploring', 'approved-for-build', '--workflow', 'quick', '--json']);
+    assert.equal(guard.exitCode, 0, guard.stderr);
+    assert.equal(guard.json.pass, true);
+  });
+
+  it('recommends hotfix for an incident and accepts it without a planning approval', () => {
+    const recommended = recommend(['--request-kind', 'incident']);
+    assert.equal(recommended.exitCode, 0, recommended.stderr);
     assert.equal(recommended.json.recommendation.mode, 'hotfix');
+    const accepted = runSsf(['workflow', 'accept', changeDir, '--source', 'direct-request', '--json']);
+    assert.equal(accepted.exitCode, 0, accepted.stderr);
+    assert.equal(readState(changeDir).workflow, 'hotfix');
+  });
+
+  it('rejects a selectable Quick path and leaves the direct receipt boundary intact', () => {
+    const recommended = recommend();
+    assert.equal(recommended.exitCode, 0, recommended.stderr);
+    assert.equal(recommended.json.recommendation.mode, 'quick');
     assert.equal(readState(changeDir).workflow, 'auto');
 
-    const beforeUnconfirmed = snapshotWorkflowFiles();
-    const unconfirmed = runSsf(['workflow', 'select', changeDir, '--mode', 'hotfix',
-      '--reason', 'bounded code fix', '--json']);
-    assert.equal(unconfirmed.exitCode, 1);
-    assert.match(unconfirmed.stderr, /confirm/i);
-    assertWorkflowFilesUnchanged(beforeUnconfirmed);
-    assert.equal(readState(changeDir).dp_0_decisions, null);
-
-    const selected = runSsf(['workflow', 'select', changeDir, '--mode', 'hotfix',
+    const before = snapshotWorkflowFiles();
+    const selected = runSsf(['workflow', 'select', changeDir, '--mode', 'quick',
       '--confirm', '--reason', 'bounded code fix', '--json']);
-    assert.equal(selected.exitCode, 0, selected.stderr);
-    assert.equal(readState(changeDir).workflow, 'hotfix');
-    assert.match(readState(changeDir).dp_0_decisions, /workflow_path=hotfix/);
+    assert.equal(selected.exitCode, 2);
+    assert.match(selected.stderr, /full, hotfix, tweak/i);
+    assertWorkflowFilesUnchanged(before);
+    assert.equal(readState(changeDir).dp_0_decisions, null);
+  });
+
+  it('refreshes a direct Quick recommendation and escalates to Full when risk grows', () => {
+    assert.equal(recommend().exitCode, 0);
+    assert.equal(runSsf(['workflow', 'accept', changeDir, '--source', 'direct-request']).exitCode, 0);
+
+    const refreshed = runSsf(['workflow', 'recommend', changeDir,
+      '--task-count', '4', '--file-count', '4', '--config-doc-only', 'no',
+      '--schema-api-change', 'no', '--new-module', 'no', '--uncertainty', 'low', '--json']);
+    assert.equal(refreshed.exitCode, 0, refreshed.stderr);
+    assert.equal(refreshed.json.recommendation.mode, 'full');
+
+    const upgraded = runSsf(['workflow', 'select', changeDir, '--mode', 'full',
+      '--confirm', '--reason', 'scope now exceeds Quick boundary', '--json']);
+    assert.equal(upgraded.exitCode, 0, upgraded.stderr);
+    assert.equal(readState(changeDir).workflow, 'full');
+    assert.equal(upgraded.json.record.selection.mode, 'full');
   });
 
   it('shows complete ready recommendations in human-readable recommend and show output', () => {
@@ -95,16 +139,16 @@ describe('ssf workflow', () => {
       '--schema-api-change', 'no', '--new-module', 'no', '--uncertainty', 'low']);
     assert.equal(recommended.exitCode, 0, recommended.stderr);
     assert.match(recommended.stdout, /Observed:/);
-    assert.match(recommended.stdout, /Available:.*full.*hotfix.*tweak/);
-    assert.match(recommended.stdout, /Recommended: hotfix/);
-    assert.match(recommended.stdout, /Why:.*bounded code work/i);
+    assert.match(recommended.stdout, /Available:.*full.*hotfix.*tweak.*quick/);
+    assert.match(recommended.stdout, /Recommended: quick/);
+    assert.match(recommended.stdout, /Why:.*bounded low-risk code work/i);
 
     const shown = runSsf(['workflow', 'show', changeDir]);
     assert.equal(shown.exitCode, 0, shown.stderr);
     assert.match(shown.stdout, /Observed:/);
-    assert.match(shown.stdout, /Available:.*full.*hotfix.*tweak/);
-    assert.match(shown.stdout, /Recommended: hotfix/);
-    assert.match(shown.stdout, /Why:.*bounded code work/i);
+    assert.match(shown.stdout, /Available:.*full.*hotfix.*tweak.*quick/);
+    assert.match(shown.stdout, /Recommended: quick/);
+    assert.match(shown.stdout, /Why:.*bounded low-risk code work/i);
     assert.match(shown.stdout, /Hash valid: true/i);
   });
 
@@ -128,7 +172,7 @@ describe('ssf workflow', () => {
     assert.equal(human.exitCode, 0, human.stderr);
     assert.match(human.stdout, /Workflow status: needs-input/i);
     assert.match(human.stdout, /Observed:.*task_count=2.*file_count=null/i);
-    assert.match(human.stdout, /Available:.*full.*hotfix.*tweak/i);
+    assert.match(human.stdout, /Available:.*full.*hotfix.*tweak.*quick/i);
     assert.match(human.stdout, /Missing facts: file_count, schema_api_change/i);
     assert.match(human.stdout, /Hash valid: true/i);
 
@@ -215,7 +259,7 @@ describe('ssf workflow', () => {
       'task_count', 'file_count', 'config_doc_only', 'schema_api_change',
       'new_module', 'uncertainty',
     ]);
-    assert.deepEqual(result.json.available_modes, ['full', 'hotfix', 'tweak']);
+    assert.deepEqual(result.json.available_modes, ['full', 'hotfix', 'tweak', 'quick']);
     assert.equal(result.json.recommendation, null);
     assert.equal(result.json.receipt.exists, false);
 
@@ -240,8 +284,8 @@ describe('ssf workflow', () => {
     assert.equal(human.exitCode, 1);
     assert.match(human.stdout, /Workflow status: invalid/i);
     assert.match(human.stdout, /Observed:.*file_count=99/i);
-    assert.match(human.stdout, /Available:.*full.*hotfix.*tweak/i);
-    assert.match(human.stdout, /Recommended: hotfix/i);
+    assert.match(human.stdout, /Available:.*full.*hotfix.*tweak.*quick/i);
+    assert.match(human.stdout, /Recommended: quick/i);
     assert.match(human.stdout, /Why:/i);
     assert.match(human.stdout, /Hash valid: false/i);
     assert.match(human.stdout, /hash mismatch/i);
@@ -260,49 +304,49 @@ describe('ssf workflow', () => {
       new_module: 'no', uncertainty: 'low',
     });
     recordWorkflowSelection(changeDir, {
-      mode: 'hotfix', reason: 'recoverable selection', confirmed: true, acknowledged: false,
+      mode: 'tweak', reason: 'recoverable selection', confirmed: true, acknowledged: true,
     });
 
     const human = runSsf(['workflow', 'show', changeDir]);
     assert.equal(human.exitCode, 0, human.stderr);
     assert.match(human.stdout, /Workflow status: selection-pending/i);
     assert.match(human.stdout, /Observed:/i);
-    assert.match(human.stdout, /Available:.*full.*hotfix.*tweak/i);
-    assert.match(human.stdout, /Recommended: hotfix/i);
+    assert.match(human.stdout, /Available:.*full.*hotfix.*tweak.*quick/i);
+    assert.match(human.stdout, /Recommended: quick/i);
     assert.match(human.stdout, /Why:/i);
-    assert.match(human.stdout, /Selection:.*mode=hotfix.*reason=recoverable selection/i);
+    assert.match(human.stdout, /Selection:.*mode=tweak.*reason=recoverable selection/i);
     assert.match(human.stdout, /Hash valid: true/i);
 
     const json = runSsf(['workflow', 'show', changeDir, '--json']);
     assert.equal(json.exitCode, 0, json.stderr);
     assert.equal(json.json.status, 'selection-pending');
     assert.equal(json.json.workflow, 'auto');
-    assert.equal(json.json.record.selection.mode, 'hotfix');
+    assert.equal(json.json.record.selection.mode, 'tweak');
     assert.equal(json.json.record.selection.reason, 'recoverable selection');
   });
 
-  it('restores selected evidence in human and JSON show output', () => {
+  it('restores directly accepted Quick evidence in human and JSON show output', () => {
     assert.equal(recommend().exitCode, 0);
 
-    let result = runSsf(['workflow', 'select', changeDir, '--mode', 'hotfix',
-      '--confirm', '--reason', 'recoverable selection', '--json']);
+    let result = runSsf(['workflow', 'accept', changeDir,
+      '--source', 'direct-request', '--json']);
     assert.equal(result.exitCode, 0, result.stderr);
 
     const human = runSsf(['workflow', 'show', changeDir]);
     assert.equal(human.exitCode, 0, human.stderr);
     assert.match(human.stdout, /Workflow status: selected/i);
     assert.match(human.stdout, /Observed:/i);
-    assert.match(human.stdout, /Available:.*full.*hotfix.*tweak/i);
-    assert.match(human.stdout, /Recommended: hotfix/i);
+    assert.match(human.stdout, /Available:.*full.*hotfix.*tweak.*quick/i);
+    assert.match(human.stdout, /Recommended: quick/i);
     assert.match(human.stdout, /Why:/i);
-    assert.match(human.stdout, /Selection:.*mode=hotfix.*reason=recoverable selection/i);
+    assert.match(human.stdout, /Selection:.*mode=quick.*source=direct-request/i);
     assert.match(human.stdout, /Hash valid: true/i);
 
     result = runSsf(['workflow', 'show', changeDir, '--json']);
     assert.equal(result.exitCode, 0, result.stderr);
     assert.equal(result.json.status, 'selected');
-    assert.equal(result.json.workflow, 'hotfix');
-    assert.equal(result.json.record.selection.mode, 'hotfix');
+    assert.equal(result.json.workflow, 'quick');
+    assert.equal(result.json.record.selection.mode, 'quick');
     assert.equal(result.json.record.selection.followed_recommendation, true);
   });
 
@@ -385,13 +429,13 @@ describe('ssf workflow', () => {
       '',
     ].join('\n'));
     assert.equal(recommend().exitCode, 0);
-    const selected = runSsf(['workflow', 'select', changeDir, '--mode', 'hotfix',
-      '--confirm', '--reason', 'bounded code fix', '--json']);
+    const selected = runSsf(['workflow', 'accept', changeDir,
+      '--source', 'direct-request', '--json']);
     assert.equal(selected.exitCode, 0, selected.stderr);
     const decisions = readState(changeDir).dp_0_decisions;
     assert.match(decisions, /scope=issue 70/);
     assert.match(decisions, /artifact_language=zh-CN/);
     assert.equal((decisions.match(/workflow_path=/g) ?? []).length, 1);
-    assert.match(decisions, /workflow_path=hotfix; recommended=hotfix; followed_recommendation=true/);
+    assert.match(decisions, /workflow_path=quick; recommended=quick; followed_recommendation=true/);
   });
 });

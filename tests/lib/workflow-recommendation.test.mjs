@@ -1,9 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import {
+  acceptWorkflowRecommendation,
   recommendWorkflowPath,
   recordWorkflowSelection,
   readWorkflowSelection,
@@ -21,12 +23,77 @@ const base = {
   uncertainty: 'low',
 };
 
+function stableJson(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+}
+
+function hashRecord(record) {
+  const { hash, ...content } = record;
+  return `sha256:${createHash('sha256').update(stableJson(content)).digest('hex')}`;
+}
+
 describe('workflow path recommendation', () => {
-  it('recommends hotfix for a bounded code change', () => {
+  it('recommends quick for a bounded low-risk code change', () => {
+    const result = recommendWorkflowPath({ ...base, task_count: 3, file_count: 3 });
+    assert.equal(result.recommendation.mode, 'quick');
+    assert.deepEqual(result.available_modes, ['full', 'hotfix', 'tweak', 'quick']);
+  });
+
+  it('recommends hotfix only for a bounded incident', () => {
+    const result = recommendWorkflowPath({ ...base, request_kind: 'incident' });
+    assert.equal(result.recommendation.mode, 'hotfix');
+    assert.equal(result.facts.request_kind, 'incident');
+  });
+
+  it('accepts a recommended quick path without a confirmation reason', () => {
+    const changeDir = mkdtempSync(join(tmpdir(), 'ssf-workflow-accept-'));
+    try {
+      saveWorkflowRecommendation(changeDir, base);
+      const accepted = acceptWorkflowRecommendation(changeDir, { source: 'direct-request' });
+      assert.equal(accepted.selection.mode, 'quick');
+      assert.equal(accepted.selection.accepted_automatically, true);
+      assert.equal(accepted.selection.source, 'direct-request');
+    } finally {
+      rmSync(changeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('reads a valid legacy receipt without request_kind as standard', () => {
+    const changeDir = mkdtempSync(join(tmpdir(), 'ssf-workflow-legacy-'));
+    try {
+      const legacy = {
+        schema_version: 1,
+        available_modes: ['full', 'hotfix', 'tweak'],
+        facts: { ...base },
+        missing_facts: [],
+        status: 'ready',
+        recommendation: { mode: 'hotfix', reasons: ['legacy bounded code work'] },
+        created_at: '2026-07-01T00:00:00.000Z',
+        selection: null,
+      };
+      legacy.hash = hashRecord(legacy);
+      const receiptPath = getOverlayPaths(changeDir).workflowSelection;
+      mkdirSync(dirname(receiptPath), { recursive: true });
+      writeFileSync(receiptPath, JSON.stringify(legacy), 'utf8');
+      const loaded = readWorkflowSelection(changeDir);
+      assert.equal(loaded.valid, true);
+      assert.equal(loaded.record.facts.request_kind, 'standard');
+      assert.throws(
+        () => acceptWorkflowRecommendation(changeDir, { source: 'direct-request' }),
+        /incident/i,
+      );
+    } finally {
+      rmSync(changeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('recommends quick for a bounded standard code change', () => {
     const result = recommendWorkflowPath(base);
     assert.equal(result.status, 'ready');
     assert.deepEqual(result.available_modes, WORKFLOW_MODES);
-    assert.equal(result.recommendation.mode, 'hotfix');
+    assert.equal(result.recommendation.mode, 'quick');
   });
 
   it('recommends tweak for a small config/doc-only change', () => {
@@ -39,7 +106,7 @@ describe('workflow path recommendation', () => {
       { ...base, schema_api_change: 'yes' },
       { ...base, new_module: 'yes' },
       { ...base, uncertainty: 'high' },
-      { ...base, task_count: 3 },
+      { ...base, task_count: 4 },
     ]) assert.equal(recommendWorkflowPath(facts).recommendation.mode, 'full');
   });
 
@@ -77,6 +144,18 @@ describe('workflow path recommendation', () => {
         mode: 'full', reason: 'operator preference', confirmed: true, acknowledged: true,
       });
       assert.equal(selected.selection.followed_recommendation, false);
+    } finally {
+      rmSync(changeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('requires direct acceptance for the Quick workflow', () => {
+    const changeDir = mkdtempSync(join(tmpdir(), 'ssf-workflow-quick-'));
+    try {
+      saveWorkflowRecommendation(changeDir, base);
+      assert.throws(() => recordWorkflowSelection(changeDir, {
+        mode: 'quick', reason: 'bounded code', confirmed: true, acknowledged: false,
+      }), /direct acceptance/i);
     } finally {
       rmSync(changeDir, { recursive: true, force: true });
     }

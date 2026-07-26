@@ -148,7 +148,7 @@ npx spec-superflow list          # 或通过 npx 使用
 | `ssf handoff finish <dir> <id>` | 校验 handoff 结果 |
 | `ssf handoff resolve <dir> <id> --decision <decision>` | 记录显式 handoff 决策 |
 | `ssf execution recommend <dir> ...` | 基于任务量、wave 和工作流列出可用执行方式并给出推荐 |
-| `ssf execution plan <dir> ...` | 在用户确认选择后，为 full/hotfix 保存受 guard 保护的执行计划 |
+| `ssf execution plan <dir> ...` | 在用户确认选择后，为 Full/legacy Hotfix 保存受 guard 保护的执行计划 |
 | `ssf execution show <dir> [--json]` | 查看并校验当前执行计划、wave 与 receipt |
 | `ssf execution revise <dir> ...` | 将已有计划保留/升级为 SDD，并生成新 revision；不允许降级 |
 | `ssf execution review <dir> ...` | 为一个计划 wave 记录 review receipt |
@@ -202,7 +202,7 @@ Delta spec 的规范路径是 `specs/<capability>/spec.md`；扁平的 `specs/<c
 
 ### 受 guard 保护的执行计划
 
-对 full/hotfix，DP-4 不是一段任意文本：开始实现前必须保存并校验 current
+对 Full/legacy Hotfix，DP-4 不是一段任意文本：开始实现前必须保存并校验 current
 execution plan。它位于 `<change>/.superpowers/sdd/execution-plan.json`，不写入
 `execution-contract.md`。先运行 `ssf execution recommend`，它会根据任务量和 wave
 策略列出 `inline`、`batch-inline`、`sdd`，并给出可审计的推荐理由，同时把当前 wave 的
@@ -210,7 +210,7 @@ execution plan。它位于 `<change>/.superpowers/sdd/execution-plan.json`，不
 候选项和推荐展示给用户。`plan` 或 `revise` 只接受匹配当前 artifact、contract 和 wave 的
 凭据。用户用 `--confirm` 明确确认选择；若选择与推荐不同，必须额外
 传入 `--acknowledge-recommendation` 记录已知风险。Batch Inline 始终串行，绝不冒充并行。
-`tweak` 保持轻量例外，不要求 execution plan 或 wave receipt。
+Quick、direct Hotfix 与 `tweak` 保持轻量例外：不要求 contract、execution plan、wave receipt 或 DP；在边界内验证后持久化 `test_result: pass`。
 
 ```bash
 ssf execution recommend changes/my-change \
@@ -270,7 +270,7 @@ overlay，不会增加第九个状态；其 CLI 与 CodeBuddy/WorkBuddy Markdown
 
 **❌ 不推荐：** 一次性脚本/工具、纯咨询/问答。
 
-> **v0.6.0 起自动模式检测**：hotfix（≤2 文件，最小契约 + DP-3 后执行）和 tweak（≤4 文件，纯配置/文档，直接编辑）让小型变更也能高效使用。
+> **四级模式**：Quick（≤3 文件/任务低风险代码）、direct Hotfix（incident 且≤2）、Tweak（≤4 配置/文档）直接执行并验证；Full 与 legacy Hotfix 保留规划、契约和 review。
 
 ---
 
@@ -319,11 +319,13 @@ overlay，不会增加第九个状态；其 CLI 与 CodeBuddy/WorkBuddy Markdown
    closing            CLOSED 成功终态（无 next skill）
 ```
 
-**关键约束：** 没有 `execution-contract.md` 或未被批准 → 不允许实现；full/hotfix 没有 current execution plan、或任一 wave 缺少 `pass` review receipt → 不允许推进；需求变更 → 强制回退；遇到 bug → 强制走 debugging，不允许"随便试试"。
+**关键约束：** Full/legacy Hotfix 没有 `execution-contract.md`、current execution plan 或 `pass` review receipt → 不允许推进；Quick/direct Hotfix/Tweak 以有效 receipt、边界检查与 `test_result: pass` 放行。任何风险升级转 Full。
 
-### 快速路径（hotfix / tweak）
+### 快速路径（Quick / Hotfix / Tweak）
 
-- **hotfix** — ≤2 文件、无新模块时，走 `exploring -> bridging -> approved-for-build -> executing`。可跳过 `proposal.md`、`design.md`、`tasks.md`、`specs/` 等完整规划工件，但仍必须先生成一份新的最小 `execution-contract.md`，并完成 DP-3 批准后才能进入实现
+- **Quick** — ≤3 文件/任务、低风险代码：同轮推荐/接受，`exploring -> approved-for-build -> executing`，跑定向验证。
+- **direct Hotfix** — incident 且≤2 文件/任务：同一路径，必须验证原症状回归。
+- **legacy Hotfix** — 既有或无 direct receipt：保留最小契约、DP-3、plan/review。
 - **tweak** — ≤4 文件、纯配置/文档修改时，跳过规划+桥接，直接编辑
 
 ---
@@ -386,7 +388,7 @@ ssf config --resolve-model mechanical
 <details>
 <summary><strong>SDD (Subagent-Driven Development) 怎么工作的？</strong></summary>
 
-full/hotfix 先由 `ssf execution recommend` 根据任务量和 wave 策略列出 Inline、Batch Inline、SDD 并推荐一种；Agent 展示候选项和理由，用户以 `--confirm` 确认后才保存 plan。若选择非推荐方式，`--acknowledge-recommendation` 会记录风险确认。SDD 按可执行 wave 派实施子代理；每个 wave 先有 review report，再写 `pass`/`fail` review receipt。Batch Inline 仍是串行。进度台账防止会话压缩后丢失进度。
+Full/legacy Hotfix 先由 `ssf execution recommend` 根据任务量和 wave 策略列出 Inline、Batch Inline、SDD 并推荐一种；Agent 展示候选项和理由，用户以 `--confirm` 确认后才保存 plan。Quick/direct Hotfix/Tweak 不创建 plan 或 review receipt，而是报告边界内的验证并写入 `test_result: pass`。Batch Inline 仍是串行。进度台账防止会话压缩后丢失进度。
 
 </details>
 

@@ -27,7 +27,12 @@ describe('BUG/#29: install-zcode deploys skills', () => {
     assert.equal(existsSync(wfStart), true, 'workflow-start skill should be deployed');
     const content = readFileSync(wfStart, 'utf-8');
     assert.equal(content.includes('${CLAUDE_PLUGIN_ROOT}'), false, 'CLAUDE_PLUGIN_ROOT should be rewritten to an absolute path');
-    assert.equal(existsSync(join(cwd, '.zcode', 'rules', 'phase-guard.mdc')), true, 'phase guard should be written');
+    const guardPath = join(cwd, '.zcode', 'rules', 'phase-guard.mdc');
+    assert.equal(existsSync(guardPath), true, 'phase guard should be written');
+    const guard = readFileSync(guardPath, 'utf-8');
+    assert.match(guard, /Full 或 legacy Hotfix/);
+    assert.match(guard, /Quick、direct Hotfix、tweak/);
+    assert.match(guard, /test_result: pass/);
   });
 
   it('SHALL give contract-builder the portable execution-contract asset command', () => {

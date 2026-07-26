@@ -3,9 +3,10 @@
 import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { acceptWorkflowRecommendation, saveWorkflowRecommendation } from '../../scripts/lib/workflow-recommendation.mjs';
 
 let generatePhaseGuard, toCursorMdc, toCopilotInstructions;
 
@@ -57,6 +58,22 @@ describe('cmd-inject: generatePhaseGuard()', () => {
     assert.ok(result.includes('DP-4'));
     assert.match(result, /execution plan/);
     assert.match(result, /不得开始实现/);
+  });
+
+  it('generates a quick phase guard without plan, review, or DP approval language', () => {
+    const approved = generatePhaseGuard({ state: 'approved-for-build', workflow: 'quick', change_name: 'test' }, { directShortPath: true });
+    assert.match(approved, /direct receipt/i);
+    assert.match(approved, /不得要求 execution plan、wave review 或 DP-4/i);
+
+    const executing = generatePhaseGuard({ state: 'executing', workflow: 'quick', change_name: 'test' }, { directShortPath: true });
+    assert.match(executing, /定向测试/i);
+    assert.doesNotMatch(executing, /execution-contract\.md/);
+  });
+
+  it('keeps legacy hotfix phase guards on the contract and review path', () => {
+    const legacy = generatePhaseGuard({ state: 'approved-for-build', workflow: 'hotfix', change_name: 'test' });
+    assert.match(legacy, /execution plan/);
+    assert.match(legacy, /DP-4/);
   });
 
   it('generates executing phase with test prohibition', () => {
@@ -200,6 +217,32 @@ describe('cmd-inject: CLI writes', () => {
       assert.equal(result.exitCode, 0, result.stdout + result.stderr);
       assert.equal(existsSync(join(root, '.cursor', 'rules', 'phase-guard.mdc')), true);
       assert.equal(existsSync(join(root, 'GEMINI.md')), false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('uses direct wording only when the short-path receipt is valid', () => {
+    const root = mkdtempSync(join(tmpdir(), 'ssf-inject-cli-direct-'));
+    try {
+      const change = join(root, 'change');
+      mkdirSync(change, { recursive: true });
+      writeFileSync(join(change, '.spec-superflow.yaml'), 'state: approved-for-build\nworkflow: quick\nchange_name: inject-test\n');
+      saveWorkflowRecommendation(change, {
+        task_count: 3, file_count: 3, config_doc_only: 'no', schema_api_change: 'no',
+        new_module: 'no', uncertainty: 'low', request_kind: 'standard',
+      });
+      acceptWorkflowRecommendation(change, { source: 'direct-request' });
+      const result = runInject(root, change, ['--platforms', 'cursor']);
+      assert.equal(result.exitCode, 0, result.stdout + result.stderr);
+      const guard = readFileSync(join(root, '.cursor', 'rules', 'phase-guard.mdc'), 'utf8');
+      assert.match(guard, /direct receipt/i);
+
+      writeFileSync(join(change, '.spec-superflow.yaml'), 'state: approved-for-build\nworkflow: hotfix\nchange_name: inject-test\n');
+      const legacy = runInject(root, change, ['--platforms', 'cursor']);
+      assert.equal(legacy.exitCode, 0, legacy.stdout + legacy.stderr);
+      const legacyGuard = readFileSync(join(root, '.cursor', 'rules', 'phase-guard.mdc'), 'utf8');
+      assert.match(legacyGuard, /execution plan/);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

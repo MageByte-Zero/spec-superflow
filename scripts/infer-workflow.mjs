@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// scripts/infer-workflow.mjs — infer hotfix/tweak/full from change artifacts
+// scripts/infer-workflow.mjs — infer quick/tweak/full from change artifacts
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readState } from './lib/state-loader.mjs';
@@ -49,7 +49,7 @@ function inferMode(changeDir) {
 
   // Explicit override: honor any non-auto, non-null workflow value
   if (state.workflow && state.workflow !== 'auto') {
-    const valid = ['hotfix', 'tweak', 'full'];
+    const valid = ['quick', 'hotfix', 'tweak', 'full'];
     if (valid.includes(state.workflow)) {
       return {
         mode: state.workflow,
@@ -92,21 +92,22 @@ function inferMode(changeDir) {
     };
   }
 
-  // Hotfix: very small, no schema/api, no new module
-  if (taskCount <= 2 && fileCount <= 2 && !hasSchemaChange && !hasNewModule) {
-    return {
-      mode: 'hotfix',
-      explicit: false,
-      reason: `≤2 tasks, ≤2 files, no schema/API/new-module keywords → hotfix`,
-    };
-  }
-
   // Tweak: small config/doc change
   if (taskCount <= 4 && configDocOnly && !hasSchemaChange && !hasNewModule) {
     return {
       mode: 'tweak',
       explicit: false,
       reason: `≤4 tasks, only config/doc files, no schema/API/new-module keywords → tweak`,
+    };
+  }
+
+  // Quick: small non-document code change. Incident detection requires request context,
+  // so legacy artifact inference deliberately never infers hotfix.
+  if (taskCount <= 3 && fileCount <= 3 && codeFileCount > 0 && !hasSchemaChange && !hasNewModule) {
+    return {
+      mode: 'quick',
+      explicit: false,
+      reason: `≤3 tasks, ≤3 code files, no schema/API/new-module keywords → quick`,
     };
   }
 

@@ -12,6 +12,8 @@ import { checkContractCurrent } from './checks/contract-current.mjs';
 import { checkDp3Approved } from './checks/dp3-approved.mjs';
 import { checkExecutionPlanReady } from './checks/execution-plan-ready.mjs';
 import { checkExecutionReviewsPassed } from './checks/execution-reviews-passed.mjs';
+import { readState } from '../lib/state-loader.mjs';
+import { isDirectWorkflowReceipt, readWorkflowSelection } from '../lib/workflow-recommendation.mjs';
 
 // Transition matrix: <from>:<to> → required check dimensions
 const TRANSITION_CHECKS = {
@@ -56,17 +58,22 @@ const WORKFLOW_TRANSITION_CHECKS = {
   },
   tweak: {
     'exploring:approved-for-build': [],
-    // Tweak remains a low-risk fast path: it is intentionally exempt from
-    // execution-plan and per-wave review receipt requirements.
-    'approved-for-build:executing': ['artifacts-exist', 'contract-fresh', 'dp-gate-passed'],
-    'executing:closing': ['tasks-complete', 'tests-passing', 'specs-merged'],
-    'debugging:executing': ['contract-fresh'],
+    'approved-for-build:executing': [],
+    'executing:closing': ['tests-passing'],
+    'debugging:executing': [],
   },
+};
+
+const DIRECT_SHORT_PATH_CHECKS = {
+  'exploring:approved-for-build': ['direct-short-path'],
+  'approved-for-build:executing': ['direct-short-path'],
+  'executing:closing': ['direct-short-path', 'direct-test-result'],
+  'debugging:executing': ['direct-short-path'],
 };
 
 const TRANSITION_WORKFLOW_REQUIREMENTS = {
   'exploring:bridging': ['hotfix'],
-  'exploring:approved-for-build': ['tweak'],
+  'exploring:approved-for-build': ['tweak', 'quick', 'hotfix'],
 };
 
 function checkWorkflowAllowed(key, workflow) {
@@ -82,8 +89,42 @@ function checkWorkflowAllowed(key, workflow) {
   };
 }
 
-function resolveDimensions(key, workflow) {
+function resolveDimensions(key, workflow, directShortPath) {
+  if (workflow === 'quick') return DIRECT_SHORT_PATH_CHECKS[key] ?? TRANSITION_CHECKS[key];
+  if (workflow === 'hotfix' && key === 'exploring:approved-for-build') {
+    return DIRECT_SHORT_PATH_CHECKS[key];
+  }
+  if (workflow === 'hotfix' && directShortPath) {
+    return DIRECT_SHORT_PATH_CHECKS[key] ?? WORKFLOW_TRANSITION_CHECKS.hotfix[key] ?? TRANSITION_CHECKS[key];
+  }
   return WORKFLOW_TRANSITION_CHECKS[workflow]?.[key] ?? TRANSITION_CHECKS[key];
+}
+
+export function isDirectShortPath(record, state) {
+  return isDirectWorkflowReceipt(record, state);
+}
+
+function directShortPathCheck(changeDir, workflow) {
+  const state = readState(changeDir);
+  const receipt = readWorkflowSelection(changeDir);
+  if (!receipt.valid || !isDirectShortPath(receipt.record, state) || state.workflow !== workflow) {
+    return {
+      pass: false,
+      failures: ['a valid direct receipt matching the current workflow is required for this short-path transition'],
+    };
+  }
+  return { pass: true, failures: [] };
+}
+
+function directTestResultCheck(changeDir) {
+  const testResult = readState(changeDir).test_result;
+  if (typeof testResult === 'string' && testResult.trim().toLowerCase().startsWith('pass')) {
+    return { pass: true, failures: [] };
+  }
+  return {
+    pass: false,
+    failures: ['direct short-path closing requires test_result starting with pass; DP-6 is not a substitute'],
+  };
 }
 
 async function main() {
@@ -107,7 +148,7 @@ async function main() {
   const useJson = values.json;
   const workflow = values.workflow;
 
-  const VALID_WORKFLOWS = ['full', 'hotfix', 'tweak'];
+  const VALID_WORKFLOWS = ['full', 'hotfix', 'tweak', 'quick'];
   if (!VALID_WORKFLOWS.includes(workflow)) {
     console.error(`Invalid workflow: ${workflow}. Must be one of: ${VALID_WORKFLOWS.join(', ')}`);
     process.exit(2);
@@ -119,7 +160,8 @@ async function main() {
   }
 
   const key = `${fromState}:${toState}`;
-  const dimensions = resolveDimensions(key, workflow);
+  const directShortPath = isDirectShortPath(readWorkflowSelection(changeDir).record, readState(changeDir));
+  const dimensions = resolveDimensions(key, workflow, directShortPath);
 
   if (!dimensions) {
     const valid = Object.keys(TRANSITION_CHECKS).join(', ');
@@ -163,6 +205,8 @@ async function main() {
     'dp3-approved': (dir) => checkDp3Approved(dir),
     'execution-plan-ready': (dir) => checkExecutionPlanReady(dir),
     'execution-reviews-passed': (dir) => checkExecutionReviewsPassed(dir),
+    'direct-short-path': (dir) => directShortPathCheck(dir, workflow),
+    'direct-test-result': (dir) => directTestResultCheck(dir),
   };
 
   const checks = [];

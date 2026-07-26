@@ -726,15 +726,15 @@ changes/<change-name>/
 
 ### 受 guard 保护的执行计划
 
-full/hotfix 在 DP-4 必须保存 current execution plan 到
+Full/legacy Hotfix 在 DP-4 必须保存 current execution plan 到
 `<change>/.superpowers/sdd/execution-plan.json`；它不属于 `execution-contract.md`。
 先运行 `ssf execution recommend`：它按任务量和 wave 策略列出 `inline`、
 `batch-inline`、`sdd` 并给出推荐，并保存当前 wave 的推荐凭据到
 `<change>/.superpowers/sdd/execution-recommendation.json`。Agent 展示候选项和理由后，
 `plan` 与 `revise` 必须消费匹配当前 artifact、contract 和 wave 的凭据；用户用 `--confirm`
 确认；若选择非推荐方式，必须用 `--acknowledge-recommendation` 记录风险确认。Batch
-Inline 始终串行，不会表示并行。`tweak`
-免除 execution plan 与 review receipt gate。
+Inline 始终串行，不会表示并行。Quick、direct Hotfix 与 `tweak`
+免除 contract、execution plan、review receipt 和 DP gate；它们在边界内验证后持久化 `test_result: pass`。
 
 ```bash
 ssf execution recommend changes/my-change \
@@ -813,6 +813,6 @@ Checkpoint 是任务级恢复上下文。`result-ready` handoff 在继续受影�
 
 从 `workflow-start` 入口开始，不要直接调用 `build-executor`。
 
-推荐流程：`exploring -> specifying -> bridging -> approved-for-build -> execution plan -> executing -> closing`
+Full/legacy 推荐流程：`exploring -> specifying -> bridging -> approved-for-build -> execution plan -> executing -> closing`
 
-hotfix 快速路径：`exploring -> bridging -> approved-for-build -> executing`。hotfix 可以跳过完整的 `proposal.md`、`design.md`、`tasks.md`、`specs/`，但仍然必须先生成一份新的最小 `execution-contract.md`，并完成 DP-3 批准后才能开始实现。
+Quick（≤3 低风险文件/任务）与 direct Hotfix（incident，≤2）走 `exploring -> approved-for-build -> executing`，同轮推荐/接受后直接验证；direct Hotfix 必须复现原症状回归。legacy Hotfix 才走最小契约、DP-3、plan/review 路径。
