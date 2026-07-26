@@ -200,6 +200,10 @@ Prototype 只在用户明确确认后创建；后端、CLI、配置和内部重�
 
 Delta spec 的规范路径是 `specs/<capability>/spec.md`；扁平的 `specs/<capability>.md` 和根级 `specs/spec.md` 不会被视为合法规范。
 
+### 活动规格与发布基线
+
+活动工作流只以 `changes/<change>/` 为事实来源：其中的 `specs/` 是可审计的 delta spec。项目根 `specs/` 是发布后的规范基线，不参与活动 change 的状态转换。运行 `ssf sync changes/<change>` 时，CLI 会把 ADDED/MODIFIED/REMOVED/RENAMED 操作应用到根基线的 `## Requirements`，并在 change 状态写入可重算的发布回执。closing 会同时核验 delta 与基线；任一侧同步后被修改，都必须重新同步，`spec_merged: true` 不能绕过该检查。
+
 ### 受 guard 保护的执行计划
 
 对 Full/legacy Hotfix，DP-4 不是一段任意文本：开始实现前必须保存并校验 current

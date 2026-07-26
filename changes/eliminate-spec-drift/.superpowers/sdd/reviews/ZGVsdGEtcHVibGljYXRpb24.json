@@ -1,0 +1,9 @@
+{
+  "status": "pass",
+  "base": "00971850040b5bc62e4cbcef50d5daa32bf8cca9",
+  "head": "1ddee5b301572618f833b9111f52369b65177855",
+  "report": ".superpowers/sdd/reviews/delta-publication-review.md",
+  "plan_hash": "sha256:6bdac0a0bd0894ce4ae9c0dee0d17dd318b486b02ee9b72c24bcc4d0cfc3dff1",
+  "plan_revision": 1,
+  "recorded_at": "2026-07-26T16:32:12.851Z"
+}

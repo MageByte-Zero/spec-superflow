@@ -164,6 +164,10 @@ automatically. Handoff results never edit `design.md` or `tasks.md` automaticall
 
 Canonical delta specs live at `specs/<capability>/spec.md`; flat `specs/<capability>.md` and root-level `specs/spec.md` are not valid canonical paths.
 
+### Active specs and published baselines
+
+An active workflow has one source of truth: `changes/<change>/`, whose `specs/` directory contains auditable delta specs. Root `specs/` is the published specification baseline and never drives active change transitions. `ssf sync changes/<change>` applies ADDED/MODIFIED/REMOVED/RENAMED operations to the baseline's `## Requirements` and writes a recomputable publication receipt to the change state. Closing verifies both the delta and baseline; editing either after sync requires another sync, and `spec_merged: true` cannot bypass this check.
+
 ---
 
 ## Why
