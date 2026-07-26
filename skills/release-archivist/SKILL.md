@@ -18,6 +18,10 @@ Continue only when the persisted state is exactly `executing`. If it is
 completed before this transition." For any other state, or if the state cannot
 be read → STOP and route through `workflow-start`; do not perform side effects.
 
+## Direct Short-Path Closure (run before the Full checklist)
+
+For Quick, Tweak, or a valid direct incident Hotfix receipt, skip the Full verification, audit, delta merge, DP-6, and DP-7 sections below. Record changed files, the focused verification command and result, then persist `test_result: pass` and transition to closing. Quick requires a targeted test or syntax/static check; direct Hotfix requires an original-symptom regression. A legacy Hotfix stays on the Full checklist.
+
 ## The Iron Law: Verification Before Completion
 
 Claiming work is complete without verification is dishonesty, not efficiency. Before claiming any status:

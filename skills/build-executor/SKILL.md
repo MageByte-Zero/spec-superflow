@@ -9,7 +9,7 @@ Controls the implementation phase. Uses `execution-contract.md` as the workflow 
 
 ## Required Inputs
 
-Read: `execution-contract.md`, `tasks.md`, relevant `specs/`, relevant `design.md`. (Skip contract/spec requirements when workflow is `tweak`.)
+For Full or legacy Hotfix, read `execution-contract.md`, `tasks.md`, relevant `specs/`, and relevant `design.md`. Quick, direct incident Hotfix, and Tweak require only their receipt, request boundary, changed files, and verification command.
 
 Check workflow mode and receipt first. Tweak → direct edit mode. Quick or a valid direct incident Hotfix → Direct Quick and Hotfix. Full or legacy Hotfix → standard contract-first discipline.
 
@@ -158,7 +158,7 @@ DP-5 (debug escalation): `npx --yes --package spec-superflow@0.11.0 ssf state se
 
 ## Completion Standard
 
-Don't report completion until: tests pass, contract obligations satisfied, review blockers resolved, every planned wave has a current `pass` receipt, final review is complete, and workflow is ready for `release-archivist`.
+For Full or legacy Hotfix, do not report completion until tests pass, contract obligations are satisfied, review blockers resolved, every planned wave has a current `pass` receipt, and final review is complete. For Quick/direct Hotfix/Tweak, report completion only after bounded verification and persisted `test_result: pass`; do not require contract or review receipts.
 
 ## Exception Handling
 

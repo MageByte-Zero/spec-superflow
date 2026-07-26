@@ -38,9 +38,7 @@ scan, or `release-archivist`; do not resume, hand off, or route any more work.
 
 4. **Execution-control recovery scan**: For Full or legacy Hotfix in `approved-for-build`, `executing`, or `debugging`, run `npx --yes --package spec-superflow@0.11.0 ssf execution show <change-dir> --json`. Treat only `current: true` plus `waves[].eligible: true` as permission to start a wave. Do not require this scan for Quick, Tweak, or a valid direct Hotfix receipt.
 
-## DP-0: User Confirmation Gate
-
-## Direct Short-Path Intake (before DP-0)
+## Direct Short-Path Intake
 
 For a clearly bounded Quick or incident Hotfix request, recommend and accept in the same turn. Do not collect the six intake facts as a questionnaire: infer the available facts from the request and repository, show the single recommendation and qualification reason, then run:
 
@@ -51,6 +49,8 @@ npx --yes --package spec-superflow@0.11.0 ssf workflow accept <change-dir> --sou
 ```
 
 Quick is ≤3 tasks/files of low-risk code. Hotfix is an incident with a reproducible symptom and ≤2 tasks/files. Display `Observed`, `Recommended`, and `Why`; acceptance is the user's direct request to proceed. Do not create planning artifacts, a contract, an execution plan, wave receipts, or DP approvals. Transition through the receipt-aware guard, execute bounded work, and require `test_result: pass` before closing. Any fourth file, public/schema/API boundary, new module, dependency/permission/data change, high uncertainty, or failed verification stops the path and routes to Full. A legacy Hotfix without a valid direct receipt remains on the Full contract/DP-3/plan/review path.
+
+## DP-0: User Confirmation Gate
 
 Run DP-0 when: change folder doesn't exist, planning artifacts are
 missing/empty, `dp_0_confirmed` is not `true`, or a legacy change still has an
@@ -137,10 +137,10 @@ Change is fuzzy, scope unclear, comparing options, no stable change name.
 Guard: `npx --yes --package spec-superflow@0.11.0 ssf runtime guard check <dir> exploring specifying --json` → fail = BLOCK. User knows what they want, artifacts missing/incomplete.
 
 ### Route to contract-builder
-Guard: `... check <dir> specifying bridging --json` → fail = BLOCK. Artifacts exist, implementation requested, contract missing/stale. Include `DP-3: 契约批准`.
+Only for Full or legacy Hotfix. Guard: `... check <dir> specifying bridging --json` → fail = BLOCK. Artifacts exist, implementation requested, contract missing/stale. Include `DP-3: 契约批准`.
 
 ### Route to build-executor
-Contract exists and approved, contract matches artifacts. Include `DP-4: 执行模式选择`: propose waves, run `npx --yes --package spec-superflow@0.11.0 ssf execution recommend <change-dir> [--wave ...]`, show the user every available mode plus evidence and the recommendation, then obtain a clear selection. The command saves a current receipt; before the first implementation edit, `build-executor` must run `npx --yes --package spec-superflow@0.11.0 ssf execution plan <change-dir> --mode <selected> --confirm ...` (and `--acknowledge-recommendation` when the selected mode differs from the recommendation) using matching artifacts, contract, and waves, then `npx --yes --package spec-superflow@0.11.0 ssf execution show <change-dir> --json`; report the saved revision, selected mode, recommendation alignment, ordered waves, and actual concurrent-dispatch capability. A revision must repeat recommend and confirmation. Do not transition to `executing` until `show` reports `current: true`; then run `... check <dir> approved-for-build executing --json` → fail = BLOCK.
+For Full or legacy Hotfix: contract exists and approved, contract matches artifacts. Include `DP-4: 执行模式选择`: propose waves, run `npx --yes --package spec-superflow@0.11.0 ssf execution recommend <change-dir> [--wave ...]`, then run `npx --yes --package spec-superflow@0.11.0 ssf execution plan <change-dir> --mode <selected> --confirm ...` and `execution show`. For Quick, Tweak, or direct Hotfix: use the receipt-aware guard and bounded verification; do not require DP-4, a contract, plan, or review receipt.
 
 ### Route to bug-investigator
 Execution hit blockage: test failure, unexpected behavior, build error, task cannot proceed. After debugging, route back to build-executor.
