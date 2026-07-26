@@ -1,7 +1,7 @@
 {
   "mode": "sdd",
-  "source": "user-confirmed",
-  "rationale": "User explicitly authorized execution after code analysis; selected the recommended dependency-aware SDD plan.",
+  "source": "user-confirmed-revision",
+  "rationale": "Task completion checkmarks now match executed work; retain the approved SDD plan.",
   "waves": [
     {
       "id": "delta-publication",
@@ -30,10 +30,10 @@
       ]
     }
   ],
-  "artifacts_hash": "sha256:9764256a4ea054571562c30799e89c46d0951603ca6b14c70613a66a4056a1e2",
+  "artifacts_hash": "sha256:d366016328874d2c9b9f50b54f86d830e9478578ac54c8191a6903e633ef8d41",
   "contract_hash": "sha256:b0466f1f22f031f90ac4d609132874bfdaa413c260543d9f98c7e654e52bb79a",
   "workflow": "full",
-  "revision": 1,
+  "revision": 3,
   "recommendation": {
     "available_modes": [
       "inline",
@@ -105,17 +105,17 @@
         ]
       }
     ],
-    "artifacts_hash": "sha256:9764256a4ea054571562c30799e89c46d0951603ca6b14c70613a66a4056a1e2",
+    "artifacts_hash": "sha256:d366016328874d2c9b9f50b54f86d830e9478578ac54c8191a6903e633ef8d41",
     "contract_hash": "sha256:b0466f1f22f031f90ac4d609132874bfdaa413c260543d9f98c7e654e52bb79a",
     "workflow": "full",
-    "execution_plan_revision_at_recommendation": null,
-    "created_at": "2026-07-26T16:17:42.017Z",
-    "hash": "sha256:20f95262351cc4bb148f0dc15e5549fc0dd452f456d19ac1ad93300194d72d0c"
+    "execution_plan_revision_at_recommendation": 2,
+    "created_at": "2026-07-26T16:40:52.513Z",
+    "hash": "sha256:ecf5f6dc7bbb1dd594e084a3134b08bdb27f6bfd131af5974c08ce5e56c3e7fc"
   },
   "selection": {
     "confirmed": true,
     "followed_recommendation": true,
     "acknowledged_non_recommendation": false
   },
-  "hash": "sha256:6bdac0a0bd0894ce4ae9c0dee0d17dd318b486b02ee9b72c24bcc4d0cfc3dff1"
+  "hash": "sha256:97830bd2c12069f80c6d0bfb1fb58f2504c15938353fbe931ff8e633e167f108"
 }
