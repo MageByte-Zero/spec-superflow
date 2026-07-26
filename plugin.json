@@ -22,5 +22,15 @@
     "copilot"
   ],
   "category": "Productivity",
-  "skills": "skills/"
+  "skills": [
+    "./skills/bug-investigator",
+    "./skills/build-executor",
+    "./skills/code-reviewer",
+    "./skills/contract-builder",
+    "./skills/need-explorer",
+    "./skills/release-archivist",
+    "./skills/spec-merger",
+    "./skills/spec-writer",
+    "./skills/workflow-start"
+  ]
 }
