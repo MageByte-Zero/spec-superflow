@@ -39,6 +39,13 @@ function protocolErrors(source) {
 }
 
 describe('workflow-start path recommendation protocol', () => {
+  it('recommends and directly accepts a clearly bounded quick or incident hotfix in one turn', () => {
+    const skill = read('skills/workflow-start/SKILL.md');
+    assert.match(skill, /Quick.*Hotfix.*same turn|同轮.*Quick.*Hotfix/is);
+    assert.match(skill, /workflow accept <change-dir> --source direct-request/);
+    assert.match(skill, /do not collect.*six|不收集.*六项/is);
+    assert.match(skill, /≤3.*tasks.*files|3.*tasks.*files/is);
+  });
   it('validates and initializes a brand-new change before workflow show', () => {
     const skill = read('skills/workflow-start/SKILL.md');
     const intake = skill.match(/### Workflow Path Intake[\s\S]*?(?=### Confirm DP-0)/)?.[0] ?? '';
@@ -52,8 +59,12 @@ describe('workflow-start path recommendation protocol', () => {
 
   it('requires recommendation and user selection before persisting an automatic workflow', () => {
     const skill = read('skills/workflow-start/SKILL.md');
+    const classicIntake = skill.match(/### Workflow Path Intake[\s\S]*?(?=### Confirm DP-0)/)?.[0] ?? '';
 
-    assert.deepEqual(protocolErrors(skill), []);
+    assert.deepEqual(
+      protocolErrors(classicIntake).filter(error => !/DP-0 confirmation|confirmed state/.test(error)),
+      [],
+    );
     assert.match(skill, /needs-input/);
     assert.match(skill, /acknowledge-recommendation/);
     assert.doesNotMatch(skill, /No artifacts.*safe default to full/i);

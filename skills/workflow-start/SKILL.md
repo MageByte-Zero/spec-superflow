@@ -40,6 +40,17 @@ scan, or `release-archivist`; do not resume, hand off, or route any more work.
 
 ## DP-0: User Confirmation Gate
 
+## Direct Short-Path Intake (before DP-0)
+
+For a clearly bounded Quick or incident Hotfix request, recommend and accept in the same turn. Do not collect the six intake facts as a questionnaire: infer the available facts from the request and repository, show the single recommendation and qualification reason, then run:
+
+```bash
+npx --yes --package spec-superflow@0.11.0 ssf workflow recommend <change-dir> --task-count <n> --file-count <n> --config-doc-only no --schema-api-change no --new-module no --uncertainty low --request-kind <standard|incident>
+npx --yes --package spec-superflow@0.11.0 ssf workflow accept <change-dir> --source direct-request
+```
+
+Quick is ≤3 tasks/files of low-risk code. Hotfix is an incident with a reproducible symptom and ≤2 tasks/files. Display `Observed`, `Recommended`, and `Why`; acceptance is the user's direct request to proceed. Do not create planning artifacts, a contract, an execution plan, wave receipts, or DP approvals. Transition through the receipt-aware guard, execute bounded work, and require `test_result: pass` before closing. Any fourth file, public/schema/API boundary, new module, dependency/permission/data change, high uncertainty, or failed verification stops the path and routes to Full. A legacy Hotfix without a valid direct receipt remains on the Full contract/DP-3/plan/review path.
+
 Run DP-0 when: change folder doesn't exist, planning artifacts are
 missing/empty, `dp_0_confirmed` is not `true`, or a legacy change still has an
 `auto`/empty workflow. Resolve the artifact language first, then complete the
@@ -68,7 +79,7 @@ languages without an explicit user request.
 ### Workflow Path Intake (Mode Detection)
 
 Workflow path selection is a DP-0 intake decision. It selects the planning path
-(`full`, `hotfix`, or `tweak`); it is separate from DP-4, which later selects
+(`full`, `hotfix`, `tweak`, or `quick`); it is separate from DP-4, which later selects
 the execution mode (`Inline`, `Batch Inline`, or `SDD`). It does not add a
 state or cause a phase transition.
 

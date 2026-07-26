@@ -147,6 +147,10 @@ If task hits BLOCKED (3+ fix failures or changes outside declared scope), escala
 
 Skip TDD. Apply changes directly. Verify file integrity (exists, non-empty, valid syntax). No batch execution — sequential changes.
 
+## Direct Quick and Hotfix
+
+Quick direct execution requires the valid direct receipt, a bounded diff, targeted tests or syntax/static checks, and a persisted `test_result: pass`; do not create a contract, execution plan, wave review, DP-6, or DP-7. Direct Hotfix follows the same route only for an incident-backed receipt and must run a regression that demonstrates the original symptom is fixed. Stop rather than expanding scope when the boundary is exceeded or verification fails; route to Full. A legacy Hotfix without a direct receipt remains subject to the contract, DP-3, execution plan, and review receipts.
+
 ## DP Records
 
 DP-4 is written by `npx --yes --package spec-superflow@0.11.0 ssf execution plan`; do not write it with raw `state set`.

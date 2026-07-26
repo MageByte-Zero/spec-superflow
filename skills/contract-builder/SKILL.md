@@ -58,7 +58,7 @@ Refresh if: scope changed in proposal, requirements changed in specs, constraint
 
 ## Hotfix Mode
 
-Generate minimal contract: Intent Lock (one sentence), Task List (numbered), Approval Gate (DP-3). Skip Scope Fence, Build Rules, Review Gates, Test Evidence. Still requires DP-3 approval.
+Generate a minimal contract only for a legacy Hotfix: Intent Lock (one sentence), Task List (numbered), Approval Gate (DP-3). Skip Scope Fence, Build Rules, Review Gates, Test Evidence. Still requires DP-3 approval. Quick direct execution and direct incident Hotfix do not invoke this skill; they use the signed receipt and finish with `test_result: pass` instead.
 
 ## Guardrails
 

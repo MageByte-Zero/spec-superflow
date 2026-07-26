@@ -107,9 +107,9 @@ run `npx --yes --package spec-superflow@0.11.0 ssf state transition <change-dir>
 `executing → closing` is the final action: once it succeeds, select no next
 skill and run no recovery scans.
 
-## Lightweight Closure (hotfix/tweak)
+## Lightweight Closure (Quick/direct Hotfix/tweak)
 
-Verify files exist and are non-empty, run `node --check` on code files, skip 5-step verification. Still record DP-6 and DP-7.
+Quick and direct Hotfix use a concise verification summary: changed files, focused command, result, and persisted `test_result: pass`. Quick runs targeted tests or syntax/static checks; direct Hotfix proves the original symptom regression. Do not require a contract, execution plan, review receipt, DP-6, or DP-7. A legacy Hotfix remains on the full contract/DP/review closure path. Tweak verifies file integrity and also persists `test_result: pass`.
 
 ## Exception Handling
 
