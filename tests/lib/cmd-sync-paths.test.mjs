@@ -26,11 +26,19 @@ function runSync(cwd, changeDir) {
   }
 }
 
-function writeSpec(path) {
-  writeFileSync(path, '## ADDED Requirements\n\n### Requirement: Sync path\n\nThe system SHALL sync canonical paths.\n\n#### Scenario: Sync\n- **WHEN** sync runs\n- **THEN** the main spec is written');
+function writeSpec(file, content) {
+  writeFileSync(file, content);
 }
 
-describe('cmd-sync: canonical spec paths', () => {
+function requirement(name, text = name) {
+  return `### Requirement: ${name}\n\nThe system SHALL ${text}.\n\n#### Scenario: ${name}\n- **WHEN** sync runs\n- **THEN** ${text}.`;
+}
+
+function writeChangeState(change) {
+  writeFileSync(join(change, '.spec-superflow.yaml'), 'state: executing\nworkflow: full\nchange_name: canonical\n');
+}
+
+describe('cmd-sync: canonical spec publication', () => {
   before(() => {
     tempRoot = mkdtempSync(join(tmpdir(), 'ssf-sync-paths-'));
   });
@@ -39,16 +47,80 @@ describe('cmd-sync: canonical spec paths', () => {
     if (tempRoot) rmSync(tempRoot, { recursive: true, force: true });
   });
 
-  it('syncs canonical specs to main specs/<capability>/spec.md', () => {
+  it('applies ADDED requirements to an existing canonical baseline and writes a receipt', () => {
     const repo = mkdtempSync(join(tempRoot, 'repo-'));
     const change = join(repo, 'changes', 'canonical');
     mkdirSync(join(change, 'specs', 'ui-theme'), { recursive: true });
-    writeSpec(join(change, 'specs', 'ui-theme', 'spec.md'));
+    mkdirSync(join(repo, 'specs', 'ui-theme'), { recursive: true });
+    writeChangeState(change);
+    writeSpec(join(repo, 'specs', 'ui-theme', 'spec.md'), `# UI Theme\n\n## Requirements\n\n${requirement('Existing', 'keep existing behavior')}\n`);
+    writeSpec(join(change, 'specs', 'ui-theme', 'spec.md'), `# UI Theme delta\n\n## ADDED Requirements\n\n${requirement('Sync path', 'publish canonical paths')}\n`);
 
     const result = runSync(repo, change);
+    const baseline = readFileSync(join(repo, 'specs', 'ui-theme', 'spec.md'), 'utf-8');
+    const state = readFileSync(join(change, '.spec-superflow.yaml'), 'utf-8');
+
     assert.equal(result.exitCode, 0, result.stdout + result.stderr);
-    assert.equal(existsSync(join(repo, 'specs', 'ui-theme', 'spec.md')), true);
-    assert.match(readFileSync(join(repo, 'specs', 'ui-theme', 'spec.md'), 'utf-8'), /Sync path/);
+    assert.match(baseline, /^## Requirements$/m);
+    assert.match(baseline, /Requirement: Existing/);
+    assert.match(baseline, /Requirement: Sync path/);
+    assert.doesNotMatch(baseline, /^## ADDED Requirements$/m);
+    assert.match(state, /^spec_publication_receipt: [A-Za-z0-9_-]+$/m);
+  });
+
+  it('applies MODIFIED, REMOVED, RENAMED, and ADDED operations without persisting delta headers', () => {
+    const repo = mkdtempSync(join(tempRoot, 'repo-operations-'));
+    const change = join(repo, 'changes', 'operations');
+    mkdirSync(join(change, 'specs', 'workflow'), { recursive: true });
+    mkdirSync(join(repo, 'specs', 'workflow'), { recursive: true });
+    writeChangeState(change);
+    writeSpec(join(repo, 'specs', 'workflow', 'spec.md'), `# Workflow\n\n## Requirements\n\n${requirement('Keep', 'keep behavior')}\n\n${requirement('Modify me', 'old behavior')}\n\n${requirement('Remove me', 'remove behavior')}\n\n${requirement('Rename me', 'rename behavior')}\n`);
+    writeSpec(join(change, 'specs', 'workflow', 'spec.md'), `## ADDED Requirements\n\n${requirement('Added', 'add behavior')}\n\n## MODIFIED Requirements\n\n${requirement('Modify me', 'new behavior')}\n\n## REMOVED Requirements\n\n### Requirement: Remove me\n\n## RENAMED Requirements\n\n- FROM: \`### Requirement: Rename me\`\n- TO: \`### Requirement: Renamed\`\n`);
+
+    const result = runSync(repo, change);
+    const baseline = readFileSync(join(repo, 'specs', 'workflow', 'spec.md'), 'utf-8');
+
+    assert.equal(result.exitCode, 0, result.stdout + result.stderr);
+    assert.match(baseline, /Requirement: Keep/);
+    assert.match(baseline, /Requirement: Added/);
+    assert.match(baseline, /Requirement: Modify me[\s\S]*new behavior/);
+    assert.doesNotMatch(baseline, /old behavior/);
+    assert.doesNotMatch(baseline, /Requirement: Remove me/);
+    assert.match(baseline, /Requirement: Renamed/);
+    assert.doesNotMatch(baseline, /Requirement: Rename me/);
+    assert.doesNotMatch(baseline, /^## (ADDED|MODIFIED|REMOVED|RENAMED) Requirements$/m);
+  });
+
+  it('normalizes a legacy copied delta baseline before publishing the next delta', () => {
+    const repo = mkdtempSync(join(tempRoot, 'repo-legacy-'));
+    const change = join(repo, 'changes', 'legacy');
+    mkdirSync(join(change, 'specs', 'workflow'), { recursive: true });
+    mkdirSync(join(repo, 'specs', 'workflow'), { recursive: true });
+    writeChangeState(change);
+    writeSpec(join(repo, 'specs', 'workflow', 'spec.md'), `# Workflow\n\n## ADDED Requirements\n\n${requirement('Legacy', 'keep migrated behavior')}\n`);
+    writeSpec(join(change, 'specs', 'workflow', 'spec.md'), `## ADDED Requirements\n\n${requirement('Current', 'publish current behavior')}\n`);
+
+    const result = runSync(repo, change);
+    const baseline = readFileSync(join(repo, 'specs', 'workflow', 'spec.md'), 'utf-8');
+
+    assert.equal(result.exitCode, 0, result.stdout + result.stderr);
+    assert.match(baseline, /^## Requirements$/m);
+    assert.match(baseline, /Requirement: Legacy/);
+    assert.match(baseline, /Requirement: Current/);
+    assert.doesNotMatch(baseline, /^## ADDED Requirements$/m);
+  });
+
+  it('derives the published baseline from the change path rather than the caller cwd', () => {
+    const repo = mkdtempSync(join(tempRoot, 'repo-context-'));
+    const change = join(repo, 'changes', 'context');
+    mkdirSync(join(change, 'specs', 'workflow'), { recursive: true });
+    writeSpec(join(change, 'specs', 'workflow', 'spec.md'), `## ADDED Requirements\n\n${requirement('Context', 'resolve its project root')}\n`);
+
+    const result = runSync(tempRoot, change);
+
+    assert.equal(result.exitCode, 0, result.stdout + result.stderr);
+    assert.equal(existsSync(join(repo, 'specs', 'workflow', 'spec.md')), true);
+    assert.equal(existsSync(join(tempRoot, 'specs', 'workflow', 'spec.md')), false);
   });
 
   it('derives capability dirs from Windows-style spec paths', () => {
@@ -62,7 +134,7 @@ describe('cmd-sync: canonical spec paths', () => {
     const repo = mkdtempSync(join(tempRoot, 'repo-flat-'));
     const change = join(repo, 'changes', 'flat');
     mkdirSync(join(change, 'specs'), { recursive: true });
-    writeSpec(join(change, 'specs', 'ui-theme.md'));
+    writeSpec(join(change, 'specs', 'ui-theme.md'), `## ADDED Requirements\n\n${requirement('Flat')}`);
 
     const result = runSync(repo, change);
     assert.equal(result.exitCode, 1);
@@ -74,7 +146,7 @@ describe('cmd-sync: canonical spec paths', () => {
     const repo = mkdtempSync(join(tempRoot, 'repo-root-'));
     const change = join(repo, 'changes', 'root-spec');
     mkdirSync(join(change, 'specs'), { recursive: true });
-    writeSpec(join(change, 'specs', 'spec.md'));
+    writeSpec(join(change, 'specs', 'spec.md'), `## ADDED Requirements\n\n${requirement('Root')}`);
 
     const result = runSync(repo, change);
     assert.equal(result.exitCode, 1);
