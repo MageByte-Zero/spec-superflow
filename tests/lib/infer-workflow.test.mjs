@@ -42,28 +42,35 @@ describe('infer-workflow: inferMode()', () => {
     assert.equal(result.explicit, true);
   });
 
-  it('infers hotfix for small change (≤2 tasks, ≤2 files, no code files in tasks)', () => {
+  it('infers tweak for a small documentation change', () => {
     // Use consistent paths — same file names in proposal AND tasks to avoid unique-count inflation
     writeFileSync(join(tempDir, '.spec-superflow.yaml'), 'state: exploring\nworkflow: auto');
     writeFileSync(join(tempDir, 'proposal.md'), '# Proposal\nFix typo in README.md');
     writeFileSync(join(tempDir, 'tasks.md'), '- [ ] Fix typo in README.md\n- [ ] Verify fix');
 
     const result = inferMode(tempDir);
-    // Hotfix check runs before tweak; 2 tasks, 1 file, no keywords → hotfix wins
-    assert.equal(result.mode, 'hotfix', `Expected hotfix but got ${result.mode}: ${result.reason}`);
+    assert.equal(result.mode, 'tweak', `Expected tweak but got ${result.mode}: ${result.reason}`);
   });
 
-  it('infers hotfix for small code change (≤2 tasks, ≤2 files, no schema)', () => {
+  it('infers quick for small code change (≤2 tasks, ≤2 files, no schema)', () => {
     writeFileSync(join(tempDir, '.spec-superflow.yaml'), 'state: exploring\nworkflow: auto');
     writeFileSync(join(tempDir, 'proposal.md'), '# Proposal\nFix null check in util.ts');
     writeFileSync(join(tempDir, 'tasks.md'), '- [ ] Add null check in util.ts\n- [ ] Add test for null case');
 
     const result = inferMode(tempDir);
-    // 2 tasks, 1 file (util.ts), no schema keyword, code file → hotfix
-    assert.equal(result.mode, 'hotfix', `Expected hotfix but got ${result.mode}: ${result.reason}`);
+    assert.equal(result.mode, 'quick', `Expected quick but got ${result.mode}: ${result.reason}`);
   });
 
-  it('infers hotfix for small Java code changes', () => {
+  it('infers quick for a bounded three-file code change', () => {
+    writeFileSync(join(tempDir, '.spec-superflow.yaml'), 'state: exploring\nworkflow: auto');
+    writeFileSync(join(tempDir, 'proposal.md'), '# Change\nModify src/a.ts src/b.ts src/c.ts');
+    writeFileSync(join(tempDir, 'tasks.md'), '- [ ] Update src/a.ts\n- [ ] Update src/b.ts\n- [ ] Verify src/c.ts');
+
+    const result = inferMode(tempDir);
+    assert.equal(result.mode, 'quick');
+  });
+
+  it('infers quick for small Java code changes', () => {
     const changeDir = mkdtempSync(join(tempDir, 'java-hotfix-'));
     writeFileSync(join(changeDir, '.spec-superflow.yaml'), 'state: exploring\nworkflow: auto');
     writeFileSync(join(changeDir, 'proposal.md'), '# Proposal\nFix null check in src/Main.java');
@@ -71,10 +78,10 @@ describe('infer-workflow: inferMode()', () => {
 
     const result = inferMode(changeDir);
 
-    assert.equal(result.mode, 'hotfix', `Expected hotfix but got ${result.mode}: ${result.reason}`);
+    assert.equal(result.mode, 'quick', `Expected quick but got ${result.mode}: ${result.reason}`);
   });
 
-  it('does not infer tweak for multi-task Java and Go code changes', () => {
+  it('infers quick for bounded multi-task Java and Go code changes', () => {
     const javaDir = mkdtempSync(join(tempDir, 'java-code-'));
     writeFileSync(join(javaDir, '.spec-superflow.yaml'), 'state: exploring\nworkflow: auto');
     writeFileSync(join(javaDir, 'proposal.md'), '# Proposal\nRefactor service in src/Main.java');
@@ -85,11 +92,11 @@ describe('infer-workflow: inferMode()', () => {
     writeFileSync(join(goDir, 'proposal.md'), '# Proposal\nRefactor handler in cmd/server/main.go');
     writeFileSync(join(goDir, 'tasks.md'), '- [ ] Update handler in cmd/server/main.go\n- [ ] Add unit test\n- [ ] Update wiring');
 
-    assert.equal(inferMode(javaDir).mode, 'full');
-    assert.equal(inferMode(goDir).mode, 'full');
+    assert.equal(inferMode(javaDir).mode, 'quick');
+    assert.equal(inferMode(goDir).mode, 'quick');
   });
 
-  it('does not infer tweak for multi-task Python and Rust code changes', () => {
+  it('infers quick for bounded multi-task Python and Rust code changes', () => {
     const pythonDir = mkdtempSync(join(tempDir, 'python-code-'));
     writeFileSync(join(pythonDir, '.spec-superflow.yaml'), 'state: exploring\nworkflow: auto');
     writeFileSync(join(pythonDir, 'proposal.md'), '# Proposal\nRefactor worker in app/worker.py');
@@ -100,8 +107,8 @@ describe('infer-workflow: inferMode()', () => {
     writeFileSync(join(rustDir, 'proposal.md'), '# Proposal\nRefactor parser in src/parser.rs');
     writeFileSync(join(rustDir, 'tasks.md'), '- [ ] Update parser in src/parser.rs\n- [ ] Add unit test\n- [ ] Update caller');
 
-    assert.equal(inferMode(pythonDir).mode, 'full');
-    assert.equal(inferMode(rustDir).mode, 'full');
+    assert.equal(inferMode(pythonDir).mode, 'quick');
+    assert.equal(inferMode(rustDir).mode, 'quick');
   });
 
   it('infers tweak for config/doc-only change (≤4 tasks)', () => {
@@ -134,13 +141,12 @@ describe('infer-workflow: inferMode()', () => {
     assert.ok(result.reason.includes('new module'));
   });
 
-  it('infers full when too many files (> 2) for hotfix', () => {
+  it('infers full when too many files (> 3) for quick', () => {
     writeFileSync(join(tempDir, '.spec-superflow.yaml'), 'state: exploring\nworkflow: auto');
-    writeFileSync(join(tempDir, 'proposal.md'), '# Big change\nModify src/a.ts src/b.ts src/c.ts');
-    writeFileSync(join(tempDir, 'tasks.md'), '- [ ] Task 1\n- [ ] Task 2\n- [ ] Task 3');
+    writeFileSync(join(tempDir, 'proposal.md'), '# Big change\nModify src/a.ts src/b.ts src/c.ts src/d.ts');
+    writeFileSync(join(tempDir, 'tasks.md'), '- [ ] Task 1\n- [ ] Task 2\n- [ ] Task 3\n- [ ] Task 4');
 
     const result = inferMode(tempDir);
-    // 3 files > 2 → not hotfix; 3 tasks ≤ 4 but files contain code → not tweak → full
     assert.equal(result.mode, 'full');
   });
 

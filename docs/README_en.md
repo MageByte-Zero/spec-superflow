@@ -191,7 +191,7 @@ AI coding sessions fail in one of two ways:
 
 **❌ Skip:** One-off scripts, pure Q&A conversations.
 
-> **v0.6.0+ auto mode detection:** hotfix (≤2 files, minimal contract + DP-3 before execution) and tweak (≤4 files, config/docs only, skips planning + bridging) make lightweight changes efficient too.
+> **Four workflow modes:** Quick (≤3 low-risk code files/tasks), direct Hotfix (incident, ≤2), and Tweak (≤4 config/docs files) execute with bounded verification; Full and legacy Hotfix retain planning, contract, and review controls.
 
 ---
 
@@ -240,11 +240,11 @@ You: "add authorization to the API"
    closing            CLOSED successful terminal state (no next skill)
 ```
 
-**Hard constraints:** No `execution-contract.md` or no approval → implementation blocked. Requirements change mid-execution → forced rollback. Bug encountered → must enter debugging state, no ad-hoc fixes.
+**Hard constraints:** Full and legacy Hotfix require an approved `execution-contract.md`; Quick, direct Hotfix, and Tweak instead stay within their accepted boundary and persist `test_result: pass`. Requirements change mid-execution → forced rollback. Bug encountered → must enter debugging state, no ad-hoc fixes.
 
 ### Guarded execution plans
 
-For full/hotfix, DP-4 is a persisted, current execution plan at
+For Full/legacy Hotfix, DP-4 is a persisted, current execution plan at
 `<change>/.superpowers/sdd/execution-plan.json`, rather than an arbitrary text
 field or content stored in `execution-contract.md`. Run `ssf execution recommend`
 first: it lists `inline`, `batch-inline`, and `sdd` from task count and wave
@@ -254,7 +254,7 @@ user records a choice with `--confirm`; `plan` and `revise` require a receipt ma
 artifacts, contract, and waves. A non-recommended choice also requires
 `--acknowledge-recommendation`. Batch Inline remains serial and never claims
 parallel work.
-`tweak` is exempt from this execution-plan and review-receipt gate.
+Quick, direct Hotfix, and Tweak are exempt from contract, execution-plan, and review-receipt gates; they persist `test_result: pass` after bounded verification.
 
 ```bash
 ssf execution recommend changes/my-change \
@@ -289,9 +289,11 @@ Recovery, switching, and manual save form a control-plane overlay, not a ninth
 workflow state; their CLI and CodeBuddy/WorkBuddy Markdown adapters keep the
 same guards.
 
-### Fast Paths (hotfix / tweak)
+### Fast Paths (Quick / Hotfix / Tweak)
 
-- **hotfix** — ≤2 files, no new modules → `exploring -> bridging -> approved-for-build -> executing`. It may skip full planning artifacts such as `proposal.md`, `design.md`, `tasks.md`, and `specs/`, but it still requires a fresh minimal `execution-contract.md` plus DP-3 approval before implementation
+- **Quick** — ≤3 low-risk code files/tasks → same-turn recommendation and direct acceptance, then targeted verification.
+- **direct Hotfix** — incident, ≤2 files/tasks → direct path plus original-symptom regression.
+- **legacy Hotfix** — no direct receipt → minimal contract, DP-3, execution plan, and review remain required.
 - **tweak** — ≤4 files, config/docs only → skip planning + bridging, direct edit
 
 ---
@@ -354,7 +356,7 @@ Content-level detection, not timestamps: proposal scope changed, approved spec b
 <details>
 <summary><strong>How does SDD (Subagent-Driven Development) work?</strong></summary>
 
-For full/hotfix, `ssf execution recommend` first presents Inline, Batch Inline,
+For Full/legacy Hotfix, `ssf execution recommend` first presents Inline, Batch Inline,
 and SDD with evidence from the change, then recommends one. The user confirms a
 selection with `--confirm`; a different selection requires
 `--acknowledge-recommendation`. The saved execution plan at

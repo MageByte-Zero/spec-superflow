@@ -7,6 +7,28 @@ const root = process.cwd();
 const read = path => readFileSync(join(root, path), 'utf8');
 
 describe('execution control plane instructions', () => {
+  it('limits planning and review receipts to Full and legacy Hotfix', () => {
+    for (const path of [
+      'skills/workflow-start/SKILL.md',
+      'skills/build-executor/SKILL.md',
+      'skills/contract-builder/SKILL.md',
+      'skills/release-archivist/SKILL.md',
+    ]) {
+      const content = read(path);
+      assert.match(content, /Quick.*direct|direct.*Quick/is, `${path} publishes Quick direct execution`);
+      assert.match(content, /legacy Hotfix/is, `${path} distinguishes legacy Hotfix`);
+      assert.match(content, /test_result.*pass/is, `${path} requires a persisted short-path verification result`);
+    }
+  });
+  it('publishes direct-path semantics in user documentation', () => {
+    for (const path of ['README.md', 'INSTALL.md', 'docs/README_en.md', 'docs/state-machine.md', 'docs/artifact-contract.md', 'docs/decision-points.md']) {
+      const content = read(path);
+      assert.match(content, /Quick/);
+      assert.match(content, /direct Hotfix/i);
+      assert.match(content, /legacy Hotfix/i);
+      assert.match(content, /test_result.*pass/is);
+    }
+  });
   it('documents #45 guarded execution', () => {
     const documents = [
       'README.md',
@@ -239,11 +261,9 @@ describe('execution control plane instructions', () => {
       'scripts/install-zcode.mjs',
     ]) {
       const content = read(path);
-      assert.match(content, /execution recommend/);
-      assert.match(content, /--confirm/);
-      assert.match(content, /acknowledge-recommendation/);
-      assert.match(content, /all.*pass.*review receipt.*closing/is);
-      assert.match(content, /full\/hotfix.*tweak.*exempt/is);
+      assert.match(content, /Full.*legacy Hotfix/is);
+      assert.match(content, /Quick.*direct Hotfix.*tweak/is);
+      assert.match(content, /test_result: pass/);
     }
   });
 

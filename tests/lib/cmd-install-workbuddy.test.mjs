@@ -98,8 +98,13 @@ describe('cmd-install-workbuddy', () => {
     // Runtime dirs copied.
     assert.ok(existsSync(join(pluginDir, 'scripts', 'check-update.mjs')));
 
-    // Phase-guard rule deployed.
-    assert.ok(existsSync(join(pluginDir, 'rules', 'phase-guard.md')));
+    // Phase-guard rule deployed with the actual four-mode contract.
+    const guardPath = join(pluginDir, 'rules', 'phase-guard.md');
+    assert.ok(existsSync(guardPath));
+    const guard = readFileSync(guardPath, 'utf-8');
+    assert.match(guard, /Full 或 legacy Hotfix/);
+    assert.match(guard, /Quick、direct Hotfix、tweak/);
+    assert.match(guard, /test_result: pass/);
 
     // Plugin manifest deployed.
     const manifest = JSON.parse(readFileSync(join(pluginDir, '.codebuddy-plugin', 'plugin.json'), 'utf-8'));

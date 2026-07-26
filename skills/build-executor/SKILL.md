@@ -9,9 +9,9 @@ Controls the implementation phase. Uses `execution-contract.md` as the workflow 
 
 ## Required Inputs
 
-Read: `execution-contract.md`, `tasks.md`, relevant `specs/`, relevant `design.md`. (Skip contract/spec requirements when workflow is `tweak`.)
+For Full or legacy Hotfix, read `execution-contract.md`, `tasks.md`, relevant `specs/`, and relevant `design.md`. Quick, direct incident Hotfix, and Tweak require only their receipt, request boundary, changed files, and verification command.
 
-Check workflow mode first: `npx --yes --package spec-superflow@0.11.0 ssf state get <change-dir> workflow`. If `tweak` → direct edit mode. If `hotfix` or `full` → standard contract-first discipline.
+Check workflow mode and receipt first. Tweak → direct edit mode. Quick or a valid direct incident Hotfix → Direct Quick and Hotfix. Full or legacy Hotfix → standard contract-first discipline.
 
 Branch/worktree preflight before ANY implementation edit (mandatory — do not skip):
 1. Run the isolation check:
@@ -29,23 +29,28 @@ Branch/worktree preflight before ANY implementation edit (mandatory — do not s
 
 ## Core Laws
 
-### Law 1: Contract First
-The execution contract is the approved handoff artifact, not chat history.
+### Law 1: Contract First (Full and legacy Hotfix)
+For Full and legacy Hotfix, the execution contract is the approved handoff artifact, not chat history. Direct Quick and incident Hotfix use their valid direct receipt plus bounded verification instead; they must not create or require a contract.
 
-### Law 2: TDD Iron Law — No Production Code Without a Failing Test First
+### Law 2: TDD Iron Law — Full and legacy Hotfix
 RED (write test, see it fail) → GREEN (write minimal code, see it pass) → REFACTOR (clean up, suite stays green).
+
+Quick may use the closest targeted test or syntax/static check when no behavioral test is appropriate; direct Hotfix must run the original-symptom regression.
 
 **Red Flags**: "Quick implementation first, test later" / "Skip the test, manually verify" / "I already know it works" / "Just this one time without tests." ALL mean STOP and write the test first.
 
 ### Law 3: Review Before Drift
 Block on: logic defects, spec violations, missing required tests, unintended scope expansion.
 
-### Law 4: Rewind on Contract Break
+### Law 4: Rewind on Contract Break — Full and legacy Hotfix
 Return to `specifying` or `bridging` if: new behavior appears, interfaces change materially, design assumptions fail, artifacts no longer define intended implementation.
+
+For Quick/direct Hotfix, stop instead of creating or rewinding a contract; refresh
+`workflow recommend` with the observed risk, then select `full --confirm`.
 
 ## Execution Mode Selection
 
-For `full`/`hotfix`, generate proposed waves from the approved contract, then use the recommendation as a decision aid rather than silently defaulting a mode:
+For Full or legacy Hotfix, generate proposed waves from the approved contract, then use the recommendation as a decision aid rather than silently defaulting a mode:
 
 ```bash
 npx --yes --package spec-superflow@0.11.0 ssf execution recommend <change-dir> \
@@ -81,7 +86,7 @@ Boundaries: if any task touches >1 module, involves schema/API/config changes, o
 
 ## SDD Workflow
 
-For full/hotfix by default. Dispatch according to the persisted plan, review each planned wave, and run a final broad review after all waves.
+For Full/legacy Hotfix by default. Dispatch according to the persisted plan, review each planned wave, and run a final broad review after all waves.
 
 ### Planned-Wave Loop
 1. Read the current plan with `npx --yes --package spec-superflow@0.11.0 ssf execution show <change-dir> --json`; only waves shown with `current: true` and `eligible: true` may start. A `retryable: true` wave may only be repaired and re-reviewed; do not dispatch its dependents until its replacement receipt is `pass`. The CLI encodes dependencies in `--wave <id>:<strategy>:<tasks>[:<depends-on,...>]` and rejects a review receipt for a wave whose prerequisites lack current `pass` receipts.
@@ -147,6 +152,10 @@ If task hits BLOCKED (3+ fix failures or changes outside declared scope), escala
 
 Skip TDD. Apply changes directly. Verify file integrity (exists, non-empty, valid syntax). No batch execution — sequential changes.
 
+## Direct Quick and Hotfix
+
+Quick direct execution requires the valid direct receipt, a bounded diff, targeted tests or syntax/static checks, and a persisted `test_result: pass`; do not create a contract, execution plan, wave review, DP-6, or DP-7. Direct Hotfix follows the same route only for an incident-backed receipt and must run a regression that demonstrates the original symptom is fixed. Stop rather than expanding scope when the boundary is exceeded or verification fails; refresh `workflow recommend` with the observed risk, then select `full --confirm` before resuming. A legacy Hotfix without a direct receipt remains subject to the contract, DP-3, execution plan, and review receipts.
+
 ## DP Records
 
 DP-4 is written by `npx --yes --package spec-superflow@0.11.0 ssf execution plan`; do not write it with raw `state set`.
@@ -154,7 +163,7 @@ DP-5 (debug escalation): `npx --yes --package spec-superflow@0.11.0 ssf state se
 
 ## Completion Standard
 
-Don't report completion until: tests pass, contract obligations satisfied, review blockers resolved, every planned wave has a current `pass` receipt, final review is complete, and workflow is ready for `release-archivist`.
+For Full or legacy Hotfix, do not report completion until tests pass, contract obligations are satisfied, review blockers resolved, every planned wave has a current `pass` receipt, and final review is complete. For Quick/direct Hotfix/Tweak, report completion only after bounded verification and persisted `test_result: pass`; do not require contract or review receipts.
 
 ## Exception Handling
 

@@ -7,7 +7,7 @@ function read(path) {
 }
 
 const AUTO_INTAKE_STEPS = [
-  ['explicit workflow', /explicit[^\n]*full[^\n]*hotfix[^\n]*tweak/i],
+  ['explicit Full workflow', /explicit `full` workflow/i],
   ['show receipt', /ssf workflow show/],
   ['only missing facts', /only[^\n]*missing_facts|missing_facts[^\n]*only/i],
   ['recommend', /ssf workflow recommend/],
@@ -15,8 +15,8 @@ const AUTO_INTAKE_STEPS = [
   ['Available', /Available/],
   ['Recommended', /Recommended/],
   ['Why', /Why/],
-  ['user choice', /user(?:'s)? explicit path choice/i],
-  ['persist selection', /ssf workflow select/],
+  ['user choice', /user(?:'s)? explicit choice/i],
+  ['persist selection', /ssf workflow select[^\n]*full\|hotfix\|tweak/],
   ['DP-0 confirmation', /Confirm DP-0/],
   ['confirmed state', /dp_0_confirmed true/],
 ];
@@ -39,6 +39,13 @@ function protocolErrors(source) {
 }
 
 describe('workflow-start path recommendation protocol', () => {
+  it('recommends and directly accepts a clearly bounded quick or incident hotfix in one turn', () => {
+    const skill = read('skills/workflow-start/SKILL.md');
+    assert.match(skill, /Quick.*Hotfix.*same turn|同轮.*Quick.*Hotfix/is);
+    assert.match(skill, /workflow accept <change-dir> --source direct-request/);
+    assert.match(skill, /do not collect.*six|不收集.*六项/is);
+    assert.match(skill, /≤3.*tasks.*files|3.*tasks.*files/is);
+  });
   it('validates and initializes a brand-new change before workflow show', () => {
     const skill = read('skills/workflow-start/SKILL.md');
     const intake = skill.match(/### Workflow Path Intake[\s\S]*?(?=### Confirm DP-0)/)?.[0] ?? '';
@@ -50,10 +57,14 @@ describe('workflow-start path recommendation protocol', () => {
     assert.ok(intake.indexOf('ssf state init') < intake.indexOf('ssf workflow show'));
   });
 
-  it('requires recommendation and user selection before persisting an automatic workflow', () => {
+  it('requires recommendation and user selection before persisting a Full or legacy workflow', () => {
     const skill = read('skills/workflow-start/SKILL.md');
+    const classicIntake = skill.match(/### Workflow Path Intake[\s\S]*?(?=### Confirm DP-0)/)?.[0] ?? '';
 
-    assert.deepEqual(protocolErrors(skill), []);
+    assert.deepEqual(
+      protocolErrors(classicIntake).filter(error => !/DP-0 confirmation|confirmed state/.test(error)),
+      [],
+    );
     assert.match(skill, /needs-input/);
     assert.match(skill, /acknowledge-recommendation/);
     assert.doesNotMatch(skill, /No artifacts.*safe default to full/i);
@@ -61,16 +72,16 @@ describe('workflow-start path recommendation protocol', () => {
 
   it('rejects a protocol that persists selection before recommendation', () => {
     const wrongOrder = [
-      'explicit workflow full hotfix tweak',
+      'explicit `full` workflow',
       'ssf workflow show',
       'only missing_facts',
-      'ssf workflow select',
+      'ssf workflow select --mode full|hotfix|tweak',
       'ssf workflow recommend',
       'Observed',
       'Available',
       'Recommended',
       'Why',
-      "user's explicit path choice",
+      "user's explicit choice",
       'Confirm DP-0',
       'dp_0_confirmed true',
     ].join('\n');
@@ -80,15 +91,15 @@ describe('workflow-start path recommendation protocol', () => {
 
   it('rejects a protocol that omits a required recommendation display field', () => {
     const missingWhy = [
-      'explicit workflow full hotfix tweak',
+      'explicit `full` workflow',
       'ssf workflow show',
       'only missing_facts',
       'ssf workflow recommend',
       'Observed',
       'Available',
       'Recommended',
-      "user's explicit path choice",
-      'ssf workflow select',
+      "user's explicit choice",
+      'ssf workflow select --mode full|hotfix|tweak',
       'Confirm DP-0',
       'dp_0_confirmed true',
     ].join('\n');
@@ -105,13 +116,15 @@ describe('workflow-start path recommendation protocol', () => {
     assert.match(decisions, /\.spec-superflow\.yaml[^\n]*dp_0_[^\n]*(?:scope|artifact_language)/);
   });
 
-  it('documents every DP-0 trigger including legacy recovery and fast paths', () => {
+  it('documents Full/legacy DP-0 triggers and fast-path exemptions', () => {
     const decisions = read('docs/decision-points.md');
     const trigger = decisions.match(/- \*\*触发条件\*\*：([^\n]+)/)?.[1] ?? '';
 
-    assert.match(trigger, /auto/i);
-    assert.match(trigger, /空|empty/i);
+    assert.match(trigger, /Full/i);
     assert.match(trigger, /legacy/i);
-    assert.match(trigger, /fast path/i);
+    assert.match(trigger, /Quick/i);
+    assert.match(trigger, /direct Hotfix/i);
+    assert.match(trigger, /Tweak/i);
+    assert.doesNotMatch(trigger, /auto|空|empty/i);
   });
 });

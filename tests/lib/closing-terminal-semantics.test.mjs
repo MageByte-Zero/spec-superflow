@@ -93,8 +93,8 @@ describe('closing terminal lifecycle', () => {
     const archivist = read('skills/release-archivist/SKILL.md');
     const guard = archivist.indexOf('## Execution-State Guard');
     const audit = archivist.indexOf(`${RUNTIME_PREFIX} audit <change-dir>`);
-    const dp6 = archivist.indexOf('### DP-6 (Verification Outcome)');
-    const dp7 = archivist.indexOf('### DP-7 (Archive Confirmation)');
+    const dp6 = archivist.indexOf('### DP-6 (Verification Outcome');
+    const dp7 = archivist.indexOf('### DP-7 (Archive Confirmation');
     const merger = archivist.indexOf('invoke `spec-merger`');
     const transition = archivist.indexOf(`${RUNTIME_PREFIX} state transition <change-dir> closing`);
 

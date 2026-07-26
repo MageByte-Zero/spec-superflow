@@ -57,7 +57,7 @@ Defines:
 - review gates and their review receipts
 - escalation rules
 
-For full/hotfix, `ssf execution recommend` lists applicable execution modes and
+For Full/legacy Hotfix, `ssf execution recommend` lists applicable execution modes and
 recommends one from task count and wave strategy, and persists a recommendation
 receipt at `<change>/.superpowers/sdd/execution-recommendation.json`. `plan`
 and `revise` require the receipt to match the current artifacts, contract, and
@@ -67,8 +67,7 @@ waves. The user confirms the selected mode with `--confirm`; a non-recommended m
 the persisted execution plan to `<change>/.superpowers/sdd/execution-plan.json`.
 That JSON records each wave's dependencies and parallel/serial strategy; it is
 not stored in `execution-contract.md`. A current `pass` review receipt is
-required for every wave before dependent work or closing proceeds. `tweak` is
-exempt from execution-plan and review-receipt gates. `ssf execution revise`
+required for every wave before dependent work or closing proceeds. Quick, direct Hotfix, and Tweak are exempt from execution-plan and review-receipt gates and persist `test_result: pass` after bounded verification. `ssf execution revise`
 retains or upgrades an existing plan as `sdd`, requires fresh confirmation,
 creates a new revision, and
 clears prior review receipts; it never permits a downgrade.
@@ -98,11 +97,11 @@ the same CLI guards; other platforms are not promised identical slash names.
 
 ## Guardrail
 
-Implementation starts only after:
+For Full/legacy Hotfix, implementation starts only after:
 
 - planning artifacts exist
 - `execution-contract.md` exists
 - the user approves the execution contract
-- full/hotfix have a current `ssf execution plan` with a user-confirmed mode and
+- Full/legacy Hotfix have a current `ssf execution plan` with a user-confirmed mode and
   persisted recommendation evidence
 - every completed wave records a current `pass` review receipt before closing

@@ -84,10 +84,12 @@ Commands:
                         Recover an explicit change context without changing the shell
   runtime check-update  Run a portable update check for canonical skills
   runtime infer <dir>   Infer workflow mode without a plugin-root path
-  workflow recommend <change-dir> [--task-count <n>] [--file-count <n>] [--config-doc-only yes|no|unknown] [--schema-api-change yes|no|unknown] [--new-module yes|no|unknown] [--uncertainty low|high|unknown]
-                        Persist observed intake facts and recommend full, hotfix, or tweak without selecting one
+  workflow recommend <change-dir> [--task-count <n>] [--file-count <n>] [--config-doc-only yes|no|unknown] [--schema-api-change yes|no|unknown] [--new-module yes|no|unknown] [--uncertainty low|high|unknown] [--request-kind standard|incident]
+                        Persist observed intake facts and recommend full, hotfix, tweak, or quick without selecting one
   workflow select <change-dir> --mode full|hotfix|tweak --confirm --reason <text> [--acknowledge-recommendation]
-                        Persist a user-confirmed workflow choice after a ready recommendation
+                        Persist a user-confirmed Full, legacy Hotfix, or Tweak choice; use accept for Quick/direct Hotfix
+  workflow accept <change-dir> --source direct-request
+                        Directly accept a recommended quick or hotfix workflow
   workflow show <change-dir> [--json]
                         Show the saved workflow recommendation or selection recovery state
   runtime guard ...     Run a portable phase-transition guard
@@ -122,8 +124,8 @@ Examples:
   ssf state init changes/my-change/
   ssf state check changes/my-change/
   ssf state transition changes/my-change/ approved-for-build
-  ssf workflow recommend changes/fix-typo --task-count 1 --file-count 1 --config-doc-only no --schema-api-change no --new-module no --uncertainty low
-  ssf workflow select changes/fix-typo --mode hotfix --confirm --reason "bounded code fix"
+  ssf workflow recommend changes/fix-typo --task-count 1 --file-count 1 --config-doc-only no --schema-api-change no --new-module no --uncertainty low --request-kind incident
+  ssf workflow accept changes/fix-typo --source direct-request
   ssf state get changes/my-change/ batches_completed
   ssf checkpoint save changes/my-change/ --task 1.1 --next "Run focused tests"
   ssf checkpoint list changes/my-change/
