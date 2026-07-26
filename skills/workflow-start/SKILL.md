@@ -36,7 +36,7 @@ scan, or `release-archivist`; do not resume, hand off, or route any more work.
 
 ## Execution-Control Recovery Scan
 
-4. **Execution-control recovery scan**: For `approved-for-build`, `executing`, or `debugging`, run `npx --yes --package spec-superflow@0.11.0 ssf execution show <change-dir> --json`. Treat only `current: true` plus `waves[].eligible: true` as permission to start a wave; report plan revision, mode, next eligible wave, and every wave's receipt/blockers. A missing, invalid, or stale plan blocks implementation and routes to `build-executor`; do not infer progress from chat history.
+4. **Execution-control recovery scan**: For Full or legacy Hotfix in `approved-for-build`, `executing`, or `debugging`, run `npx --yes --package spec-superflow@0.11.0 ssf execution show <change-dir> --json`. Treat only `current: true` plus `waves[].eligible: true` as permission to start a wave. Do not require this scan for Quick, Tweak, or a valid direct Hotfix receipt.
 
 ## DP-0: User Confirmation Gate
 
@@ -45,6 +45,7 @@ scan, or `release-archivist`; do not resume, hand off, or route any more work.
 For a clearly bounded Quick or incident Hotfix request, recommend and accept in the same turn. Do not collect the six intake facts as a questionnaire: infer the available facts from the request and repository, show the single recommendation and qualification reason, then run:
 
 ```bash
+npx --yes --package spec-superflow@0.11.0 ssf state init <change-dir>
 npx --yes --package spec-superflow@0.11.0 ssf workflow recommend <change-dir> --task-count <n> --file-count <n> --config-doc-only no --schema-api-change no --new-module no --uncertainty low --request-kind <standard|incident>
 npx --yes --package spec-superflow@0.11.0 ssf workflow accept <change-dir> --source direct-request
 ```
@@ -88,7 +89,7 @@ state or cause a phase transition.
    (not `.` or `..`, with no `/` or `\\`), resolve the change dir as `<project-root>/changes/<change-name>`, and reject any normalized path that
    escapes the project's `changes/` directory.
 2. If the state file is absent or `dp_0_confirmed` is `false`/null, run `npx --yes --package spec-superflow@0.11.0 ssf state init <change-dir>` before `show`; initialization must leave DP-0 unconfirmed.
-3. Read `state.workflow`. An explicit workflow `full`/`hotfix`/`tweak` wins;
+3. Read `state.workflow`. An explicit workflow `full`/`hotfix`/`tweak`/`quick` wins;
    report it and skip the automatic recommendation flow.
 4. For `auto`/`null`/unset, run `npx --yes --package spec-superflow@0.11.0 ssf workflow show <change-dir> --json` before collecting or changing any facts. A missing receipt is represented as `needs-input` with all six fixed facts in `missing_facts`.
 5. If the response is `needs-input`, ask only for `missing_facts`; do not ask
@@ -98,7 +99,7 @@ state or cause a phase transition.
 7. Show the user `Observed`, `Available`, `Recommended`, and `Why`. A
    recommendation is advice only: never persist it as the workflow selection.
 8. Obtain the user's explicit path choice, then run
-   `npx --yes --package spec-superflow@0.11.0 ssf workflow select <change-dir> --mode <full|hotfix|tweak> --confirm --reason "<user choice>"`.
+   `npx --yes --package spec-superflow@0.11.0 ssf workflow select <change-dir> --mode <full|hotfix|tweak|quick> --confirm --reason "<user choice>"`.
 9. Add `--acknowledge-recommendation` only after the user chooses a
    non-recommended path. Report the persisted receipt and DP-0 audit summary.
 10. If `show` reports `selection-pending`, explain that its signed receipt was
@@ -175,7 +176,7 @@ or internal-refactor work. Never pass `--force` to `ssf isolate` for prototype
 work.
 
 ### Fast-Path Routing
-- **Hotfix**: Route to contract-builder (minimal), skip need-explorer + spec-writer, guard check `exploring bridging --workflow hotfix`, then `bridging -> approved-for-build`, after DP-3 → build-executor (recommend, show, and confirm an execution mode), after → release-archivist (lightweight). Hotfix may skip `proposal.md`, `design.md`, `tasks.md`, and `specs/`, but it still requires a fresh minimal `execution-contract.md`, DP-3 approval, and a current execution plan before build
+- **Legacy Hotfix**: Route to contract-builder (minimal), skip need-explorer + spec-writer, guard check `exploring bridging --workflow hotfix`, then `bridging -> approved-for-build`, after DP-3 → build-executor (recommend, show, and confirm an execution mode), after → release-archivist (lightweight). It may skip planning artifacts but still requires a minimal contract, DP-3, and a current execution plan. A direct Hotfix instead follows Direct Short-Path Intake.
 - **Tweak**: Route to build-executor (direct edit), skip need-explorer + spec-writer + contract-builder, guard check `exploring approved-for-build --workflow tweak`, after → release-archivist (lightweight)
 
 Post-transition: 💡 `npx --yes --package spec-superflow@0.11.0 ssf inject <change-dir>` to update phase-guard artifacts.
@@ -193,7 +194,7 @@ Use content inspection, not timestamps.
 ## Guardrails
 
 - No implementation before planning artifacts or contract exist
-- No implementation for full/hotfix without a current `npx --yes --package spec-superflow@0.11.0 ssf execution plan`; no state transition based on an unverified DP-4 string
+- No implementation for Full or legacy Hotfix without a current `npx --yes --package spec-superflow@0.11.0 ssf execution plan`; no state transition based on an unverified DP-4 string
 - No "continue" without state inspection
 - No implementation past stale contract
 - No implementation past bug without investigation

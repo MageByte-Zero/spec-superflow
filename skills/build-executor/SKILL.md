@@ -11,7 +11,7 @@ Controls the implementation phase. Uses `execution-contract.md` as the workflow 
 
 Read: `execution-contract.md`, `tasks.md`, relevant `specs/`, relevant `design.md`. (Skip contract/spec requirements when workflow is `tweak`.)
 
-Check workflow mode first: `npx --yes --package spec-superflow@0.11.0 ssf state get <change-dir> workflow`. If `tweak` → direct edit mode. If `hotfix` or `full` → standard contract-first discipline.
+Check workflow mode and receipt first. Tweak → direct edit mode. Quick or a valid direct incident Hotfix → Direct Quick and Hotfix. Full or legacy Hotfix → standard contract-first discipline.
 
 Branch/worktree preflight before ANY implementation edit (mandatory — do not skip):
 1. Run the isolation check:
@@ -45,7 +45,7 @@ Return to `specifying` or `bridging` if: new behavior appears, interfaces change
 
 ## Execution Mode Selection
 
-For `full`/`hotfix`, generate proposed waves from the approved contract, then use the recommendation as a decision aid rather than silently defaulting a mode:
+For Full or legacy Hotfix, generate proposed waves from the approved contract, then use the recommendation as a decision aid rather than silently defaulting a mode:
 
 ```bash
 npx --yes --package spec-superflow@0.11.0 ssf execution recommend <change-dir> \
@@ -81,7 +81,7 @@ Boundaries: if any task touches >1 module, involves schema/API/config changes, o
 
 ## SDD Workflow
 
-For full/hotfix by default. Dispatch according to the persisted plan, review each planned wave, and run a final broad review after all waves.
+For Full/legacy Hotfix by default. Dispatch according to the persisted plan, review each planned wave, and run a final broad review after all waves.
 
 ### Planned-Wave Loop
 1. Read the current plan with `npx --yes --package spec-superflow@0.11.0 ssf execution show <change-dir> --json`; only waves shown with `current: true` and `eligible: true` may start. A `retryable: true` wave may only be repaired and re-reviewed; do not dispatch its dependents until its replacement receipt is `pass`. The CLI encodes dependencies in `--wave <id>:<strategy>:<tasks>[:<depends-on,...>]` and rejects a review receipt for a wave whose prerequisites lack current `pass` receipts.
