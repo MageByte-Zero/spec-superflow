@@ -1,0 +1,45 @@
+# .spec-superflow.yaml — lightweight state machine
+# Derived data. Always rebuildable from artifacts. Lost/corrupt → fall back to content-level detection.
+
+# === Core state ===
+state: executing
+workflow: full
+revision: 1
+
+# === Hashes (fast staleness detection) ===
+artifacts_hash: sha256:9764256a4ea054571562c30799e89c46d0951603ca6b14c70613a66a4056a1e2
+contract_hash: sha256:b0466f1f22f031f90ac4d609132874bfdaa413c260543d9f98c7e654e52bb79a
+
+# === Execution progress ===
+execution_mode: sdd
+execution_plan_hash: sha256:6bdac0a0bd0894ce4ae9c0dee0d17dd318b486b02ee9b72c24bcc4d0cfc3dff1
+execution_plan_revision: 1
+batches_completed: 0
+test_result: null
+spec_merged: false
+
+# === Metadata ===
+change_name: eliminate-spec-drift
+last_transition: 2026-07-26T16:17:53.932Z
+last_transition_from: approved-for-build
+last_transition_to: executing
+
+# === Decision points ===
+dp_0_decisions: change=eliminate-spec-drift; intent=eliminate spec drift by making the active change the only workflow source and publishing verified baseline specs through a merge receipt; scope=path context, delta application, receipt validation, closing guard, tests, and documentation; non_goals=do not let root specs drive active state transitions; artifact_language=Chinese; workflow_path=full
+dp_0_result: confirmed
+dp_0_confirmed: true
+dp_0_timestamp: 2026-07-26T16:05:49Z
+dp_1_result: confirmed: active change is the sole workflow source; root specs are published baseline updated only through a verified delta application receipt
+dp_1_timestamp: 2026-07-26T16:10:00Z
+dp_2_result: approved: publication receipt, delta application, active change isolation, and stale-receipt closing guard
+dp_2_timestamp: 2026-07-26T16:15:00Z
+dp_3_result: approved: user explicitly authorized execution after code analysis; intent lock, delta publication receipt, and receipt-gated closing accepted
+dp_3_timestamp: null
+dp_4_result: sdd: plan revision 1; user-confirmed; User explicitly authorized execution after code analysis; selected the recommended dependency-aware SDD plan.
+dp_4_timestamp: 2026-07-26T16:17:53.561Z
+dp_5_result: null
+dp_5_timestamp: null
+dp_6_result: null
+dp_6_timestamp: null
+dp_7_result: null
+dp_7_timestamp: null
