@@ -2,7 +2,7 @@
 import { parseArgs } from 'node:util';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readState, writeState, updateField, rebuildState } from './state-loader.mjs';
 import { computeArtifactsHash, computeContractHash } from './hash.mjs';
@@ -124,10 +124,14 @@ export async function run(args) {
 
       // Run guard before allowing transition (H-2: enforce guard)
       const guardScript = join(__dirname, '..', 'guard', 'guard.mjs');
+      // The guard runs from the bundled plugin directory. Resolve a relative
+      // change path from the caller project before spawning it so both commands
+      // inspect the same artifacts.
+      const guardChangeDir = resolve(changeDir);
       const rawWorkflow = state.workflow || 'full';
       // Normalize: guard only accepts full/hotfix/tweak, not "auto"
       const workflow = rawWorkflow === 'auto' ? 'full' : rawWorkflow;
-      const guardResult = spawnSync('node', [guardScript, 'check', changeDir, fromState, toState, '--json', '--workflow', workflow], {
+      const guardResult = spawnSync('node', [guardScript, 'check', guardChangeDir, fromState, toState, '--json', '--workflow', workflow], {
         cwd: join(__dirname, '..', '..'),
         timeout: 10_000,
       });
