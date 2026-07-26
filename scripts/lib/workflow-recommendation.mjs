@@ -144,6 +144,9 @@ export function acceptWorkflowRecommendation(changeDir, { source }) {
   if (!['quick', 'hotfix'].includes(recommendation.mode)) {
     throw new Error('only a recommended quick or hotfix workflow can be accepted directly');
   }
+  if (recommendation.mode === 'hotfix' && loaded.record.facts.request_kind !== 'incident') {
+    throw new Error('direct hotfix acceptance requires an incident request');
+  }
   if (source !== 'direct-request') {
     throw new Error('workflow acceptance source must be direct-request');
   }

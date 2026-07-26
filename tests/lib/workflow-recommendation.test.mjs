@@ -80,6 +80,10 @@ describe('workflow path recommendation', () => {
       const loaded = readWorkflowSelection(changeDir);
       assert.equal(loaded.valid, true);
       assert.equal(loaded.record.facts.request_kind, 'standard');
+      assert.throws(
+        () => acceptWorkflowRecommendation(changeDir, { source: 'direct-request' }),
+        /incident/i,
+      );
     } finally {
       rmSync(changeDir, { recursive: true, force: true });
     }
