@@ -86,8 +86,8 @@ Commands:
   runtime infer <dir>   Infer workflow mode without a plugin-root path
   workflow recommend <change-dir> [--task-count <n>] [--file-count <n>] [--config-doc-only yes|no|unknown] [--schema-api-change yes|no|unknown] [--new-module yes|no|unknown] [--uncertainty low|high|unknown] [--request-kind standard|incident]
                         Persist observed intake facts and recommend full, hotfix, tweak, or quick without selecting one
-  workflow select <change-dir> --mode full|hotfix|tweak|quick --confirm --reason <text> [--acknowledge-recommendation]
-                        Persist a user-confirmed workflow choice after a ready recommendation
+  workflow select <change-dir> --mode full|hotfix|tweak --confirm --reason <text> [--acknowledge-recommendation]
+                        Persist a user-confirmed Full, legacy Hotfix, or Tweak choice; use accept for Quick/direct Hotfix
   workflow accept <change-dir> --source direct-request
                         Directly accept a recommended quick or hotfix workflow
   workflow show <change-dir> [--json]

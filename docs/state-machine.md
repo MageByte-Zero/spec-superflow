@@ -14,7 +14,9 @@
 #### Workflow Path Intake
 
 At entry, `workflow-start` reads the persisted `workflow` selection first. An
-explicit `full`, `hotfix`, `tweak`, or `quick` selection wins. Otherwise it runs `ssf
+an explicit `full` selection wins. A selected `hotfix`, `tweak`, or `quick` stays
+active only while it remains within its boundary; a scope or risk increase refreshes
+the recommendation before escalating to Full. Otherwise it runs `ssf
 workflow show`, asks only for `missing_facts`, runs `ssf workflow recommend`,
 and presents Observed, Available, Recommended, and Why. Recommendation does
 not change state. Full, legacy Hotfix, and Tweak are selected explicitly with
@@ -24,6 +26,11 @@ accepted with `ssf workflow accept --source direct-request`, which records the
 valid direct receipt needed by its short path. The legacy `runtime infer`
 compatibility API may return `full` for an empty directory, but it never
 replaces the user's intake selection.
+
+Quick is not a selectable workflow: it must use direct acceptance. To escalate
+Quick, direct Hotfix, or Tweak, run `ssf workflow recommend` with the updated
+facts, then confirm `ssf workflow select --mode full`; that replaces the short
+selection with an auditable Full intake receipt.
 
 Full and legacy Hotfix intake completes before DP-0 is marked confirmed.
 Artifact language may be resolved first, but `dp_0_confirmed=true` is written

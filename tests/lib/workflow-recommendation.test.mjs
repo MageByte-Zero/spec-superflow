@@ -149,6 +149,18 @@ describe('workflow path recommendation', () => {
     }
   });
 
+  it('requires direct acceptance for the Quick workflow', () => {
+    const changeDir = mkdtempSync(join(tmpdir(), 'ssf-workflow-quick-'));
+    try {
+      saveWorkflowRecommendation(changeDir, base);
+      assert.throws(() => recordWorkflowSelection(changeDir, {
+        mode: 'quick', reason: 'bounded code', confirmed: true, acknowledged: false,
+      }), /direct acceptance/i);
+    } finally {
+      rmSync(changeDir, { recursive: true, force: true });
+    }
+  });
+
   it('rejects Unicode control characters and line separators in selection reasons', () => {
     const changeDir = mkdtempSync(join(tmpdir(), 'ssf-workflow-reason-'));
     try {

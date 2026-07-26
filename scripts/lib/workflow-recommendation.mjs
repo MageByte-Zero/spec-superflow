@@ -111,6 +111,7 @@ export function recordWorkflowSelection(changeDir, { mode, reason, confirmed, ac
     throw new Error('workflow recommendation needs more input');
   }
   if (!WORKFLOW_MODES.includes(mode)) throw new Error(`invalid workflow mode: ${mode}`);
+  if (mode === 'quick') throw new Error('quick workflow must use direct acceptance');
   if (confirmed !== true) throw new Error('workflow selection requires --confirm');
   if (!isSafeReason(reason)) {
     throw new Error('workflow selection reason must be non-empty single-line text');

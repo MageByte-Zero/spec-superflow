@@ -34,6 +34,8 @@ const BOOLEAN_FACTS = {
   'new-module': ['yes', 'no', 'unknown'],
 };
 
+const SELECTABLE_WORKFLOW_MODES = Object.freeze(['full', 'hotfix', 'tweak']);
+
 class UsageError extends Error {}
 
 export async function run(args) {
@@ -58,10 +60,13 @@ export async function run(args) {
     requireStateFile(changeDir);
     const state = readState(changeDir);
 
-    if (['select', 'accept'].includes(subcommand) && isExplicitWorkflow(state.workflow)) {
+    if (subcommand === 'accept' && isExplicitWorkflow(state.workflow)) {
       return fail('workflow is already explicitly selected', 1);
     }
-    if (subcommand === 'recommend' && isExplicitWorkflow(state.workflow)) {
+    if (subcommand === 'select' && isExplicitWorkflow(state.workflow) && !canEscalateToFull(state, values)) {
+      return fail('workflow is already explicitly selected', 1);
+    }
+    if (subcommand === 'recommend' && state.workflow === 'full') {
       return print({ source: 'explicit-state', workflow: state.workflow }, values.json);
     }
     if (subcommand === 'recommend') return recommend(changeDir, values);
@@ -80,8 +85,8 @@ function recommend(changeDir, values) {
 }
 
 function select(changeDir, state, values) {
-  if (!WORKFLOW_MODES.includes(values.mode)) {
-    throw new UsageError(`--mode must be one of: ${WORKFLOW_MODES.join(', ')}`);
+  if (!SELECTABLE_WORKFLOW_MODES.includes(values.mode)) {
+    throw new UsageError(`--mode must be one of: ${SELECTABLE_WORKFLOW_MODES.join(', ')}`);
   }
   const record = recordWorkflowSelection(changeDir, {
     mode: values.mode,
@@ -91,6 +96,10 @@ function select(changeDir, state, values) {
   });
   persistWorkflowSelection(changeDir, state, record);
   return print({ ok: true, source: 'user-confirmed', record }, values.json);
+}
+
+function canEscalateToFull(state, values) {
+  return values.mode === 'full' && ['quick', 'hotfix', 'tweak'].includes(state.workflow);
 }
 
 function accept(changeDir, state, values) {
@@ -265,7 +274,7 @@ function fail(message, exitCode) {
 function printHelp() {
   console.log(`Usage:
   ssf workflow recommend <change-dir> [--task-count <n>] [--file-count <n>] [--config-doc-only yes|no|unknown] [--schema-api-change yes|no|unknown] [--new-module yes|no|unknown] [--uncertainty low|high|unknown] [--request-kind standard|incident] [--json]
-  ssf workflow select <change-dir> --mode full|hotfix|tweak|quick --confirm --reason <text> [--acknowledge-recommendation] [--json]
+  ssf workflow select <change-dir> --mode full|hotfix|tweak --confirm --reason <text> [--acknowledge-recommendation] [--json]
   ssf workflow accept <change-dir> --source direct-request [--json]
   ssf workflow show <change-dir> [--json]`);
 }

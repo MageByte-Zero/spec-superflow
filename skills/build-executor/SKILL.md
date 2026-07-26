@@ -45,7 +45,8 @@ Block on: logic defects, spec violations, missing required tests, unintended sco
 ### Law 4: Rewind on Contract Break — Full and legacy Hotfix
 Return to `specifying` or `bridging` if: new behavior appears, interfaces change materially, design assumptions fail, artifacts no longer define intended implementation.
 
-For Quick/direct Hotfix, stop and route to Full instead of creating or rewinding a contract.
+For Quick/direct Hotfix, stop instead of creating or rewinding a contract; refresh
+`workflow recommend` with the observed risk, then select `full --confirm`.
 
 ## Execution Mode Selection
 
@@ -153,7 +154,7 @@ Skip TDD. Apply changes directly. Verify file integrity (exists, non-empty, vali
 
 ## Direct Quick and Hotfix
 
-Quick direct execution requires the valid direct receipt, a bounded diff, targeted tests or syntax/static checks, and a persisted `test_result: pass`; do not create a contract, execution plan, wave review, DP-6, or DP-7. Direct Hotfix follows the same route only for an incident-backed receipt and must run a regression that demonstrates the original symptom is fixed. Stop rather than expanding scope when the boundary is exceeded or verification fails; route to Full. A legacy Hotfix without a direct receipt remains subject to the contract, DP-3, execution plan, and review receipts.
+Quick direct execution requires the valid direct receipt, a bounded diff, targeted tests or syntax/static checks, and a persisted `test_result: pass`; do not create a contract, execution plan, wave review, DP-6, or DP-7. Direct Hotfix follows the same route only for an incident-backed receipt and must run a regression that demonstrates the original symptom is fixed. Stop rather than expanding scope when the boundary is exceeded or verification fails; refresh `workflow recommend` with the observed risk, then select `full --confirm` before resuming. A legacy Hotfix without a direct receipt remains subject to the contract, DP-3, execution plan, and review receipts.
 
 ## DP Records
 

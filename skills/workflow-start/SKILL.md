@@ -48,7 +48,7 @@ npx --yes --package spec-superflow@0.11.0 ssf workflow recommend <change-dir> --
 npx --yes --package spec-superflow@0.11.0 ssf workflow accept <change-dir> --source direct-request
 ```
 
-Quick is ≤3 tasks/files of low-risk code. Hotfix is an incident with a reproducible symptom and ≤2 tasks/files. Display `Observed`, `Recommended`, and `Why`; acceptance is the user's direct request to proceed. Do not create planning artifacts, a contract, an execution plan, wave receipts, or DP approvals. Transition through the receipt-aware guard, execute bounded work, and require `test_result: pass` before closing. Any fourth file, public/schema/API boundary, new module, dependency/permission/data change, high uncertainty, or failed verification stops the path and routes to Full. A legacy Hotfix without a valid direct receipt remains on the Full contract/DP-3/plan/review path.
+Quick is ≤3 tasks/files of low-risk code. Hotfix is an incident with a reproducible symptom and ≤2 tasks/files. Display `Observed`, `Recommended`, and `Why`; acceptance is the user's direct request to proceed. Do not create planning artifacts, a contract, an execution plan, wave receipts, or DP approvals. Transition through the receipt-aware guard, execute bounded work, and require `test_result: pass` before closing. Any fourth file, public/schema/API boundary, new module, dependency/permission/data change, high uncertainty, or failed verification stops the path: refresh `workflow recommend` with those facts, then select `full --confirm` before continuing. A legacy Hotfix without a valid direct receipt remains on the Full contract/DP-3/plan/review path.
 
 ## DP-0: User Confirmation Gate
 
@@ -89,8 +89,10 @@ state or cause a phase transition.
    (not `.` or `..`, with no `/` or `\\`), resolve the change dir as `<project-root>/changes/<change-name>`, and reject any normalized path that
    escapes the project's `changes/` directory.
 2. If the state file is absent or `dp_0_confirmed` is `false`/null, run `npx --yes --package spec-superflow@0.11.0 ssf state init <change-dir>` before `show`; initialization must leave DP-0 unconfirmed.
-3. Read `state.workflow`. An explicit workflow `full`/`hotfix`/`tweak`/`quick` wins;
-   report it and skip the automatic recommendation flow.
+3. Read `state.workflow`. An explicit `full` workflow wins and skips automatic
+   recommendation. For an explicit `hotfix`/`tweak`/`quick`, report the active
+   path; if scope, risk, or verification now exceeds its boundary, refresh the
+   recommendation with observed facts and route it to Full instead of continuing.
 4. For `auto`/`null`/unset, run `npx --yes --package spec-superflow@0.11.0 ssf workflow show <change-dir> --json` before collecting or changing any facts. A missing receipt is represented as `needs-input` with all six fixed facts in `missing_facts`.
 5. If the response is `needs-input`, ask only for `missing_facts`; do not ask
    for any fact not listed by the receipt. Do not invent facts from missing
@@ -98,13 +100,16 @@ state or cause a phase transition.
 6. Run `npx --yes --package spec-superflow@0.11.0 ssf workflow recommend <change-dir> ...` once with one complete fact snapshot.
 7. Show the user `Observed`, `Available`, `Recommended`, and `Why`. A
    recommendation is advice only: never persist it as the workflow selection.
-8. Obtain the user's explicit path choice, then run
-   `npx --yes --package spec-superflow@0.11.0 ssf workflow select <change-dir> --mode <full|hotfix|tweak|quick> --confirm --reason "<user choice>"`.
+8. A recommended Quick or incident Hotfix is accepted only with
+   `npx --yes --package spec-superflow@0.11.0 ssf workflow accept <change-dir> --source direct-request`.
+   For Full, legacy Hotfix, or Tweak, obtain the user's explicit choice and run
+   `npx --yes --package spec-superflow@0.11.0 ssf workflow select <change-dir> --mode <full|hotfix|tweak> --confirm --reason "<user choice>"`.
 9. Add `--acknowledge-recommendation` only after the user chooses a
-   non-recommended path. Report the persisted receipt and DP-0 audit summary.
-10. If `show` reports `selection-pending`, explain that its signed receipt was
-   written before the state update and safely repeat the same explicit `select`
-   command. Do not overwrite an explicit mode unless the user asks.
+   non-recommended selectable path. Report the persisted receipt and DP-0 audit summary.
+10. To escalate a selected Quick, direct Hotfix, or Tweak, refresh
+   `workflow recommend` with observed risk facts, then select `full` with
+   `--confirm` (and `--acknowledge-recommendation` only if required). Do not
+   overwrite an explicit mode without this persisted recommendation.
 11. Keep `npx --yes --package spec-superflow@0.11.0 ssf runtime infer <change-dir>` only for legacy artifact inference and validation compatibility; it cannot replace user selection at intake.
 
 ### Confirm DP-0
