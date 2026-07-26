@@ -8,6 +8,7 @@ import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { PLATFORM_RUNTIME_INVENTORY, ZCODE_COMPATIBILITY_PATH } from '../../scripts/lib/platform-runtime-inventory.mjs';
+import { installPlatform } from '../../scripts/lib/install.mjs';
 
 const ROOT = process.cwd();
 const VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
@@ -75,6 +76,31 @@ describe('canonical skill runtime protocol', () => {
 });
 
 describe('local runtime deployment', () => {
+  it('writes four-mode phase guards through the Cursor and shared installers', async () => {
+    const cursorTarget = mkdtempSync(join(tmpdir(), 'ssf-cursor-guard-'));
+    const sharedTarget = mkdtempSync(join(tmpdir(), 'ssf-shared-guard-'));
+    try {
+      execFileSync(process.execPath, [join(ROOT, 'scripts', 'install-cursor.mjs'), '--local', ROOT], {
+        cwd: cursorTarget,
+        stdio: 'pipe',
+      });
+      await installPlatform('cline', { local: ROOT, cwd: sharedTarget });
+
+      const guards = [
+        readFileSync(join(cursorTarget, '.cursor', 'rules', 'phase-guard.mdc'), 'utf8'),
+        readFileSync(join(sharedTarget, '.clinerules', 'phase-guard.md'), 'utf8'),
+      ];
+      for (const guard of guards) {
+        assert.match(guard, /Full 或 legacy Hotfix/);
+        assert.match(guard, /Quick、direct Hotfix、tweak/);
+        assert.match(guard, /test_result: pass/);
+      }
+    } finally {
+      rmSync(cursorTarget, { recursive: true, force: true });
+      rmSync(sharedTarget, { recursive: true, force: true });
+    }
+  });
+
   it('rewrites the canonical prefix to ZCODE\'s installed runtime tree', () => {
     const target = mkdtempSync(join(tmpdir(), 'ssf-zcode-runtime-'));
     try {

@@ -17,22 +17,28 @@ At entry, `workflow-start` reads the persisted `workflow` selection first. An
 explicit `full`, `hotfix`, `tweak`, or `quick` selection wins. Otherwise it runs `ssf
 workflow show`, asks only for `missing_facts`, runs `ssf workflow recommend`,
 and presents Observed, Available, Recommended, and Why. Recommendation does
-not change state or select a path: only an explicit `ssf workflow select
---confirm` writes `workflow`. A non-recommended selection requires
-`--acknowledge-recommendation`. The legacy `runtime infer` compatibility API
-may return `full` for an empty directory, but it never replaces the user's
-intake selection.
+not change state. Full, legacy Hotfix, and Tweak are selected explicitly with
+`ssf workflow select --confirm`; a non-recommended selection requires
+`--acknowledge-recommendation`. A recommended Quick or incident Hotfix may be
+accepted with `ssf workflow accept --source direct-request`, which records the
+valid direct receipt needed by its short path. The legacy `runtime infer`
+compatibility API may return `full` for an empty directory, but it never
+replaces the user's intake selection.
 
-This intake completes before DP-0 is marked confirmed. Artifact language may
-be resolved first, but `dp_0_confirmed=true` is written only after the selected
-path summary and the remaining scope, constraints, and communication decisions
-are confirmed together. The full selection receipt lives at
+Full and legacy Hotfix intake completes before DP-0 is marked confirmed.
+Artifact language may be resolved first, but `dp_0_confirmed=true` is written
+only after the selected path summary and the remaining scope, constraints, and
+communication decisions are confirmed together. Quick, direct Hotfix, and
+Tweak do not mark DP-0 or create planning artifacts. The full selection
+receipt lives at
 `.superpowers/sdd/workflow-selection.json`; DP-0 state stores only the
 idempotent summary while preserving scope and `artifact_language`.
 
-This is the DP-0 planning-path decision. DP-4 remains the separate execution
-mode decision among Inline, Batch Inline, and SDD. Neither recommendation nor
-selection creates a ninth state or performs a phase transition.
+For Full and legacy Hotfix, this is the DP-0 planning-path decision. DP-4
+remains their separate execution-mode decision among Inline, Batch Inline, and
+SDD. Neither recommendation nor selection creates a ninth state or performs a
+phase transition; the direct receipt then permits the short transition from
+`exploring` to `approved-for-build`.
 
 ### `specifying`
 
@@ -51,15 +57,18 @@ selection creates a ninth state or performs a phase transition.
 
 ### `approved-for-build`
 
-- Full/legacy Hotfix have an approved execution contract and current plan; Quick/direct Hotfix/Tweak use their receipt-aware short path
+- Full/legacy Hotfix have an approved execution contract and current plan; Quick/direct Hotfix use a valid direct receipt, while Tweak uses its explicitly selected short path
 
 ### `executing`
 
-- implementation follows the execution contract
-- TDD, SDD (subagent-driven), review gates, and escalation rules apply
-- `build-executor` is active
-- `code-reviewer` invoked after each execution batch
-- 发布验证、delta-spec 同步与审计都必须在此状态完成；必要时调用 `release-archivist` 和 `spec-merger`，再执行最终状态转换
+- Full/legacy Hotfix implementation follows the execution contract, with TDD,
+  SDD (subagent-driven), review gates, and escalation rules
+- Quick/direct Hotfix/Tweak execute only their accepted boundary and focused
+  verification; they persist `test_result: pass` instead of a plan/review receipt
+- `build-executor` is active for the applicable path; `code-reviewer` is invoked
+  after each Full/legacy execution batch
+- Full/legacy release verification, delta-spec sync, and audit evidence complete
+  in this state before the final transition
 
 ## Execution Plan Control Plane
 
@@ -75,9 +84,9 @@ selected mode with `--confirm`; a non-recommended selection also requires
 substitute for parallel execution.
 Quick, direct Hotfix, and Tweak are exempt from execution-plan and review-receipt requirements; each closes only with `test_result: pass`.
 
-The plan names ordered execution waves, dependencies, and parallel/serial
-strategy. `ssf execution show <change-dir> --json` reports which current waves
-are eligible. Each completed wave must have a current
+For Full/legacy Hotfix, the plan names ordered execution waves, dependencies,
+and parallel/serial strategy. `ssf execution show <change-dir> --json` reports
+which current waves are eligible. Each completed Full/legacy wave must have a current
 `pass` review receipt, recorded with `ssf execution review`, before a dependent
 wave or `closing` can proceed. `ssf execution revise` retains or upgrades an
 existing plan as `sdd`; that new revision requires a fresh confirmation (and
@@ -140,9 +149,8 @@ eight core states.
 ## Transitions
 
 ```text
-  exploring ──── hotfix ─────────> bridging          (fast-path)
-  bridging  ──── hotfix ─────────> approved-for-build
-  exploring ──── tweak ──────────> approved-for-build (fast-path)
+  exploring ──── legacy Hotfix ──> bridging ──> approved-for-build
+  exploring ──── Quick/direct Hotfix/Tweak ──> approved-for-build (short path)
 
   exploring -> specifying -> bridging -> approved-for-build -> executing -> closing
                 ^              ^             |                 ^    |

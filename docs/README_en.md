@@ -240,7 +240,7 @@ You: "add authorization to the API"
    closing            CLOSED successful terminal state (no next skill)
 ```
 
-**Hard constraints:** No `execution-contract.md` or no approval → implementation blocked. Requirements change mid-execution → forced rollback. Bug encountered → must enter debugging state, no ad-hoc fixes.
+**Hard constraints:** Full and legacy Hotfix require an approved `execution-contract.md`; Quick, direct Hotfix, and Tweak instead stay within their accepted boundary and persist `test_result: pass`. Requirements change mid-execution → forced rollback. Bug encountered → must enter debugging state, no ad-hoc fixes.
 
 ### Guarded execution plans
 
