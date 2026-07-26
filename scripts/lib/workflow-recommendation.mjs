@@ -5,7 +5,7 @@ import {
 import { dirname } from 'node:path';
 import { getOverlayPaths } from './sdd-overlay.mjs';
 
-export const WORKFLOW_MODES = Object.freeze(['full', 'hotfix', 'tweak']);
+export const WORKFLOW_MODES = Object.freeze(['full', 'hotfix', 'tweak', 'quick']);
 
 const BOOLEAN_FACTS = ['config_doc_only', 'schema_api_change', 'new_module'];
 const FACT_KEYS = ['task_count', 'file_count', ...BOOLEAN_FACTS, 'uncertainty'];
@@ -18,7 +18,14 @@ export function normalizeWorkflowFacts(input = {}) {
     schema_api_change: normalizeEnum(input.schema_api_change, ['yes', 'no', 'unknown']),
     new_module: normalizeEnum(input.new_module, ['yes', 'no', 'unknown']),
     uncertainty: normalizeEnum(input.uncertainty, ['low', 'high', 'unknown']),
+    request_kind: normalizeRequestKind(input.request_kind),
   };
+}
+
+function normalizeRequestKind(value) {
+  if (value === null || value === undefined) return 'standard';
+  if (!['standard', 'incident'].includes(value)) throw new Error('invalid request_kind value');
+  return value;
 }
 
 export function recommendWorkflowPath(input = {}) {
@@ -35,8 +42,12 @@ export function recommendWorkflowPath(input = {}) {
   if (facts.config_doc_only === 'yes' && facts.task_count <= 4 && facts.file_count <= 4) {
     return ready(base, 'tweak', 'Config/doc-only work is within the tweak thresholds.');
   }
-  if (facts.config_doc_only === 'no' && facts.task_count <= 2 && facts.file_count <= 2) {
-    return ready(base, 'hotfix', 'Bounded code work is within the hotfix thresholds.');
+  if (facts.request_kind === 'incident' && facts.config_doc_only === 'no'
+    && facts.task_count <= 2 && facts.file_count <= 2) {
+    return ready(base, 'hotfix', 'Bounded incident work is within the hotfix thresholds.');
+  }
+  if (facts.config_doc_only === 'no' && facts.task_count <= 3 && facts.file_count <= 3) {
+    return ready(base, 'quick', 'Bounded low-risk code work is within the quick thresholds.');
   }
   return ready(base, 'full', 'The observed scope exceeds the fast-path thresholds.');
 }
@@ -104,11 +115,41 @@ export function recordWorkflowSelection(changeDir, { mode, reason, confirmed, ac
       reason,
       followed_recommendation: followed,
       acknowledged_non_recommendation: !followed && acknowledged === true,
+      accepted_automatically: false,
       selected_at: new Date().toISOString(),
     },
   });
   writeRecord(changeDir, selected);
   return selected;
+}
+
+export function acceptWorkflowRecommendation(changeDir, { source }) {
+  const loaded = readWorkflowSelection(changeDir);
+  if (!loaded.valid) throw new Error(loaded.failures.join('; '));
+  const recommendation = loaded.record.recommendation;
+  if (loaded.record.status !== 'ready' || !recommendation) {
+    throw new Error('workflow recommendation needs more input');
+  }
+  if (!['quick', 'hotfix'].includes(recommendation.mode)) {
+    throw new Error('only a recommended quick or hotfix workflow can be accepted directly');
+  }
+  if (source !== 'direct-request') {
+    throw new Error('workflow acceptance source must be direct-request');
+  }
+
+  const accepted = withHash({
+    ...withoutHash(loaded.record),
+    selection: {
+      mode: recommendation.mode,
+      source,
+      followed_recommendation: true,
+      acknowledged_non_recommendation: false,
+      accepted_automatically: true,
+      selected_at: new Date().toISOString(),
+    },
+  });
+  writeRecord(changeDir, accepted);
+  return accepted;
 }
 
 function ready(base, mode, reason) {

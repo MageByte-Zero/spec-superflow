@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import {
   WORKFLOW_MODES,
+  acceptWorkflowRecommendation,
   recommendWorkflowPath,
   readWorkflowSelection,
   recordWorkflowSelection,
@@ -17,10 +18,12 @@ const OPTIONS = {
   'schema-api-change': { type: 'string' },
   'new-module': { type: 'string' },
   uncertainty: { type: 'string' },
+  'request-kind': { type: 'string' },
   mode: { type: 'string' },
   confirm: { type: 'boolean', default: false },
   reason: { type: 'string' },
   'acknowledge-recommendation': { type: 'boolean', default: false },
+  source: { type: 'string' },
   json: { type: 'boolean', default: false },
   help: { type: 'boolean', default: false },
 };
@@ -44,18 +47,18 @@ export async function run(args) {
   const { positionals, values } = parsed;
   const [subcommand, changeDir] = positionals;
   if (values.help || subcommand === undefined) return printHelp();
-  if (!['recommend', 'select', 'show'].includes(subcommand)) {
-    return fail('Usage: ssf workflow <recommend|select|show> <change-dir>', 2);
+  if (!['recommend', 'select', 'accept', 'show'].includes(subcommand)) {
+    return fail('Usage: ssf workflow <recommend|select|accept|show> <change-dir>', 2);
   }
   if (positionals.length !== 2 || !changeDir) {
-    return fail('Usage: ssf workflow <recommend|select|show> <change-dir>', 2);
+    return fail('Usage: ssf workflow <recommend|select|accept|show> <change-dir>', 2);
   }
 
   try {
     requireStateFile(changeDir);
     const state = readState(changeDir);
 
-    if (subcommand === 'select' && isExplicitWorkflow(state.workflow)) {
+    if (['select', 'accept'].includes(subcommand) && isExplicitWorkflow(state.workflow)) {
       return fail('workflow is already explicitly selected', 1);
     }
     if (subcommand === 'recommend' && isExplicitWorkflow(state.workflow)) {
@@ -63,6 +66,7 @@ export async function run(args) {
     }
     if (subcommand === 'recommend') return recommend(changeDir, values);
     if (subcommand === 'show') return show(changeDir, state, values.json);
+    if (subcommand === 'accept') return accept(changeDir, state, values);
     return select(changeDir, state, values);
   } catch (error) {
     if (error instanceof UsageError) return fail(error.message, 2);
@@ -85,11 +89,21 @@ function select(changeDir, state, values) {
     confirmed: values.confirm,
     acknowledged: values['acknowledge-recommendation'],
   });
+  persistWorkflowSelection(changeDir, state, record);
+  return print({ ok: true, source: 'user-confirmed', record }, values.json);
+}
+
+function accept(changeDir, state, values) {
+  const record = acceptWorkflowRecommendation(changeDir, { source: values.source });
+  persistWorkflowSelection(changeDir, state, record);
+  return print({ ok: true, source: 'direct-request', record }, values.json);
+}
+
+function persistWorkflowSelection(changeDir, state, record) {
   const summary = `workflow_path=${record.selection.mode}; recommended=${record.recommendation.mode}; followed_recommendation=${record.selection.followed_recommendation}`;
   state.workflow = record.selection.mode;
   state.dp_0_decisions = appendDecision(state.dp_0_decisions, summary);
   writeState(changeDir, state);
-  return print({ ok: true, source: 'user-confirmed', record }, values.json);
 }
 
 function show(changeDir, state, json) {
@@ -140,7 +154,16 @@ function factsFrom(values) {
     schema_api_change: parseFact(values['schema-api-change'], 'schema-api-change'),
     new_module: parseFact(values['new-module'], 'new-module'),
     uncertainty: parseFact(values.uncertainty, 'uncertainty'),
+    request_kind: parseRequestKind(values['request-kind']),
   };
+}
+
+function parseRequestKind(value) {
+  if (value === undefined) return 'standard';
+  if (!['standard', 'incident'].includes(value)) {
+    throw new UsageError('request-kind must be one of: standard, incident');
+  }
+  return value;
 }
 
 function parseCount(value, name) {
@@ -217,7 +240,10 @@ function formatRecordDetails(value, record) {
     lines.push(`Missing facts: ${record.missing_facts.join(', ')}`);
   }
   if (record?.selection) {
-    lines.push(`Selection: mode=${record.selection.mode}, reason=${record.selection.reason}, followed_recommendation=${record.selection.followed_recommendation}`);
+    const detail = record.selection.accepted_automatically
+      ? `source=${record.selection.source}, accepted_automatically=true`
+      : `reason=${record.selection.reason}`;
+    lines.push(`Selection: mode=${record.selection.mode}, ${detail}, followed_recommendation=${record.selection.followed_recommendation}`);
   }
 
   if (value.receipt?.exists === false) lines.push('Hash valid: unavailable (receipt missing)');
@@ -238,7 +264,8 @@ function fail(message, exitCode) {
 
 function printHelp() {
   console.log(`Usage:
-  ssf workflow recommend <change-dir> [--task-count <n>] [--file-count <n>] [--config-doc-only yes|no|unknown] [--schema-api-change yes|no|unknown] [--new-module yes|no|unknown] [--uncertainty low|high|unknown] [--json]
-  ssf workflow select <change-dir> --mode full|hotfix|tweak --confirm --reason <text> [--acknowledge-recommendation] [--json]
+  ssf workflow recommend <change-dir> [--task-count <n>] [--file-count <n>] [--config-doc-only yes|no|unknown] [--schema-api-change yes|no|unknown] [--new-module yes|no|unknown] [--uncertainty low|high|unknown] [--request-kind standard|incident] [--json]
+  ssf workflow select <change-dir> --mode full|hotfix|tweak|quick --confirm --reason <text> [--acknowledge-recommendation] [--json]
+  ssf workflow accept <change-dir> --source direct-request [--json]
   ssf workflow show <change-dir> [--json]`);
 }
