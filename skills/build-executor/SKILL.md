@@ -29,8 +29,8 @@ Branch/worktree preflight before ANY implementation edit (mandatory — do not s
 
 ## Core Laws
 
-### Law 1: Contract First
-The execution contract is the approved handoff artifact, not chat history.
+### Law 1: Contract First (Full and legacy Hotfix)
+For Full and legacy Hotfix, the execution contract is the approved handoff artifact, not chat history. Direct Quick and incident Hotfix use their valid direct receipt plus bounded verification instead; they must not create or require a contract.
 
 ### Law 2: TDD Iron Law — No Production Code Without a Failing Test First
 RED (write test, see it fail) → GREEN (write minimal code, see it pass) → REFACTOR (clean up, suite stays green).

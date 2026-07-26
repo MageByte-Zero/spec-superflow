@@ -71,7 +71,7 @@ Generate a minimal contract only for a legacy Hotfix: Intent Lock (one sentence)
 
 Run `npx --yes --package spec-superflow@0.11.0 ssf state init <change-dir>` to create `.spec-superflow.yaml` with hashes.
 
-For hotfix, after writing the minimal contract, run `npx --yes --package spec-superflow@0.11.0 ssf state init <change-dir>` or `npx --yes --package spec-superflow@0.11.0 ssf state rebuild <change-dir>` so `contract_hash` is recorded. DP-3 remains mandatory before build.
+For a legacy Hotfix, after writing the minimal contract, run `npx --yes --package spec-superflow@0.11.0 ssf state init <change-dir>` or `npx --yes --package spec-superflow@0.11.0 ssf state rebuild <change-dir>` so `contract_hash` is recorded. DP-3 remains mandatory before build.
 
 ## Exception Handling
 
