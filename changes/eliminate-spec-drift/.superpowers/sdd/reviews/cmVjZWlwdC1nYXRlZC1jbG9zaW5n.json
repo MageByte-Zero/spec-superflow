@@ -1,0 +1,9 @@
+{
+  "status": "pass",
+  "base": "1ddee5b301572618f833b9111f52369b65177855",
+  "head": "7eb616ed30be9ae777d1726ac52743919db99fb5",
+  "report": ".superpowers/sdd/reviews/receipt-gated-closing-review.md",
+  "plan_hash": "sha256:6bdac0a0bd0894ce4ae9c0dee0d17dd318b486b02ee9b72c24bcc4d0cfc3dff1",
+  "plan_revision": 1,
+  "recorded_at": "2026-07-26T16:33:22.783Z"
+}
