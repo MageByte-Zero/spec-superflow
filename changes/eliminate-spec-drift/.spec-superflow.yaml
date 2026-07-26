@@ -2,12 +2,12 @@
 # Derived data. Always rebuildable from artifacts. Lost/corrupt → fall back to content-level detection.
 
 # === Core state ===
-state: executing
+state: approved-for-build
 workflow: full
 revision: 1
 
 # === Hashes (fast staleness detection) ===
-artifacts_hash: sha256:9764256a4ea054571562c30799e89c46d0951603ca6b14c70613a66a4056a1e2
+artifacts_hash: sha256:55793ff376a3806fe2ee7837984ac9dac0e54ecf8280106ea7baade8b41c7597
 contract_hash: sha256:b0466f1f22f031f90ac4d609132874bfdaa413c260543d9f98c7e654e52bb79a
 
 # === Execution progress ===
@@ -17,12 +17,13 @@ execution_plan_revision: 1
 batches_completed: 0
 test_result: null
 spec_merged: false
+spec_publication_receipt: null
 
 # === Metadata ===
 change_name: eliminate-spec-drift
-last_transition: 2026-07-26T16:17:53.932Z
-last_transition_from: approved-for-build
-last_transition_to: executing
+last_transition: 2026-07-26T16:37:42.641Z
+last_transition_from: bridging
+last_transition_to: approved-for-build
 
 # === Decision points ===
 dp_0_decisions: change=eliminate-spec-drift; intent=eliminate spec drift by making the active change the only workflow source and publishing verified baseline specs through a merge receipt; scope=path context, delta application, receipt validation, closing guard, tests, and documentation; non_goals=do not let root specs drive active state transitions; artifact_language=Chinese; workflow_path=full

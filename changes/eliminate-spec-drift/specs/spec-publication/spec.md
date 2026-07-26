@@ -39,8 +39,6 @@ The system SHALL use `changes/<change>/` as the sole artifact source for active 
 - **WHEN** an active change has valid local planning artifacts and no published baseline yet
 - **THEN** its planning transition is evaluated only against artifacts inside that change.
 
-## MODIFIED Requirements
-
 ### Requirement: Delta spec synchronization before closure
 
 The system SHALL require a valid publication receipt, rather than an unverified `spec_merged` flag, before a change containing delta specs can transition from executing to closing.

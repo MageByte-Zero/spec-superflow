@@ -50,6 +50,15 @@ export async function run(args) {
     for (const dir of readdirSync(changesDir)) {
       const dirPath = join(changesDir, dir);
       if (!statSync(dirPath).isDirectory()) continue;
+      const isActiveChange = dirPath === changeDir;
+      // Historical copies and closed changes are audit records, not competing
+      // publication inputs. Only the target plus other stateful, non-terminal
+      // changes can create a live publication conflict.
+      if (!isActiveChange) {
+        if (!existsSync(join(dirPath, '.spec-superflow.yaml'))) continue;
+        const otherState = readState(dirPath).state;
+        if (otherState === 'closing' || otherState === 'abandoned') continue;
+      }
       const layout = validateSpecPathLayout(dirPath, { requireSpecs: false });
       if (!layout.pass) {
         for (const failure of layout.failures) console.error(failure);

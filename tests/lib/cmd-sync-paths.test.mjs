@@ -123,6 +123,25 @@ describe('cmd-sync: canonical spec publication', () => {
     assert.equal(existsSync(join(tempRoot, 'specs', 'workflow', 'spec.md')), false);
   });
 
+  it('ignores closing and state-less historical changes during conflict detection', () => {
+    const repo = mkdtempSync(join(tempRoot, 'repo-active-conflicts-'));
+    const change = join(repo, 'changes', 'active');
+    const closing = join(repo, 'changes', 'closed');
+    const historical = join(repo, 'changes', 'historical-copy');
+    for (const dir of [change, closing, historical]) mkdirSync(join(dir, 'specs', 'workflow'), { recursive: true });
+    writeChangeState(change);
+    writeFileSync(join(closing, '.spec-superflow.yaml'), 'state: closing\nworkflow: full\n');
+    writeSpec(join(change, 'specs', 'workflow', 'spec.md'), `## ADDED Requirements\n\n${requirement('Active', 'publish active behavior')}\n`);
+    const staleDelta = `## MODIFIED Requirements\n\n${requirement('Stale', 'conflicting historical behavior')}\n`;
+    writeSpec(join(closing, 'specs', 'workflow', 'spec.md'), staleDelta);
+    writeSpec(join(historical, 'specs', 'workflow', 'spec.md'), staleDelta);
+
+    const result = runSync(repo, change);
+
+    assert.equal(result.exitCode, 0, result.stdout + result.stderr);
+    assert.equal(existsSync(join(repo, 'specs', 'workflow', 'spec.md')), true);
+  });
+
   it('derives capability dirs from Windows-style spec paths', () => {
     assert.equal(
       deriveCapabilityDir('C:\\repo\\changes\\feature\\specs', 'C:\\repo\\changes\\feature\\specs\\ui-theme\\spec.md'),
