@@ -149,13 +149,19 @@ describe('workflow path recommendation', () => {
     }
   });
 
-  it('requires direct acceptance for the Quick workflow', () => {
+  it('requires an acknowledged verification strategy for a risk-acknowledged Quick workflow', () => {
     const changeDir = mkdtempSync(join(tmpdir(), 'ssf-workflow-quick-'));
     try {
-      saveWorkflowRecommendation(changeDir, base);
+      saveWorkflowRecommendation(changeDir, { ...base, behavioral_constraint_change: 'yes' });
       assert.throws(() => recordWorkflowSelection(changeDir, {
-        mode: 'quick', reason: 'bounded code', confirmed: true, acknowledged: false,
-      }), /direct acceptance/i);
+        mode: 'quick', reason: 'bounded code', confirmed: true, acknowledged: true,
+      }), /verification/i);
+      const selected = recordWorkflowSelection(changeDir, {
+        mode: 'quick', reason: 'bounded code', confirmed: true, acknowledged: true,
+        verificationStrategy: 'bounded',
+      });
+      assert.equal(selected.selection.risk_override, true);
+      assert.equal(selected.selection.verification_strategy, 'bounded');
     } finally {
       rmSync(changeDir, { recursive: true, force: true });
     }

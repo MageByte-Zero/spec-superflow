@@ -329,11 +329,11 @@ overlay，不会增加第九个状态；其 CLI 与 CodeBuddy/WorkBuddy Markdown
    closing            CLOSED 成功终态（无 next skill）
 ```
 
-**关键约束：** Full/legacy Hotfix 没有 `execution-contract.md`、current execution plan 或 `pass` review receipt → 不允许推进；Quick/direct Hotfix/Tweak 以有效 receipt、边界检查与 `test_result: pass` 放行。任何风险升级转 Full。
+**关键约束：** Full/legacy Hotfix 没有 `execution-contract.md`、current execution plan 或 `pass` review receipt → 不允许推进；Quick/direct Hotfix/Tweak 以有效 receipt、边界检查与 `test_result: pass` 放行。风险只触发建议与用户选择，绝不自动升级到 Full。
 
 ### 快速路径（Quick / Hotfix / Tweak）
 
-- **Quick** — ≤3 文件/任务、低风险代码：同轮推荐/接受，`exploring -> approved-for-build -> executing`，跑定向验证。
+- **Quick** — ≤3 文件/任务、单模块代码：低风险时同轮推荐/接受；触及 PRD、Spec/Design、API、数据/权限或跨模块时，展示风险后由用户选择 Quick 或 Full。选择 Quick 会记录 `tdd`、`new-test` 或 `bounded` 验证策略。
 - **direct Hotfix** — incident 且≤2 文件/任务：同一路径，必须验证原症状回归。
 - **legacy Hotfix** — 既有或无 direct receipt：保留最小契约、DP-3、plan/review。
 - **tweak** — ≤4 文件、纯配置/文档修改时，跳过规划+桥接，直接编辑

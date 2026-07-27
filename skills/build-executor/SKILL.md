@@ -35,9 +35,9 @@ For Full and legacy Hotfix, the execution contract is the approved handoff artif
 ### Law 2: TDD Iron Law — Full and legacy Hotfix
 RED (write test, see it fail) → GREEN (write minimal code, see it pass) → REFACTOR (clean up, suite stays green).
 
-Quick may use the closest targeted test or syntax/static check when no behavioral test is appropriate; direct Hotfix must run the original-symptom regression.
+Quick follows the verification strategy persisted in its receipt: `tdd`, `new-test`, or `bounded` (targeted test, syntax/static check, or other stated evidence). A direct Hotfix must still demonstrate that the original symptom is gone.
 
-**Red Flags**: "Quick implementation first, test later" / "Skip the test, manually verify" / "I already know it works" / "Just this one time without tests." ALL mean STOP and write the test first.
+**Red Flags**: ignoring the selected verification strategy, reporting a manual check as if it were automated evidence, or silently expanding a bounded Quick change. Full and legacy Hotfix still require RED → GREEN → REFACTOR.
 
 ### Law 3: Review Before Drift
 Block on: logic defects, spec violations, missing required tests, unintended scope expansion.
@@ -154,7 +154,7 @@ Skip TDD. Apply changes directly. Verify file integrity (exists, non-empty, vali
 
 ## Direct Quick and Hotfix
 
-Quick direct execution requires the valid direct receipt, a bounded diff, targeted tests or syntax/static checks, and a persisted `test_result: pass`; do not create a contract, execution plan, wave review, DP-6, or DP-7. Direct Hotfix follows the same route only for an incident-backed receipt and must run a regression that demonstrates the original symptom is fixed. Stop rather than expanding scope when the boundary is exceeded or verification fails; refresh `workflow recommend` with the observed risk, then select `full --confirm` before resuming. A legacy Hotfix without a direct receipt remains subject to the contract, DP-3, execution plan, and review receipts.
+Quick direct execution requires the valid receipt, a bounded diff, the receipt's selected verification strategy, and a persisted `test_result: pass`; do not create a contract, execution plan, wave review, DP-6, or DP-7. Direct Hotfix follows the same route only for an incident-backed receipt and must run a regression that demonstrates the original symptom is fixed. If scope grows or risk appears, refresh `workflow recommend`, show the revised risk, and wait for the user to choose Quick or Full before resuming. A legacy Hotfix without a direct receipt remains subject to the contract, DP-3, execution plan, and review receipts.
 
 ## DP Records
 

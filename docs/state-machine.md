@@ -27,8 +27,9 @@ valid direct receipt needed by its short path. The legacy `runtime infer`
 compatibility API may return `full` for an empty directory, but it never
 replaces the user's intake selection.
 
-Quick is not a selectable workflow: it must use direct acceptance. To escalate
-Quick, direct Hotfix, or Tweak, run `ssf workflow recommend` with the updated
+Low-risk Quick uses direct acceptance. A risk-signalled Quick is selectable only
+with an acknowledgement and an explicit verification strategy. To change a
+Quick, direct Hotfix, or Tweak choice, run `ssf workflow recommend` with the updated
 facts, then confirm `ssf workflow select --mode full`; that replaces the short
 selection with an auditable Full intake receipt.
 

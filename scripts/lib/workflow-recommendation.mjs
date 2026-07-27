@@ -7,7 +7,7 @@ import { getOverlayPaths } from './sdd-overlay.mjs';
 
 export const WORKFLOW_MODES = Object.freeze(['full', 'hotfix', 'tweak', 'quick']);
 
-const BOOLEAN_FACTS = ['config_doc_only', 'schema_api_change', 'new_module'];
+const BOOLEAN_FACTS = ['config_doc_only', 'schema_api_change', 'new_module', 'behavioral_constraint_change', 'cross_module_change'];
 const FACT_KEYS = ['task_count', 'file_count', ...BOOLEAN_FACTS, 'uncertainty'];
 
 export function normalizeWorkflowFacts(input = {}) {
@@ -17,6 +17,10 @@ export function normalizeWorkflowFacts(input = {}) {
     config_doc_only: normalizeEnum(input.config_doc_only, ['yes', 'no', 'unknown']),
     schema_api_change: normalizeEnum(input.schema_api_change, ['yes', 'no', 'unknown']),
     new_module: normalizeEnum(input.new_module, ['yes', 'no', 'unknown']),
+    // These are intentionally optional for legacy callers. Agents MUST set them when
+    // the request reveals a requirement/spec/design or cross-module impact.
+    behavioral_constraint_change: normalizeEnum(input.behavioral_constraint_change ?? 'no', ['yes', 'no', 'unknown']),
+    cross_module_change: normalizeEnum(input.cross_module_change ?? 'no', ['yes', 'no', 'unknown']),
     uncertainty: normalizeEnum(input.uncertainty, ['low', 'high', 'unknown']),
     request_kind: normalizeRequestKind(input.request_kind),
   };
@@ -36,8 +40,9 @@ export function recommendWorkflowPath(input = {}) {
   if (missing_facts.length) {
     return { ...base, status: 'needs-input', recommendation: null };
   }
-  if (facts.schema_api_change === 'yes' || facts.new_module === 'yes' || facts.uncertainty === 'high') {
-    return ready(base, 'full', 'Risk or uncertainty requires the full workflow.');
+  const riskReasons = riskReasonsFor(facts);
+  if (riskReasons.length) {
+    return ready(base, 'full', 'Risk signals require the user to choose Quick or Full.', riskReasons);
   }
   if (facts.config_doc_only === 'yes' && facts.task_count <= 4 && facts.file_count <= 4) {
     return ready(base, 'tweak', 'Config/doc-only work is within the tweak thresholds.');
@@ -104,14 +109,13 @@ function normalizeLegacyRecord(record) {
   return record;
 }
 
-export function recordWorkflowSelection(changeDir, { mode, reason, confirmed, acknowledged }) {
+export function recordWorkflowSelection(changeDir, { mode, reason, confirmed, acknowledged, verificationStrategy }) {
   const loaded = readWorkflowSelection(changeDir);
   if (!loaded.valid) throw new Error(loaded.failures.join('; '));
   if (loaded.record.status !== 'ready' || !loaded.record.recommendation) {
     throw new Error('workflow recommendation needs more input');
   }
   if (!WORKFLOW_MODES.includes(mode)) throw new Error(`invalid workflow mode: ${mode}`);
-  if (mode === 'quick') throw new Error('quick workflow must use direct acceptance');
   if (confirmed !== true) throw new Error('workflow selection requires --confirm');
   if (!isSafeReason(reason)) {
     throw new Error('workflow selection reason must be non-empty single-line text');
@@ -119,6 +123,14 @@ export function recordWorkflowSelection(changeDir, { mode, reason, confirmed, ac
   const followed = mode === loaded.record.recommendation.mode;
   if (!followed && acknowledged !== true) {
     throw new Error('non-recommended workflow selection requires acknowledgement');
+  }
+  const riskOverride = mode === 'quick' && loaded.record.recommendation.mode !== 'quick';
+  if (mode === 'quick' && (loaded.record.facts.task_count > 3 || loaded.record.facts.file_count > 3
+    || loaded.record.facts.config_doc_only === 'yes')) {
+    throw new Error('Quick is limited to at most 3 non-document code tasks/files; split the change or choose Full');
+  }
+  if (riskOverride && !isVerificationStrategy(verificationStrategy)) {
+    throw new Error('risk-acknowledged Quick selection requires --verification tdd|new-test|bounded');
   }
   const selected = withHash({
     ...withoutHash(loaded.record),
@@ -128,6 +140,8 @@ export function recordWorkflowSelection(changeDir, { mode, reason, confirmed, ac
       followed_recommendation: followed,
       acknowledged_non_recommendation: !followed && acknowledged === true,
       accepted_automatically: false,
+      risk_override: riskOverride,
+      verification_strategy: verificationStrategy ?? (mode === 'quick' ? 'bounded' : null),
       selected_at: new Date().toISOString(),
     },
   });
@@ -135,7 +149,7 @@ export function recordWorkflowSelection(changeDir, { mode, reason, confirmed, ac
   return selected;
 }
 
-export function acceptWorkflowRecommendation(changeDir, { source }) {
+export function acceptWorkflowRecommendation(changeDir, { source, verificationStrategy = 'bounded' }) {
   const loaded = readWorkflowSelection(changeDir);
   if (!loaded.valid) throw new Error(loaded.failures.join('; '));
   const recommendation = loaded.record.recommendation;
@@ -151,6 +165,9 @@ export function acceptWorkflowRecommendation(changeDir, { source }) {
   if (source !== 'direct-request') {
     throw new Error('workflow acceptance source must be direct-request');
   }
+  if (!isVerificationStrategy(verificationStrategy)) {
+    throw new Error('workflow acceptance verification must be tdd, new-test, or bounded');
+  }
 
   const accepted = withHash({
     ...withoutHash(loaded.record),
@@ -160,6 +177,8 @@ export function acceptWorkflowRecommendation(changeDir, { source }) {
       followed_recommendation: true,
       acknowledged_non_recommendation: false,
       accepted_automatically: true,
+      risk_override: false,
+      verification_strategy: verificationStrategy,
       selected_at: new Date().toISOString(),
     },
   });
@@ -171,13 +190,31 @@ export function isDirectWorkflowReceipt(record, state) {
   const selection = record?.selection;
   const mode = selection?.mode;
   if (!['quick', 'hotfix'].includes(mode) || state?.workflow !== mode) return false;
-  if (record?.status !== 'ready' || record?.recommendation?.mode !== mode) return false;
-  if (selection.accepted_automatically !== true || selection.source !== 'direct-request') return false;
+  if (record?.status !== 'ready') return false;
+  const directAcceptance = record?.recommendation?.mode === mode
+    && selection.accepted_automatically === true && selection.source === 'direct-request';
+  const acknowledgedQuick = mode === 'quick' && selection.accepted_automatically === false
+    && selection.risk_override === true && isVerificationStrategy(selection.verification_strategy);
+  if (!directAcceptance && !acknowledgedQuick) return false;
   return mode !== 'hotfix' || record?.facts?.request_kind === 'incident';
 }
 
-function ready(base, mode, reason) {
-  return { ...base, status: 'ready', recommendation: { mode, reasons: [reason] } };
+function ready(base, mode, reason, riskReasons = []) {
+  return { ...base, status: 'ready', recommendation: { mode, reasons: [reason], risk_reasons: riskReasons } };
+}
+
+function riskReasonsFor(facts) {
+  const reasons = [];
+  if (facts.behavioral_constraint_change === 'yes') reasons.push('behavioral constraint changed (PRD, spec, design, data, or permission)');
+  if (facts.schema_api_change === 'yes') reasons.push('schema or API changes');
+  if (facts.new_module === 'yes') reasons.push('new module');
+  if (facts.cross_module_change === 'yes') reasons.push('cross-module change');
+  if (facts.uncertainty === 'high') reasons.push('high uncertainty');
+  return reasons;
+}
+
+function isVerificationStrategy(value) {
+  return ['tdd', 'new-test', 'bounded'].includes(value);
 }
 
 function normalizeCount(value) {
