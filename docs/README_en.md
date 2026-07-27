@@ -301,7 +301,7 @@ same guards.
 
 ### Fast Paths (Quick / Hotfix / Tweak)
 
-- **Quick** — ≤3 low-risk code files/tasks → same-turn recommendation and direct acceptance, then targeted verification.
+- **Quick** — ≤3 single-module code files/tasks → direct acceptance when low risk; for PRD, Spec/Design, API, data/permission, or cross-module impact, show the risk and let the user choose Quick or Full. A chosen Quick records `tdd`, `new-test`, or `bounded` verification.
 - **direct Hotfix** — incident, ≤2 files/tasks → direct path plus original-symptom regression.
 - **legacy Hotfix** — no direct receipt → minimal contract, DP-3, execution plan, and review remain required.
 - **tweak** — ≤4 files, config/docs only → skip planning + bridging, direct edit

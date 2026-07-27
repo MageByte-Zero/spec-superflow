@@ -68,11 +68,10 @@ afterEach(() => {
 });
 
 describe('ssf workflow', () => {
-  it('advertises direct acceptance instead of selectable Quick in global help', () => {
+  it('advertises both direct acceptance and an explicit risk-acknowledged Quick selection', () => {
     const result = runSsf(['--help']);
     assert.equal(result.exitCode, 0, result.stderr);
-    assert.match(result.stdout, /workflow select .*full\|hotfix\|tweak/);
-    assert.doesNotMatch(result.stdout, /workflow select .*quick/);
+    assert.match(result.stdout, /workflow select .*full\|hotfix\|tweak\|quick/);
     assert.match(result.stdout, /workflow accept <change-dir> --source direct-request/);
   });
 
@@ -96,24 +95,34 @@ describe('ssf workflow', () => {
     const recommended = recommend(['--request-kind', 'incident']);
     assert.equal(recommended.exitCode, 0, recommended.stderr);
     assert.equal(recommended.json.recommendation.mode, 'hotfix');
-    const accepted = runSsf(['workflow', 'accept', changeDir, '--source', 'direct-request', '--json']);
+    const accepted = runSsf(['workflow', 'accept', changeDir, '--source', 'direct-request', '--verification', 'new-test', '--json']);
     assert.equal(accepted.exitCode, 0, accepted.stderr);
     assert.equal(readState(changeDir).workflow, 'hotfix');
+    assert.equal(accepted.json.record.selection.verification_strategy, 'new-test');
   });
 
-  it('rejects a selectable Quick path and leaves the direct receipt boundary intact', () => {
-    const recommended = recommend();
+  it('allows a risk-acknowledged Quick selection only with a user-chosen verification strategy', () => {
+    const recommended = recommend(['--behavioral-constraint-change', 'yes']);
     assert.equal(recommended.exitCode, 0, recommended.stderr);
-    assert.equal(recommended.json.recommendation.mode, 'quick');
+    assert.equal(recommended.json.recommendation.mode, 'full');
     assert.equal(readState(changeDir).workflow, 'auto');
 
-    const before = snapshotWorkflowFiles();
+    const rejected = runSsf(['workflow', 'select', changeDir, '--mode', 'quick',
+      '--confirm', '--reason', 'bounded code fix', '--acknowledge-recommendation', '--json']);
+    assert.equal(rejected.exitCode, 1);
+    assert.match(rejected.stderr, /verification/i);
+
     const selected = runSsf(['workflow', 'select', changeDir, '--mode', 'quick',
-      '--confirm', '--reason', 'bounded code fix', '--json']);
-    assert.equal(selected.exitCode, 2);
-    assert.match(selected.stderr, /full, hotfix, tweak/i);
-    assertWorkflowFilesUnchanged(before);
-    assert.equal(readState(changeDir).dp_0_decisions, null);
+      '--confirm', '--reason', 'user accepts the documented API risk',
+      '--acknowledge-recommendation', '--verification', 'new-test', '--json']);
+    assert.equal(selected.exitCode, 0, selected.stderr);
+    assert.equal(selected.json.record.selection.risk_override, true);
+    assert.equal(selected.json.record.selection.verification_strategy, 'new-test');
+    assert.equal(readState(changeDir).workflow, 'quick');
+
+    const guard = runSsf(['runtime', 'guard', 'check', changeDir, 'exploring', 'approved-for-build', '--workflow', 'quick', '--json']);
+    assert.equal(guard.exitCode, 0, guard.stderr);
+    assert.equal(guard.json.pass, true);
   });
 
   it('refreshes a direct Quick recommendation and escalates to Full when risk grows', () => {
@@ -131,6 +140,21 @@ describe('ssf workflow', () => {
     assert.equal(upgraded.exitCode, 0, upgraded.stderr);
     assert.equal(readState(changeDir).workflow, 'full');
     assert.equal(upgraded.json.record.selection.mode, 'full');
+  });
+
+  it('never permits a four-file change to override into Quick', () => {
+    const recommended = runSsf(['workflow', 'recommend', changeDir,
+      '--task-count', '4', '--file-count', '4', '--config-doc-only', 'no',
+      '--schema-api-change', 'no', '--new-module', 'no', '--uncertainty', 'low', '--json']);
+    assert.equal(recommended.exitCode, 0, recommended.stderr);
+    assert.equal(recommended.json.recommendation.mode, 'full');
+
+    const selected = runSsf(['workflow', 'select', changeDir, '--mode', 'quick',
+      '--confirm', '--reason', 'try to keep this light', '--acknowledge-recommendation',
+      '--verification', 'bounded', '--json']);
+    assert.equal(selected.exitCode, 1);
+    assert.match(selected.stderr, /at most 3/i);
+    assert.equal(readState(changeDir).workflow, 'auto');
   });
 
   it('shows complete ready recommendations in human-readable recommend and show output', () => {

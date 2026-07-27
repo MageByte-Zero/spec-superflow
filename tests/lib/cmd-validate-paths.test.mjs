@@ -37,6 +37,13 @@ describe('validate commands: spec paths', () => {
     if (tempRoot) rmSync(tempRoot, { recursive: true, force: true });
   });
 
+  it('validate-artifacts uses the bundled add-dark-mode example by default', () => {
+    const result = runNode([LEGACY]);
+    assert.equal(result.exitCode, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /Change: add-dark-mode/);
+    assert.match(result.stdout, /All artifacts validated successfully/);
+  });
+
   it('ssf validate rejects flat specs/<capability>.md', () => {
     const dir = mkdtempSync(join(tempRoot, 'flat-'));
     writeBaseChange(dir);

@@ -17,6 +17,8 @@ const OPTIONS = {
   'config-doc-only': { type: 'string' },
   'schema-api-change': { type: 'string' },
   'new-module': { type: 'string' },
+  'behavioral-constraint-change': { type: 'string' },
+  'cross-module-change': { type: 'string' },
   uncertainty: { type: 'string' },
   'request-kind': { type: 'string' },
   mode: { type: 'string' },
@@ -24,6 +26,7 @@ const OPTIONS = {
   reason: { type: 'string' },
   'acknowledge-recommendation': { type: 'boolean', default: false },
   source: { type: 'string' },
+  verification: { type: 'string' },
   json: { type: 'boolean', default: false },
   help: { type: 'boolean', default: false },
 };
@@ -32,9 +35,11 @@ const BOOLEAN_FACTS = {
   'config-doc-only': ['yes', 'no', 'unknown'],
   'schema-api-change': ['yes', 'no', 'unknown'],
   'new-module': ['yes', 'no', 'unknown'],
+  'behavioral-constraint-change': ['yes', 'no', 'unknown'],
+  'cross-module-change': ['yes', 'no', 'unknown'],
 };
 
-const SELECTABLE_WORKFLOW_MODES = Object.freeze(['full', 'hotfix', 'tweak']);
+const SELECTABLE_WORKFLOW_MODES = Object.freeze(['full', 'hotfix', 'tweak', 'quick']);
 
 class UsageError extends Error {}
 
@@ -93,6 +98,7 @@ function select(changeDir, state, values) {
     reason: values.reason,
     confirmed: values.confirm,
     acknowledged: values['acknowledge-recommendation'],
+    verificationStrategy: parseVerification(values.verification),
   });
   persistWorkflowSelection(changeDir, state, record);
   return print({ ok: true, source: 'user-confirmed', record }, values.json);
@@ -103,7 +109,10 @@ function canEscalateToFull(state, values) {
 }
 
 function accept(changeDir, state, values) {
-  const record = acceptWorkflowRecommendation(changeDir, { source: values.source });
+  const record = acceptWorkflowRecommendation(changeDir, {
+    source: values.source,
+    verificationStrategy: parseVerification(values.verification) ?? 'bounded',
+  });
   persistWorkflowSelection(changeDir, state, record);
   return print({ ok: true, source: 'direct-request', record }, values.json);
 }
@@ -162,9 +171,21 @@ function factsFrom(values) {
     config_doc_only: parseFact(values['config-doc-only'], 'config-doc-only'),
     schema_api_change: parseFact(values['schema-api-change'], 'schema-api-change'),
     new_module: parseFact(values['new-module'], 'new-module'),
+    behavioral_constraint_change: values['behavioral-constraint-change'] === undefined
+      ? 'no' : parseFact(values['behavioral-constraint-change'], 'behavioral-constraint-change'),
+    cross_module_change: values['cross-module-change'] === undefined
+      ? 'no' : parseFact(values['cross-module-change'], 'cross-module-change'),
     uncertainty: parseFact(values.uncertainty, 'uncertainty'),
     request_kind: parseRequestKind(values['request-kind']),
   };
+}
+
+function parseVerification(value) {
+  if (value === undefined) return null;
+  if (!['tdd', 'new-test', 'bounded'].includes(value)) {
+    throw new UsageError('verification must be one of: tdd, new-test, bounded');
+  }
+  return value;
 }
 
 function parseRequestKind(value) {
@@ -244,6 +265,9 @@ function formatRecordDetails(value, record) {
   if (record?.recommendation) {
     lines.push(`Recommended: ${record.recommendation.mode}`);
     lines.push(`Why: ${record.recommendation.reasons.join(' ')}`);
+    if (record.recommendation.risk_reasons?.length) {
+      lines.push(`Risk: ${record.recommendation.risk_reasons.join('; ')}`);
+    }
   }
   if (record?.missing_facts?.length) {
     lines.push(`Missing facts: ${record.missing_facts.join(', ')}`);
@@ -273,8 +297,8 @@ function fail(message, exitCode) {
 
 function printHelp() {
   console.log(`Usage:
-  ssf workflow recommend <change-dir> [--task-count <n>] [--file-count <n>] [--config-doc-only yes|no|unknown] [--schema-api-change yes|no|unknown] [--new-module yes|no|unknown] [--uncertainty low|high|unknown] [--request-kind standard|incident] [--json]
-  ssf workflow select <change-dir> --mode full|hotfix|tweak --confirm --reason <text> [--acknowledge-recommendation] [--json]
-  ssf workflow accept <change-dir> --source direct-request [--json]
+  ssf workflow recommend <change-dir> [--task-count <n>] [--file-count <n>] [--config-doc-only yes|no|unknown] [--schema-api-change yes|no|unknown] [--new-module yes|no|unknown] [--behavioral-constraint-change yes|no] [--cross-module-change yes|no] [--uncertainty low|high|unknown] [--request-kind standard|incident] [--json]
+  ssf workflow select <change-dir> --mode full|hotfix|tweak|quick --confirm --reason <text> [--acknowledge-recommendation] [--verification tdd|new-test|bounded] [--json]
+  ssf workflow accept <change-dir> --source direct-request [--verification tdd|new-test|bounded] [--json]
   ssf workflow show <change-dir> [--json]`);
 }

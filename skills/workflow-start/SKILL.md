@@ -48,7 +48,7 @@ npx --yes --package spec-superflow@0.11.0 ssf workflow recommend <change-dir> --
 npx --yes --package spec-superflow@0.11.0 ssf workflow accept <change-dir> --source direct-request
 ```
 
-Quick is ≤3 tasks/files of low-risk code. Hotfix is an incident with a reproducible symptom and ≤2 tasks/files. Display `Observed`, `Recommended`, and `Why`; acceptance is the user's direct request to proceed. Do not create planning artifacts, a contract, an execution plan, wave receipts, or DP approvals. Transition through the receipt-aware guard, execute bounded work, and require `test_result: pass` before closing. Any fourth file, public/schema/API boundary, new module, dependency/permission/data change, high uncertainty, or failed verification stops the path: refresh `workflow recommend` with those facts, then select `full --confirm` before continuing. A legacy Hotfix without a valid direct receipt remains on the Full contract/DP-3/plan/review path.
+Quick is ≤3 tasks/files of low-risk code. Hotfix is an incident with a reproducible symptom and ≤2 tasks/files. Display `Observed`, `Recommended`, `Why`, and any risk reasons; acceptance is the user's direct request to proceed. Do not create planning artifacts, a contract, an execution plan, wave receipts, or DP approvals. Transition through the receipt-aware guard, execute bounded work, and require `test_result: pass` before closing. A fourth code file, behavioral-constraint change (PRD/spec/design/API/data/permission), cross-module work, a new module, high uncertainty, or failed verification does not auto-escalate: show Quick and Full, then wait for the user's choice. A user selecting Quick must acknowledge the recommendation and choose `tdd`, `new-test`, or `bounded` verification in the receipt. A legacy Hotfix without a valid direct receipt remains on the Full contract/DP-3/plan/review path.
 
 ## DP-0: User Confirmation Gate
 
@@ -100,10 +100,10 @@ state or cause a phase transition.
 6. Run `npx --yes --package spec-superflow@0.11.0 ssf workflow recommend <change-dir> ...` once with one complete fact snapshot.
 7. Show the user `Observed`, `Available`, `Recommended`, and `Why`. A
    recommendation is advice only: never persist it as the workflow selection.
-8. A recommended Quick or incident Hotfix is accepted only with
+8. A recommended low-risk Quick or incident Hotfix is accepted only with
    `npx --yes --package spec-superflow@0.11.0 ssf workflow accept <change-dir> --source direct-request`.
    For Full, legacy Hotfix, or Tweak, obtain the user's explicit choice and run
-   `npx --yes --package spec-superflow@0.11.0 ssf workflow select <change-dir> --mode <full|hotfix|tweak> --confirm --reason "<user choice>"`.
+   `npx --yes --package spec-superflow@0.11.0 ssf workflow select <change-dir> --mode <full|hotfix|tweak> --confirm --reason "<user choice>"`. For a risk-signalled Quick choice, run `workflow select --mode quick --confirm --acknowledge-recommendation --verification <tdd|new-test|bounded>`.
 9. Add `--acknowledge-recommendation` only after the user chooses a
    non-recommended selectable path. Report the persisted receipt and DP-0 audit summary.
 10. To escalate a selected Quick, direct Hotfix, or Tweak, refresh

@@ -137,7 +137,7 @@ function phaseGuardContent(rulesFormat, platformId) {
 - Full 或 legacy Hotfix 没有 execution-contract.md 或未经用户明确批准，不得进入实现。
 - Full 或 legacy Hotfix 必须先运行 ssf execution plan <change-dir> ...；没有 current execution plan 不得开始实现。
 - 只有 Full/legacy Hotfix 的 all pass review receipts 后才可 closing；不得把未审查的 wave 当作完成。
-- Quick、direct Hotfix、tweak 不要求 contract、execution plan、review receipt 或 DP-3/DP-4；它们须在边界内验证并持久化 test_result: pass。direct Hotfix 必须验证原症状回归。
+- Quick、direct Hotfix、tweak 不要求 contract、execution plan、review receipt 或 DP-3/DP-4；它们须在边界内验证并持久化 test_result: pass。Quick 仅限 ≤3 单模块代码文件；出现 PRD、Spec/Design、API、数据/权限或跨模块风险时，展示 Quick/Full 选择，用户选择 Quick 必须在 receipt 中记录 tdd、new-test 或 bounded 验证策略。direct Hotfix 必须验证原症状回归。
 - 执行过程中如果发现需求/范围变化，必须回退到 specifying 或 bridging，而不是直接改代码。
 - 不要直接调用执行类 skill（如 "/build-executor"），必须通过入口路由。
 

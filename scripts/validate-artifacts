@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // validate-artifacts - Validate spec-superflow artifacts
-// Usage: node scripts/validate-artifacts <change-dir>
+// Usage: node scripts/validate-artifacts [change-dir]
 //
 // Reads a change directory and validates all artifacts found:
 //   - proposal.md (change content validation)
@@ -27,12 +27,7 @@ function printReport(label, report) {
 
 function main() {
   const args = process.argv.slice(2);
-  if (args.length < 1) {
-    console.error('Usage: node scripts/validate-artifacts <change-dir>');
-    process.exit(2);
-  }
-
-  const changeDir = args[0];
+  const changeDir = args[0] ?? 'docs/examples/add-dark-mode';
   if (!existsSync(changeDir) || !statSync(changeDir).isDirectory()) {
     console.error(`Error: "${changeDir}" is not a valid directory`);
     process.exit(2);
