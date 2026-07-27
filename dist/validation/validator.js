@@ -1,7 +1,6 @@
 import { MIN_PURPOSE_LENGTH, MIN_WHY_SECTION_LENGTH, MAX_WHY_SECTION_LENGTH, MAX_REQUIREMENT_TEXT_LENGTH, MAX_DELTAS_PER_CHANGE, VALIDATION_MESSAGES, VERIFICATION_MESSAGES, } from './constants.js';
 import { tokenize } from './tokenizer.js';
 import { parseDeltaSpec, normalizeRequirementName, extractRequirementsSection, } from '../parsing/requirement-blocks.js';
-const REQUIREMENT_HEADER_REGEX = /^###\s*Requirement:\s*(.+)\s*$/i;
 const SCENARIO_HEADER_REGEX = /^####\s+Scenario:/i;
 function normalizeLineEndings(content) {
     return content.replace(/\r\n?/g, '\n');

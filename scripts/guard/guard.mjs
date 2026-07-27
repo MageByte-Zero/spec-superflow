@@ -59,7 +59,7 @@ const WORKFLOW_TRANSITION_CHECKS = {
   tweak: {
     'exploring:approved-for-build': [],
     'approved-for-build:executing': [],
-    'executing:closing': ['tests-passing'],
+    'executing:closing': ['direct-test-result'],
     'debugging:executing': [],
   },
 };
@@ -123,7 +123,7 @@ function directTestResultCheck(changeDir) {
   }
   return {
     pass: false,
-    failures: ['direct short-path closing requires test_result starting with pass; DP-6 is not a substitute'],
+      failures: ['fast-path closing requires test_result starting with pass; DP-6 is not a substitute'],
   };
 }
 

@@ -20,6 +20,8 @@ const base = {
   config_doc_only: 'no',
   schema_api_change: 'no',
   new_module: 'no',
+  behavioral_constraint_change: 'no',
+  cross_module_change: 'no',
   uncertainty: 'low',
 };
 
@@ -51,7 +53,9 @@ describe('workflow path recommendation', () => {
     const changeDir = mkdtempSync(join(tmpdir(), 'ssf-workflow-accept-'));
     try {
       saveWorkflowRecommendation(changeDir, base);
-      const accepted = acceptWorkflowRecommendation(changeDir, { source: 'direct-request' });
+      const accepted = acceptWorkflowRecommendation(changeDir, {
+        source: 'direct-request', verificationStrategy: 'bounded',
+      });
       assert.equal(accepted.selection.mode, 'quick');
       assert.equal(accepted.selection.accepted_automatically, true);
       assert.equal(accepted.selection.source, 'direct-request');
@@ -117,6 +121,16 @@ describe('workflow path recommendation', () => {
     assert.deepEqual(result.missing_facts, ['file_count', 'new_module']);
   });
 
+  it('requires new behavioral and cross-module facts instead of assuming no risk', () => {
+    const result = recommendWorkflowPath({
+      ...base,
+      behavioral_constraint_change: undefined,
+      cross_module_change: undefined,
+    });
+    assert.equal(result.status, 'needs-input');
+    assert.deepEqual(result.missing_facts, ['behavioral_constraint_change', 'cross_module_change']);
+  });
+
   it('persists a hashed recommendation and detects tampering', () => {
     const changeDir = mkdtempSync(join(tmpdir(), 'ssf-workflow-recommend-'));
     try {
@@ -162,6 +176,36 @@ describe('workflow path recommendation', () => {
       });
       assert.equal(selected.selection.risk_override, true);
       assert.equal(selected.selection.verification_strategy, 'bounded');
+    } finally {
+      rmSync(changeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('requires a direct Quick acceptance to record the user-selected verification strategy', () => {
+    const changeDir = mkdtempSync(join(tmpdir(), 'ssf-workflow-verification-'));
+    try {
+      saveWorkflowRecommendation(changeDir, base);
+      assert.throws(
+        () => acceptWorkflowRecommendation(changeDir, { source: 'direct-request' }),
+        /verification/i,
+      );
+    } finally {
+      rmSync(changeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects Tweak when the observed facts are not bounded config/doc-only work', () => {
+    const changeDir = mkdtempSync(join(tmpdir(), 'ssf-workflow-tweak-boundary-'));
+    try {
+      saveWorkflowRecommendation(changeDir, {
+        ...base,
+        task_count: 5,
+        file_count: 5,
+        schema_api_change: 'yes',
+      });
+      assert.throws(() => recordWorkflowSelection(changeDir, {
+        mode: 'tweak', reason: 'try to keep it light', confirmed: true, acknowledged: true,
+      }), /Tweak.*config\/doc|Tweak.*4/i);
     } finally {
       rmSync(changeDir, { recursive: true, force: true });
     }

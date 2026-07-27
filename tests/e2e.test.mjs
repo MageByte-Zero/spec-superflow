@@ -51,6 +51,41 @@ describe('parseDeltaSpec', () => {
     assert.ok(names.includes('Auth failures map consistently'));
     assert.ok(names.includes('Existing approved login behavior remains unchanged'));
   });
+
+  it('parses requirement IDs used by existing Chinese change artifacts', () => {
+    const content = `## ADDED Requirements
+
+### REQ-AS-01: 即时外呼触发条件
+
+系统 MUST 在满足触发条件时创建外呼任务。
+
+#### Scenario: 触发外呼
+- **WHEN** 条件满足
+- **THEN** 创建任务。`;
+    const plan = parseDeltaSpec(content);
+
+    assert.equal(plan.added.length, 1);
+    assert.equal(plan.added[0].name, 'REQ-AS-01: 即时外呼触发条件');
+    assert.equal(new Validator().validateDeltaSpec(content).valid, true);
+  });
+
+  it('parses REQ requirement IDs in removed and renamed operations', () => {
+    const content = `## REMOVED Requirements
+
+### REQ-AS-01: 即时外呼触发条件
+
+## RENAMED Requirements
+
+- FROM: \`### REQ-AS-02: 旧名称\`
+- TO: \`### REQ-AS-03: 新名称\``;
+    const plan = parseDeltaSpec(content);
+
+    assert.deepEqual(plan.removed, ['REQ-AS-01: 即时外呼触发条件']);
+    assert.deepEqual(plan.renamed, [{
+      from: 'REQ-AS-02: 旧名称',
+      to: 'REQ-AS-03: 新名称',
+    }]);
+  });
 });
 
 describe('parseChangeMarkdown', () => {

@@ -16,7 +16,18 @@ export function normalizeRequirementName(name: string): string {
   return name.trim();
 }
 
-export const REQUIREMENT_HEADER_REGEX = /^###\s*Requirement:\s*(.+)\s*$/i;
+// Keep the canonical `Requirement:` form while accepting existing Chinese
+// artifacts that use a stable requirement ID as the heading.
+export const REQUIREMENT_HEADER_REGEX = /^###\s*(?:(?:Requirement|需求)\s*[:：]\s*(.+)|(REQ-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*\s*:\s*.+))\s*$/i;
+
+function requirementName(match: RegExpMatchArray): string {
+  return normalizeRequirementName(match[1] ?? match[2]);
+}
+
+function requirementNameFromHeader(header: string): string | undefined {
+  const match = header.match(REQUIREMENT_HEADER_REGEX);
+  return match ? requirementName(match) : undefined;
+}
 
 function normalizeLineEndings(content: string): string {
   return content.replace(/\r\n?/g, '\n');
@@ -70,7 +81,7 @@ export function extractRequirementsSection(content: string): RequirementsSection
       cursor++;
       continue;
     }
-    const name = normalizeRequirementName(headerMatch[1]);
+    const name = requirementName(headerMatch);
     cursor++;
     const bodyLines: string[] = [headerLineCandidate];
     while (
@@ -157,7 +168,7 @@ function parseRequirementBlocksFromSection(sectionBody: string): RequirementBloc
       i++;
       continue;
     }
-    const name = normalizeRequirementName(m[1]);
+    const name = requirementName(m);
     const buf: string[] = [headerLine];
     i++;
     while (
@@ -180,12 +191,13 @@ function parseRemovedNames(sectionBody: string): string[] {
   for (const line of lines) {
     const m = line.match(REQUIREMENT_HEADER_REGEX);
     if (m) {
-      names.push(normalizeRequirementName(m[1]));
+      names.push(requirementName(m));
       continue;
     }
-    const bullet = line.match(/^\s*-\s*`?###\s*Requirement:\s*(.+?)`?\s*$/);
+    const bullet = line.match(/^\s*-\s*`?(###\s*.+?)`?\s*$/);
     if (bullet) {
-      names.push(normalizeRequirementName(bullet[1]));
+      const name = requirementNameFromHeader(bullet[1]);
+      if (name) names.push(name);
     }
   }
   return names;
@@ -199,16 +211,12 @@ function parseRenamedPairs(
   const lines = normalizeLineEndings(sectionBody).split('\n');
   let current: { from?: string; to?: string } = {};
   for (const line of lines) {
-    const fromMatch = line.match(
-      /^\s*-?\s*FROM:\s*`?###\s*Requirement:\s*(.+?)`?\s*$/
-    );
-    const toMatch = line.match(
-      /^\s*-?\s*TO:\s*`?###\s*Requirement:\s*(.+?)`?\s*$/
-    );
+    const fromMatch = line.match(/^\s*-?\s*FROM:\s*`?(###\s*.+?)`?\s*$/);
+    const toMatch = line.match(/^\s*-?\s*TO:\s*`?(###\s*.+?)`?\s*$/);
     if (fromMatch) {
-      current.from = normalizeRequirementName(fromMatch[1]);
+      current.from = requirementNameFromHeader(fromMatch[1]);
     } else if (toMatch) {
-      current.to = normalizeRequirementName(toMatch[1]);
+      current.to = requirementNameFromHeader(toMatch[1]);
       if (current.from && current.to) {
         pairs.push({ from: current.from, to: current.to });
         current = {};

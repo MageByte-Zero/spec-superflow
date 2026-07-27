@@ -6,6 +6,14 @@ The format loosely follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-07-27
+
+### Fixed
+
+- **Safe fast-path selection**: Quick now requires explicit risk facts and a user-selected verification strategy; Tweak and Hotfix enforce their documented boundaries instead of allowing an acknowledged downgrade to bypass Full.
+- **Safe canonical publication**: `ssf sync` validates every active delta and computes the complete publication before writing. A malformed delta or a later merge failure cannot publish an empty or partial baseline, nor create a receipt.
+- **Delta header compatibility**: Delta specs now recognize `### REQ-<ID>: name` and `### 需求：name` alongside the canonical `### Requirement: name` format.
+
 ## [0.12.0] - 2026-07-27
 
 ### Added

@@ -88,8 +88,8 @@ Commands:
                         Persist observed intake facts and recommend full, hotfix, tweak, or quick without selecting one
   workflow select <change-dir> --mode full|hotfix|tweak|quick --confirm --reason <text> [--acknowledge-recommendation] [--verification tdd|new-test|bounded]
                         Persist a user-confirmed path; a risk-acknowledged Quick requires a verification choice
-  workflow accept <change-dir> --source direct-request [--verification tdd|new-test|bounded]
-                        Directly accept a recommended quick or hotfix workflow with bounded verification by default
+  workflow accept <change-dir> --source direct-request --verification tdd|new-test|bounded
+                        Directly accept a recommended quick or hotfix workflow with the user's chosen verification
   workflow show <change-dir> [--json]
                         Show the saved workflow recommendation or selection recovery state
   runtime guard ...     Run a portable phase-transition guard
@@ -124,8 +124,8 @@ Examples:
   ssf state init changes/my-change/
   ssf state check changes/my-change/
   ssf state transition changes/my-change/ approved-for-build
-  ssf workflow recommend changes/fix-typo --task-count 1 --file-count 1 --config-doc-only no --schema-api-change no --new-module no --uncertainty low --request-kind incident
-  ssf workflow accept changes/fix-typo --source direct-request
+  ssf workflow recommend changes/fix-typo --task-count 1 --file-count 1 --config-doc-only no --schema-api-change no --new-module no --behavioral-constraint-change no --cross-module-change no --uncertainty low --request-kind incident
+  ssf workflow accept changes/fix-typo --source direct-request --verification bounded
   ssf state get changes/my-change/ batches_completed
   ssf checkpoint save changes/my-change/ --task 1.1 --next "Run focused tests"
   ssf checkpoint list changes/my-change/

@@ -16,7 +16,6 @@ import {
   extractRequirementsSection,
 } from '../parsing/requirement-blocks.js';
 
-const REQUIREMENT_HEADER_REGEX = /^###\s*Requirement:\s*(.+)\s*$/i;
 const SCENARIO_HEADER_REGEX = /^####\s+Scenario:/i;
 
 function normalizeLineEndings(content: string): string {

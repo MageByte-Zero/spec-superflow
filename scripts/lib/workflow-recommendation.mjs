@@ -17,10 +17,8 @@ export function normalizeWorkflowFacts(input = {}) {
     config_doc_only: normalizeEnum(input.config_doc_only, ['yes', 'no', 'unknown']),
     schema_api_change: normalizeEnum(input.schema_api_change, ['yes', 'no', 'unknown']),
     new_module: normalizeEnum(input.new_module, ['yes', 'no', 'unknown']),
-    // These are intentionally optional for legacy callers. Agents MUST set them when
-    // the request reveals a requirement/spec/design or cross-module impact.
-    behavioral_constraint_change: normalizeEnum(input.behavioral_constraint_change ?? 'no', ['yes', 'no', 'unknown']),
-    cross_module_change: normalizeEnum(input.cross_module_change ?? 'no', ['yes', 'no', 'unknown']),
+    behavioral_constraint_change: normalizeEnum(input.behavioral_constraint_change, ['yes', 'no', 'unknown']),
+    cross_module_change: normalizeEnum(input.cross_module_change, ['yes', 'no', 'unknown']),
     uncertainty: normalizeEnum(input.uncertainty, ['low', 'high', 'unknown']),
     request_kind: normalizeRequestKind(input.request_kind),
   };
@@ -100,10 +98,15 @@ export function readWorkflowSelection(changeDir) {
 }
 
 function normalizeLegacyRecord(record) {
-  if (record?.facts && !Object.hasOwn(record.facts, 'request_kind')) {
+  if (record?.facts) {
     return {
       ...record,
-      facts: { ...record.facts, request_kind: 'standard' },
+      facts: {
+        ...record.facts,
+        request_kind: record.facts.request_kind ?? 'standard',
+        behavioral_constraint_change: record.facts.behavioral_constraint_change ?? 'no',
+        cross_module_change: record.facts.cross_module_change ?? 'no',
+      },
     };
   }
   return record;
@@ -125,10 +128,7 @@ export function recordWorkflowSelection(changeDir, { mode, reason, confirmed, ac
     throw new Error('non-recommended workflow selection requires acknowledgement');
   }
   const riskOverride = mode === 'quick' && loaded.record.recommendation.mode !== 'quick';
-  if (mode === 'quick' && (loaded.record.facts.task_count > 3 || loaded.record.facts.file_count > 3
-    || loaded.record.facts.config_doc_only === 'yes')) {
-    throw new Error('Quick is limited to at most 3 non-document code tasks/files; split the change or choose Full');
-  }
+  assertModeEligible(mode, loaded.record.facts);
   if (riskOverride && !isVerificationStrategy(verificationStrategy)) {
     throw new Error('risk-acknowledged Quick selection requires --verification tdd|new-test|bounded');
   }
@@ -149,7 +149,7 @@ export function recordWorkflowSelection(changeDir, { mode, reason, confirmed, ac
   return selected;
 }
 
-export function acceptWorkflowRecommendation(changeDir, { source, verificationStrategy = 'bounded' }) {
+export function acceptWorkflowRecommendation(changeDir, { source, verificationStrategy }) {
   const loaded = readWorkflowSelection(changeDir);
   if (!loaded.valid) throw new Error(loaded.failures.join('; '));
   const recommendation = loaded.record.recommendation;
@@ -215,6 +215,21 @@ function riskReasonsFor(facts) {
 
 function isVerificationStrategy(value) {
   return ['tdd', 'new-test', 'bounded'].includes(value);
+}
+
+function assertModeEligible(mode, facts) {
+  const riskReasons = riskReasonsFor(facts);
+  if (mode === 'quick' && (facts.task_count > 3 || facts.file_count > 3 || facts.config_doc_only !== 'no')) {
+    throw new Error('Quick is limited to at most 3 non-document code tasks/files; split the change or choose Full');
+  }
+  if (mode === 'tweak' && (facts.task_count > 4 || facts.file_count > 4
+    || facts.config_doc_only !== 'yes' || riskReasons.length > 0)) {
+    throw new Error('Tweak requires at most 4 config/doc-only tasks/files with no risk signals; choose Full');
+  }
+  if (mode === 'hotfix' && (facts.request_kind !== 'incident' || facts.task_count > 2
+    || facts.file_count > 2 || facts.config_doc_only !== 'no' || riskReasons.length > 0)) {
+    throw new Error('Hotfix requires an incident with at most 2 non-document tasks/files and no risk signals; choose Full');
+  }
 }
 
 function normalizeCount(value) {

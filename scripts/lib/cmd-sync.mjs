@@ -1,5 +1,5 @@
 // ssf sync <change-dir> — publish a change delta as canonical root baseline specs.
-import { readFileSync, readdirSync, writeFileSync, existsSync, statSync, mkdirSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync, existsSync, statSync, mkdirSync, renameSync, unlinkSync } from 'node:fs';
 import path, { join } from 'node:path';
 import { validateSpecPathLayout } from './spec-paths.mjs';
 import {
@@ -92,19 +92,21 @@ export async function run(args) {
   const changeSpecsDir = join(changeDir, 'specs');
   const capabilities = layout.specFiles.map(specFile => deriveCapabilityDir(changeSpecsDir, specFile)).sort();
   const baselineBeforeHash = hashPublishedBaseline(projectRoot, capabilities);
-  mkdirSync(baselineSpecsDir, { recursive: true });
-
-  for (const specFile of layout.specFiles) {
+  const publications = layout.specFiles.map((specFile) => {
     const capabilityDir = deriveCapabilityDir(changeSpecsDir, specFile);
     const targetDir = join(baselineSpecsDir, capabilityDir);
     const targetFile = join(targetDir, 'spec.md');
     const baseline = existsSync(targetFile) ? readFileSync(targetFile, 'utf-8') : '';
     const delta = readFileSync(specFile, 'utf-8');
+    const report = validator.validateDeltaSpec(delta);
+    if (!report.valid) {
+      throw new Error(`Invalid delta spec specs/${capabilityDir}/spec.md: ${report.issues.map(issue => issue.message).join('; ')}`);
+    }
     const published = applyDeltaToBaseline(baseline, delta, capabilityDir);
-    mkdirSync(targetDir, { recursive: true });
-    writeFileSync(targetFile, published);
-    console.log(`  📋 Published canonical baseline: specs/${capabilityDir}/spec.md`);
-  }
+    return { capabilityDir, targetDir, targetFile, published, original: existsSync(targetFile) ? baseline : null };
+  });
+  publishAtomically(publications);
+  for (const { capabilityDir } of publications) console.log(`  📋 Published canonical baseline: specs/${capabilityDir}/spec.md`);
 
   // A receipt belongs to the active change, never to the published baseline.
   // Older callers without a state file still get canonical publication but do
@@ -119,4 +121,34 @@ export async function run(args) {
   }
 
   console.log(`\n✅ Published ${layout.specFiles.length} canonical spec(s) from ${path.basename(changeDir)} to specs/`);
+}
+
+function publishAtomically(publications) {
+  const staged = [];
+  try {
+    for (const publication of publications) {
+      mkdirSync(publication.targetDir, { recursive: true });
+      const temporary = `${publication.targetFile}.tmp-${process.pid}-${staged.length}`;
+      writeFileSync(temporary, publication.published);
+      staged.push({ ...publication, temporary });
+    }
+  } catch (error) {
+    for (const { temporary } of staged) if (existsSync(temporary)) unlinkSync(temporary);
+    throw error;
+  }
+
+  const committed = [];
+  try {
+    for (const publication of staged) {
+      renameSync(publication.temporary, publication.targetFile);
+      committed.push(publication);
+    }
+  } catch (error) {
+    for (const publication of committed.reverse()) {
+      if (publication.original === null) unlinkSync(publication.targetFile);
+      else writeFileSync(publication.targetFile, publication.original);
+    }
+    for (const publication of staged) if (existsSync(publication.temporary)) unlinkSync(publication.temporary);
+    throw error;
+  }
 }

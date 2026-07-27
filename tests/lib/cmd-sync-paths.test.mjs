@@ -123,6 +123,46 @@ describe('cmd-sync: canonical spec publication', () => {
     assert.equal(existsSync(join(tempRoot, 'specs', 'workflow', 'spec.md')), false);
   });
 
+  it('rejects an unparseable delta before it writes a baseline or publication receipt', () => {
+    const repo = mkdtempSync(join(tempRoot, 'repo-invalid-delta-'));
+    const change = join(repo, 'changes', 'invalid-delta');
+    mkdirSync(join(change, 'specs', 'workflow'), { recursive: true });
+    writeChangeState(change);
+    writeSpec(join(change, 'specs', 'workflow', 'spec.md'), `## ADDED Requirements
+
+### Notes: this is not a requirement
+
+No requirement is declared here.`);
+
+    const result = runSync(repo, change);
+
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stdout + result.stderr, /No deltas found|Requirement/i);
+    assert.equal(existsSync(join(repo, 'specs', 'workflow', 'spec.md')), false);
+    assert.doesNotMatch(readFileSync(join(change, '.spec-superflow.yaml'), 'utf-8'), /spec_publication_receipt/);
+  });
+
+  it('does not publish any capability when a later delta cannot be applied', () => {
+    const repo = mkdtempSync(join(tempRoot, 'repo-atomic-publication-'));
+    const change = join(repo, 'changes', 'atomic-publication');
+    mkdirSync(join(change, 'specs', 'first'), { recursive: true });
+    mkdirSync(join(change, 'specs', 'second'), { recursive: true });
+    writeChangeState(change);
+    writeSpec(join(change, 'specs', 'first', 'spec.md'), `## ADDED Requirements
+
+${requirement('First', 'publish only after the full batch is valid')}`);
+    writeSpec(join(change, 'specs', 'second', 'spec.md'), `## MODIFIED Requirements
+
+${requirement('Missing', 'cannot modify an absent baseline requirement')}`);
+
+    const result = runSync(repo, change);
+
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stdout + result.stderr, /Cannot modify missing requirement/i);
+    assert.equal(existsSync(join(repo, 'specs', 'first', 'spec.md')), false);
+    assert.doesNotMatch(readFileSync(join(change, '.spec-superflow.yaml'), 'utf-8'), /spec_publication_receipt/);
+  });
+
   it('ignores closing and state-less historical changes during conflict detection', () => {
     const repo = mkdtempSync(join(tempRoot, 'repo-active-conflicts-'));
     const change = join(repo, 'changes', 'active');

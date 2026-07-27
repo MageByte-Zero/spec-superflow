@@ -198,10 +198,12 @@ describe('guard: direct short paths', () => {
       config_doc_only: 'no',
       schema_api_change: 'no',
       new_module: 'no',
+      behavioral_constraint_change: 'no',
+      cross_module_change: 'no',
       uncertainty: 'low',
       request_kind: workflow === 'hotfix' ? 'incident' : 'standard',
     });
-    acceptWorkflowRecommendation(dir, { source: 'direct-request' });
+    acceptWorkflowRecommendation(dir, { source: 'direct-request', verificationStrategy: 'bounded' });
   }
 
   function run(fromState, toState, workflow) {

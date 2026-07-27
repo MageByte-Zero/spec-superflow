@@ -54,7 +54,9 @@ function assertWorkflowFilesUnchanged(before) {
 function recommend(args = []) {
   return runSsf(['workflow', 'recommend', changeDir,
     '--task-count', '2', '--file-count', '2', '--config-doc-only', 'no',
-    '--schema-api-change', 'no', '--new-module', 'no', '--uncertainty', 'low',
+    '--schema-api-change', 'no', '--new-module', 'no',
+    '--behavioral-constraint-change', 'no', '--cross-module-change', 'no',
+    '--uncertainty', 'low',
     '--json', ...args]);
 }
 
@@ -80,7 +82,8 @@ describe('ssf workflow', () => {
     assert.equal(recommended.exitCode, 0, recommended.stderr);
     assert.equal(recommended.json.recommendation.mode, 'quick');
 
-    const accepted = runSsf(['workflow', 'accept', changeDir, '--source', 'direct-request', '--json']);
+    const accepted = runSsf(['workflow', 'accept', changeDir,
+      '--source', 'direct-request', '--verification', 'bounded', '--json']);
     assert.equal(accepted.exitCode, 0, accepted.stderr);
     assert.equal(readState(changeDir).workflow, 'quick');
     assert.equal(accepted.json.record.selection.accepted_automatically, true);
@@ -127,11 +130,14 @@ describe('ssf workflow', () => {
 
   it('refreshes a direct Quick recommendation and escalates to Full when risk grows', () => {
     assert.equal(recommend().exitCode, 0);
-    assert.equal(runSsf(['workflow', 'accept', changeDir, '--source', 'direct-request']).exitCode, 0);
+    assert.equal(runSsf(['workflow', 'accept', changeDir,
+      '--source', 'direct-request', '--verification', 'bounded']).exitCode, 0);
 
     const refreshed = runSsf(['workflow', 'recommend', changeDir,
       '--task-count', '4', '--file-count', '4', '--config-doc-only', 'no',
-      '--schema-api-change', 'no', '--new-module', 'no', '--uncertainty', 'low', '--json']);
+      '--schema-api-change', 'no', '--new-module', 'no',
+      '--behavioral-constraint-change', 'no', '--cross-module-change', 'no',
+      '--uncertainty', 'low', '--json']);
     assert.equal(refreshed.exitCode, 0, refreshed.stderr);
     assert.equal(refreshed.json.recommendation.mode, 'full');
 
@@ -145,7 +151,9 @@ describe('ssf workflow', () => {
   it('never permits a four-file change to override into Quick', () => {
     const recommended = runSsf(['workflow', 'recommend', changeDir,
       '--task-count', '4', '--file-count', '4', '--config-doc-only', 'no',
-      '--schema-api-change', 'no', '--new-module', 'no', '--uncertainty', 'low', '--json']);
+      '--schema-api-change', 'no', '--new-module', 'no',
+      '--behavioral-constraint-change', 'no', '--cross-module-change', 'no',
+      '--uncertainty', 'low', '--json']);
     assert.equal(recommended.exitCode, 0, recommended.stderr);
     assert.equal(recommended.json.recommendation.mode, 'full');
 
@@ -157,10 +165,36 @@ describe('ssf workflow', () => {
     assert.equal(readState(changeDir).workflow, 'auto');
   });
 
+  it('requires explicit new risk facts before recommending a direct Quick path', () => {
+    const result = runSsf(['workflow', 'recommend', changeDir,
+      '--task-count', '2', '--file-count', '2', '--config-doc-only', 'no',
+      '--schema-api-change', 'no', '--new-module', 'no', '--uncertainty', 'low', '--json']);
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.equal(result.json.status, 'needs-input');
+    assert.deepEqual(result.json.missing_facts, ['behavioral_constraint_change', 'cross_module_change']);
+  });
+
+  it('never permits a Full recommendation to be downgraded to Tweak', () => {
+    const recommended = runSsf(['workflow', 'recommend', changeDir,
+      '--task-count', '5', '--file-count', '5', '--config-doc-only', 'no',
+      '--schema-api-change', 'yes', '--new-module', 'no',
+      '--behavioral-constraint-change', 'no', '--cross-module-change', 'no',
+      '--uncertainty', 'low', '--json']);
+    assert.equal(recommended.exitCode, 0, recommended.stderr);
+    assert.equal(recommended.json.recommendation.mode, 'full');
+
+    const selected = runSsf(['workflow', 'select', changeDir, '--mode', 'tweak',
+      '--confirm', '--reason', 'try to keep it light', '--acknowledge-recommendation', '--json']);
+    assert.equal(selected.exitCode, 1);
+    assert.match(selected.stderr, /Tweak.*config\/doc|Tweak.*4/i);
+    assert.equal(readState(changeDir).workflow, 'auto');
+  });
+
   it('shows complete ready recommendations in human-readable recommend and show output', () => {
     const recommended = runSsf(['workflow', 'recommend', changeDir,
       '--task-count', '2', '--file-count', '2', '--config-doc-only', 'no',
-      '--schema-api-change', 'no', '--new-module', 'no', '--uncertainty', 'low']);
+      '--schema-api-change', 'no', '--new-module', 'no',
+      '--behavioral-constraint-change', 'no', '--cross-module-change', 'no', '--uncertainty', 'low']);
     assert.equal(recommended.exitCode, 0, recommended.stderr);
     assert.match(recommended.stdout, /Observed:/);
     assert.match(recommended.stdout, /Available:.*full.*hotfix.*tweak.*quick/);
@@ -179,7 +213,8 @@ describe('ssf workflow', () => {
   it('returns needs-input without changing auto workflow', () => {
     const result = runSsf(['workflow', 'recommend', changeDir,
       '--task-count', '2', '--config-doc-only', 'no', '--schema-api-change', 'unknown',
-      '--new-module', 'no', '--uncertainty', 'low', '--json']);
+      '--new-module', 'no', '--behavioral-constraint-change', 'no', '--cross-module-change', 'no',
+      '--uncertainty', 'low', '--json']);
     assert.equal(result.exitCode, 0, result.stderr);
     assert.equal(result.json.status, 'needs-input');
     assert.deepEqual(result.json.missing_facts, ['file_count', 'schema_api_change']);
@@ -189,7 +224,8 @@ describe('ssf workflow', () => {
   it('restores needs-input context in human and JSON show output', () => {
     const recommended = runSsf(['workflow', 'recommend', changeDir,
       '--task-count', '2', '--config-doc-only', 'no', '--schema-api-change', 'unknown',
-      '--new-module', 'no', '--uncertainty', 'low', '--json']);
+      '--new-module', 'no', '--behavioral-constraint-change', 'no', '--cross-module-change', 'no',
+      '--uncertainty', 'low', '--json']);
     assert.equal(recommended.exitCode, 0, recommended.stderr);
 
     const human = runSsf(['workflow', 'show', changeDir]);
@@ -281,7 +317,7 @@ describe('ssf workflow', () => {
     assert.equal(result.json.source, 'missing-receipt');
     assert.deepEqual(result.json.missing_facts, [
       'task_count', 'file_count', 'config_doc_only', 'schema_api_change',
-      'new_module', 'uncertainty',
+      'new_module', 'behavioral_constraint_change', 'cross_module_change', 'uncertainty',
     ]);
     assert.deepEqual(result.json.available_modes, ['full', 'hotfix', 'tweak', 'quick']);
     assert.equal(result.json.recommendation, null);
@@ -290,14 +326,14 @@ describe('ssf workflow', () => {
     result = runSsf(['workflow', 'show', changeDir]);
     assert.equal(result.exitCode, 0, result.stderr);
     assert.match(result.stdout, /Workflow status: needs-input/i);
-    assert.match(result.stdout, /Missing facts: task_count, file_count, config_doc_only, schema_api_change, new_module, uncertainty/i);
+    assert.match(result.stdout, /Missing facts: task_count, file_count, config_doc_only, schema_api_change, new_module, behavioral_constraint_change, cross_module_change, uncertainty/i);
     assert.match(result.stdout, /Hash valid: unavailable/i);
   });
 
   it('restores invalid receipt evidence in human and JSON show output', () => {
     saveWorkflowRecommendation(changeDir, {
       task_count: 2, file_count: 2, config_doc_only: 'no', schema_api_change: 'no',
-      new_module: 'no', uncertainty: 'low',
+      new_module: 'no', behavioral_constraint_change: 'no', cross_module_change: 'no', uncertainty: 'low',
     });
     const receiptPath = getOverlayPaths(changeDir).workflowSelection;
     const tampered = JSON.parse(readFileSync(receiptPath, 'utf8'));
@@ -325,10 +361,10 @@ describe('ssf workflow', () => {
   it('restores selection-pending evidence in human and JSON show output', () => {
     saveWorkflowRecommendation(changeDir, {
       task_count: 2, file_count: 2, config_doc_only: 'no', schema_api_change: 'no',
-      new_module: 'no', uncertainty: 'low',
+      new_module: 'no', behavioral_constraint_change: 'no', cross_module_change: 'no', uncertainty: 'low',
     });
     recordWorkflowSelection(changeDir, {
-      mode: 'tweak', reason: 'recoverable selection', confirmed: true, acknowledged: true,
+      mode: 'full', reason: 'recoverable selection', confirmed: true, acknowledged: true,
     });
 
     const human = runSsf(['workflow', 'show', changeDir]);
@@ -338,14 +374,14 @@ describe('ssf workflow', () => {
     assert.match(human.stdout, /Available:.*full.*hotfix.*tweak.*quick/i);
     assert.match(human.stdout, /Recommended: quick/i);
     assert.match(human.stdout, /Why:/i);
-    assert.match(human.stdout, /Selection:.*mode=tweak.*reason=recoverable selection/i);
+    assert.match(human.stdout, /Selection:.*mode=full.*reason=recoverable selection/i);
     assert.match(human.stdout, /Hash valid: true/i);
 
     const json = runSsf(['workflow', 'show', changeDir, '--json']);
     assert.equal(json.exitCode, 0, json.stderr);
     assert.equal(json.json.status, 'selection-pending');
     assert.equal(json.json.workflow, 'auto');
-    assert.equal(json.json.record.selection.mode, 'tweak');
+    assert.equal(json.json.record.selection.mode, 'full');
     assert.equal(json.json.record.selection.reason, 'recoverable selection');
   });
 
@@ -353,7 +389,7 @@ describe('ssf workflow', () => {
     assert.equal(recommend().exitCode, 0);
 
     let result = runSsf(['workflow', 'accept', changeDir,
-      '--source', 'direct-request', '--json']);
+      '--source', 'direct-request', '--verification', 'bounded', '--json']);
     assert.equal(result.exitCode, 0, result.stderr);
 
     const human = runSsf(['workflow', 'show', changeDir]);
@@ -389,7 +425,7 @@ describe('ssf workflow', () => {
     assert.equal(shown.json.status, 'needs-input');
     assert.deepEqual(shown.json.missing_facts, [
       'task_count', 'file_count', 'config_doc_only', 'schema_api_change',
-      'new_module', 'uncertainty',
+      'new_module', 'behavioral_constraint_change', 'cross_module_change', 'uncertainty',
     ]);
     assert.equal(readState(changeDir).dp_0_confirmed, null);
   });
@@ -454,7 +490,7 @@ describe('ssf workflow', () => {
     ].join('\n'));
     assert.equal(recommend().exitCode, 0);
     const selected = runSsf(['workflow', 'accept', changeDir,
-      '--source', 'direct-request', '--json']);
+      '--source', 'direct-request', '--verification', 'bounded', '--json']);
     assert.equal(selected.exitCode, 0, selected.stderr);
     const decisions = readState(changeDir).dp_0_decisions;
     assert.match(decisions, /scope=issue 70/);
