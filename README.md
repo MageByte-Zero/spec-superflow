@@ -166,7 +166,7 @@ npx spec-superflow list          # 或通过 npx 使用
 
 ### 版本
 
-- 当前版本：`v0.12.0`
+- 当前版本：`v0.12.1`
 - v0.9.1 highlights：DP-4 执行模式推荐、跨 17 个平台的 portable runtime，以及无插件根路径的 raw-package smoke；详见 [CHANGELOG.md](CHANGELOG.md)
 - v0.9.0 highlights：支持 Node 20/22、model profiles 只读解析，以及 code-reviewer 的最小性审查
 - 自包含插件，不需要运行时安装 OpenSpec 或 Superpowers
@@ -199,6 +199,8 @@ ssf handoff create changes/my-change --type research --objective "Compare approa
 Prototype 只在用户明确确认后创建；后端、CLI、配置和内部重构不会自动进入 prototype 流程。handoff 结果不会自动修改 `design.md` 或 `tasks.md`。
 
 Delta spec 的规范路径是 `specs/<capability>/spec.md`；扁平的 `specs/<capability>.md` 和根级 `specs/spec.md` 不会被视为合法规范。
+
+Requirement 标题的规范形式是 `### Requirement: 名称`。为兼容已存在的中文工件，解析器也接受 `### 需求：名称` 和 `### REQ-<ID>: 名称`；其它三级标题不会被当作需求。`ssf sync` 会先校验全部 delta，再一次性发布，任一 delta 无效时不会写入基线或发布回执。
 
 ### 活动规格与发布基线
 

@@ -230,9 +230,10 @@ describe('cmd-inject: CLI writes', () => {
       writeFileSync(join(change, '.spec-superflow.yaml'), 'state: approved-for-build\nworkflow: quick\nchange_name: inject-test\n');
       saveWorkflowRecommendation(change, {
         task_count: 3, file_count: 3, config_doc_only: 'no', schema_api_change: 'no',
-        new_module: 'no', uncertainty: 'low', request_kind: 'standard',
+        new_module: 'no', behavioral_constraint_change: 'no', cross_module_change: 'no',
+        uncertainty: 'low', request_kind: 'standard',
       });
-      acceptWorkflowRecommendation(change, { source: 'direct-request' });
+      acceptWorkflowRecommendation(change, { source: 'direct-request', verificationStrategy: 'bounded' });
       const result = runInject(root, change, ['--platforms', 'cursor']);
       assert.equal(result.exitCode, 0, result.stdout + result.stderr);
       const guard = readFileSync(join(root, '.cursor', 'rules', 'phase-guard.mdc'), 'utf8');

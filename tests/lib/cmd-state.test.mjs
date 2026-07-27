@@ -213,9 +213,9 @@ describe('cmd-state: transition', () => {
   it('accepts a direct quick receipt through the no-contract transition path', () => {
     rmSync(join(tempDir, '.spec-superflow.yaml'), { force: true });
     ssf(`state init ${tempDir}`);
-    const recommendation = ssf(`workflow recommend ${tempDir} --task-count 3 --file-count 3 --config-doc-only no --schema-api-change no --new-module no --uncertainty low`);
+    const recommendation = ssf(`workflow recommend ${tempDir} --task-count 3 --file-count 3 --config-doc-only no --schema-api-change no --new-module no --behavioral-constraint-change no --cross-module-change no --uncertainty low`);
     assert.equal(recommendation.exitCode, 0, recommendation.stderr);
-    const acceptance = ssf(`workflow accept ${tempDir} --source direct-request`);
+    const acceptance = ssf(`workflow accept ${tempDir} --source direct-request --verification bounded`);
     assert.equal(acceptance.exitCode, 0, acceptance.stderr);
 
     const approved = ssf(`state transition ${tempDir} approved-for-build`);

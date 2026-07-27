@@ -129,7 +129,7 @@ npm install -g spec-superflow
 
 ### Version
 
-- Current: `v0.12.0`
+- Current: `v0.12.1`
 - v0.9.1 highlights: DP-4 execution-mode recommendations, a portable runtime across 17 platforms, and a raw-package smoke with no plugin-root variable.
 - Self-contained — no OpenSpec or Superpowers runtime required
 - Upstream: [Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec), [obra/superpowers](https://github.com/obra/superpowers)
@@ -163,6 +163,8 @@ configuration, and internal-refactor work does not enter the prototype route
 automatically. Handoff results never edit `design.md` or `tasks.md` automatically.
 
 Canonical delta specs live at `specs/<capability>/spec.md`; flat `specs/<capability>.md` and root-level `specs/spec.md` are not valid canonical paths.
+
+The canonical requirement heading is `### Requirement: name`. For existing Chinese artifacts, the parser also accepts `### 需求：name` and `### REQ-<ID>: name`; other level-three headings are not requirements. `ssf sync` validates every delta before publishing the batch, so an invalid delta never writes a baseline or publication receipt.
 
 ### Active specs and published baselines
 

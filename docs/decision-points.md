@@ -8,7 +8,7 @@
 - **名称**：设计前确认
 - **触发条件**：Full 或 legacy change 在 planning 前触发；Quick、direct Hotfix、Tweak 不等待 DP-0，先记录可验证 recommendation/direct receipt 后执行。
 - **所需输入**：变更名称与意图、已知约束（命名风格、兼容性、受影响平台）、是否包含相关优化、用户沟通偏好；以及最少路径事实（任务数、文件数、是否仅配置/文档、是否涉及 schema/API、新模块和不确定性）
-- **路径选择协议**：低风险 Quick 与 incident Hotfix 同轮展示 recommendation 后可运行 `ssf workflow accept --source direct-request`；其余路径使用 `show`、补齐 missing facts、`recommend` 和 `select --confirm`。direct receipt 代替短路径 DP。
+- **路径选择协议**：低风险 Quick 与 incident Hotfix 同轮展示 recommendation 后，由用户选择 `tdd`、`new-test` 或 `bounded`，再运行 `ssf workflow accept --source direct-request --verification <strategy>`；其余路径使用 `show`、补齐 missing facts、`recommend` 和 `select --confirm`。direct receipt 代替短路径 DP。
 - **短路径收口**：Quick、direct Hotfix、Tweak 以边界内验证摘要和 `test_result: pass` 收口，不写 DP-6 或 DP-7。
 - **确认顺序**：可先解析 `artifact_language`，随后必须完成路径 receipt 读取、最少事实补全、建议展示和用户选择；路径摘要与其他 DP-0 决定合并确认后，才可设置 `dp_0_confirmed=true`。
 - **预期输出**：完整、防篡改的路径选择 receipt 固定保存在 change overlay 的 `.superpowers/sdd/workflow-selection.json`，用于恢复和审计；`.spec-superflow.yaml` 的 `dp_0_*` 只保存确认结果与幂等的 `workflow_path`/推荐对齐摘要，并保留既有 `scope` 和 `artifact_language`。空目录的 legacy artifact inference 可以返回 `full` 以兼容旧 API，但绝不能替代入口的用户选择。

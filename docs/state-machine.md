@@ -22,7 +22,7 @@ and presents Observed, Available, Recommended, and Why. Recommendation does
 not change state. Full, legacy Hotfix, and Tweak are selected explicitly with
 `ssf workflow select --confirm`; a non-recommended selection requires
 `--acknowledge-recommendation`. A recommended Quick or incident Hotfix may be
-accepted with `ssf workflow accept --source direct-request`, which records the
+accepted with `ssf workflow accept --source direct-request --verification <tdd|new-test|bounded>`, which records the
 valid direct receipt needed by its short path. The legacy `runtime infer`
 compatibility API may return `full` for an empty directory, but it never
 replaces the user's intake selection.

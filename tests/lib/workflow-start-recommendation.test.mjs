@@ -42,8 +42,8 @@ describe('workflow-start path recommendation protocol', () => {
   it('recommends and directly accepts a clearly bounded quick or incident hotfix in one turn', () => {
     const skill = read('skills/workflow-start/SKILL.md');
     assert.match(skill, /Quick.*Hotfix.*same turn|同轮.*Quick.*Hotfix/is);
-    assert.match(skill, /workflow accept <change-dir> --source direct-request/);
-    assert.match(skill, /do not collect.*six|不收集.*六项/is);
+    assert.match(skill, /workflow accept <change-dir> --source direct-request --verification/);
+    assert.match(skill, /do not collect.*eight|不收集.*八项/is);
     assert.match(skill, /≤3.*tasks.*files|3.*tasks.*files/is);
   });
   it('validates and initializes a brand-new change before workflow show', () => {

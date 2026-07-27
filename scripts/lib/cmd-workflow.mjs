@@ -111,7 +111,7 @@ function canEscalateToFull(state, values) {
 function accept(changeDir, state, values) {
   const record = acceptWorkflowRecommendation(changeDir, {
     source: values.source,
-    verificationStrategy: parseVerification(values.verification) ?? 'bounded',
+    verificationStrategy: parseVerification(values.verification),
   });
   persistWorkflowSelection(changeDir, state, record);
   return print({ ok: true, source: 'direct-request', record }, values.json);
@@ -171,10 +171,8 @@ function factsFrom(values) {
     config_doc_only: parseFact(values['config-doc-only'], 'config-doc-only'),
     schema_api_change: parseFact(values['schema-api-change'], 'schema-api-change'),
     new_module: parseFact(values['new-module'], 'new-module'),
-    behavioral_constraint_change: values['behavioral-constraint-change'] === undefined
-      ? 'no' : parseFact(values['behavioral-constraint-change'], 'behavioral-constraint-change'),
-    cross_module_change: values['cross-module-change'] === undefined
-      ? 'no' : parseFact(values['cross-module-change'], 'cross-module-change'),
+    behavioral_constraint_change: parseFact(values['behavioral-constraint-change'], 'behavioral-constraint-change'),
+    cross_module_change: parseFact(values['cross-module-change'], 'cross-module-change'),
     uncertainty: parseFact(values.uncertainty, 'uncertainty'),
     request_kind: parseRequestKind(values['request-kind']),
   };
