@@ -6,6 +6,17 @@ The format loosely follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-27
+
+### Added
+
+- **User-controlled lightweight workflow paths**: Workflow recommendations now surface behavioral-constraint, API/schema, cross-module, new-module, and uncertainty risks without automatically escalating. Users can explicitly retain Quick for an eligible three-file single-module change by acknowledging the risk and recording `tdd`, `new-test`, or `bounded` verification.
+- **Clearer four-mode guidance**: Quick, direct Hotfix, Tweak, and Full now document their file boundaries, decision points, and verification expectations consistently across the CLI, skills, and installation guidance.
+
+### Fixed
+
+- **Default artifact validation**: `npm run validate` now validates the bundled `docs/examples/add-dark-mode` example when no change directory is supplied, while retaining explicit-directory validation.
+
 ## [0.11.0] - 2026-07-21
 
 ### Added

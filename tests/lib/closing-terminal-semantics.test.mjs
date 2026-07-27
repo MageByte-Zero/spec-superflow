@@ -188,14 +188,14 @@ describe('closing terminal lifecycle', () => {
     }
   });
 
-  it('records the #64 terminal closing repair in the dated current release', () => {
+  it('keeps the #64 terminal closing repair in its v0.11.0 release record', () => {
     const changelog = read('CHANGELOG.md');
     const unreleased = section(changelog, '## [Unreleased]');
-    const currentRelease = section(changelog, `## [${VERSION}] - 2026-07-21`);
+    const repairedRelease = section(changelog, '## [0.11.0] - 2026-07-21');
 
     assert.equal(unreleased.trim(), '## [Unreleased]');
-    assert.match(currentRelease, /#64/);
-    assert.match(currentRelease, /closing/i);
-    assert.match(currentRelease, /终态/);
+    assert.match(repairedRelease, /#64/);
+    assert.match(repairedRelease, /closing/i);
+    assert.match(repairedRelease, /终态/);
   });
 });
