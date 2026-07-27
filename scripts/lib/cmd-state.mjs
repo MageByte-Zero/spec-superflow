@@ -126,7 +126,9 @@ export async function run(args) {
       const guardScript = join(__dirname, '..', 'guard', 'guard.mjs');
       // The guard runs from the bundled plugin directory. Resolve a relative
       // change path from the caller project before spawning it so both commands
-      // inspect the same artifacts.
+
+      // inspect the same active change.
+
       const guardChangeDir = resolve(changeDir);
       const rawWorkflow = state.workflow || 'full';
       // Normalize: guard only accepts full/hotfix/tweak, not "auto"

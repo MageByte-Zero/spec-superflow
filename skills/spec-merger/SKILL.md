@@ -5,7 +5,7 @@ description: Sync delta specs to main specs before closure. Invoke while an exec
 
 # Spec Merger
 
-Before the final `executing → closing` transition, delta specs (ADDED/MODIFIED/REMOVED/RENAMED) must be merged into the main spec base. **Specs that aren't synced become lies.** A change already in `closing` must not be routed to `spec-merger`.
+Before the final `executing → closing` transition, delta specs (ADDED/MODIFIED/REMOVED/RENAMED) must be published into the main spec base. `changes/<change>/` remains the active workflow source; root `specs/` is only the published baseline. **Specs that aren't synced become lies.** A change already in `closing` must not be routed to `spec-merger`.
 
 ## Execution-State Guard
 
@@ -29,13 +29,13 @@ Each `specs/<capability>/spec.md` under the change folder contains delta operati
 
 ### Step 2: Apply by Operation
 
-**ADDED**: Append to `specs/<capability>/spec.md`. Create the main spec if it doesn't exist. Insert before any REMOVED section.
+**ADDED**: Append the requirement to the published baseline's `## Requirements`. Create a canonical main spec if it does not exist.
 
-**MODIFIED**: Match on `### Requirement: <name>`. Replace description and scenarios. Preserve original in a `### Previous version` subsection. Flag if requirement doesn't exist in main spec.
+**MODIFIED**: Match on `### Requirement: <name>` and replace its description and scenarios. Flag if the requirement does not exist in the canonical baseline.
 
-**REMOVED**: Move to `## Removed` section with deprecation note: reason, migration, and change name. Flag if requirement doesn't exist.
+**REMOVED**: Remove the matched requirement from the published baseline. Flag if it does not exist.
 
-**RENAMED**: Match old name, change header to new name, add `_Renamed from <old> in <change>_`. Flag if new name collides with existing.
+**RENAMED**: Match the old name and change its header to the new name. Flag if the new name collides with an existing requirement.
 
 ### Step 3: Conflict Detection
 Before executing, detect:
@@ -44,7 +44,7 @@ Before executing, detect:
 - MODIFIED/REMOVED targeting nonexistent requirements → flag
 
 ### Step 4: Execute Merge
-Apply changes. Do NOT delete delta specs — they remain for traceability. After merge, validate: no duplicate requirement names, no orphaned references, REMOVED section clearly separated.
+Apply changes. Do NOT delete delta specs — they remain for traceability. The root baseline must contain `## Requirements`, never `## ADDED/MODIFIED/REMOVED/RENAMED Requirements` headers. Unsafe legacy delta-only baselines that cannot be interpreted are rejected instead of guessed.
 
 ### Step 5: Report
 Output sync report table: Capability, ADDED/MODIFIED/REMOVED/RENAMED counts, Status (✓/⚠). Summary with totals and unresolved conflicts.
@@ -60,11 +60,8 @@ Output sync report table: Capability, ADDED/MODIFIED/REMOVED/RENAMED counts, Sta
 
 1. Report results. If no conflicts → ready to archive. If conflicts → user resolves before archive.
 2. Change folder (including deltas) remains for traceability.
-3. Record that merging is complete so the `executing → closing` guard allows closure:
-   ```bash
-   npx --yes --package spec-superflow@0.11.0 ssf state set <change-dir> spec_merged true
-   ```
-   (If the change had no delta sections, still set `spec_merged true` — there was nothing to merge.)
+3. `ssf sync` automatically writes a publication receipt to the active change state. Do **not** manually set `spec_merged`: that legacy marker is not closing evidence. The closing guard recomputes the delta and published-baseline hashes, so any later edit requires another sync.
+4. If the change has no delta sections, no publication receipt is required.
 
 ## Exception Handling
 

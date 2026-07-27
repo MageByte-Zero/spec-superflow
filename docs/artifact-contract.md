@@ -29,6 +29,8 @@ Defines:
 - scenarios and acceptance conditions
 - behavioral edges the implementation must respect
 
+In a project using this plugin, `specs/` within an active `changes/<change>/` directory is the change's delta-spec source and the only spec input to that change's workflow state. The project-root `specs/` directory is a separately published baseline: `ssf sync` applies delta operations to it and records a publication receipt on the active change. Root baseline files never determine active transitions; closing verifies the receipt against both sides. The plugin repository itself ships only curated examples, not live change directories or generated baselines.
+
 ### `design.md`
 
 Defines:

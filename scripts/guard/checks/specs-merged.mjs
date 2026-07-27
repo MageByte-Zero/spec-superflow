@@ -2,6 +2,7 @@
 import { readState } from '../../lib/state-loader.mjs';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { validatePublicationReceipt } from '../../lib/spec-publication.mjs';
 
 // A delta spec block is introduced by any of these requirement headers.
 const DELTA_RE = /^##\s+(ADDED|MODIFIED|REMOVED|RENAMED)\s+Requirements/m;
@@ -31,21 +32,21 @@ function hasDeltaSpecs(changeDir) {
 
 /**
  * Returns { pass, failures[] }.
- * Passes when either spec_merged is recorded, or there are no delta specs to merge.
- * Blocks `executing → closing` when delta specs exist but spec-merger hasn't run.
+ * Passes when there are no delta specs, or a receipt proves that the current
+ * active change still matches its published root baseline. `spec_merged` is a
+ * compatibility marker only: it cannot prove which delta or baseline it meant.
  */
 export function checkSpecsMerged(changeDir) {
   const state = readState(changeDir);
-  if (state.spec_merged === true || state.spec_merged === 'true') {
-    return { pass: true, failures: [] };
-  }
   if (!hasDeltaSpecs(changeDir)) {
     return { pass: true, failures: [] };
   }
+  const receipt = validatePublicationReceipt(changeDir, state.spec_publication_receipt);
+  if (receipt.pass) return { pass: true, failures: [] };
   return {
     pass: false,
     failures: [
-      'Delta specs exist in specs/ but spec-merger has not run (spec_merged not recorded). Run spec-merger to merge ADDED/MODIFIED/REMOVED/RENAMED requirements before closing.',
+      `Delta specs require a current publication receipt before closing. ${receipt.reason} Run ssf sync <change-dir> again.`,
     ],
   };
 }

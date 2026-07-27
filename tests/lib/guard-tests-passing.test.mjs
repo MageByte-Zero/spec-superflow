@@ -23,7 +23,7 @@ function makeChangeDir() {
   writeFileSync(join(dir, 'proposal.md'), '# Test\n\n## Why\nTest.\n\n## What Changes\n- Test.\n');
   writeFileSync(join(dir, 'design.md'), '# Design\n\n## Context\nTest.\n\n## Goals\nTest.\n\n## Decisions\n\n### Decision 1\n- Choice: Test\n- Rationale: Test\n\n## Risks And Trade-Offs\nNone.\n');
   writeFileSync(join(dir, 'tasks.md'), '# Tasks\n\n- [x] Task 1\n- [x] Task 2\n');
-  writeFileSync(join(dir, 'specs', 'test.md'), '## ADDED Requirements\n\n### Requirement: Test\n\nThe system SHALL test.\n\n#### Scenario: Test\n- **WHEN** test\n- **THEN** test\n');
+  writeFileSync(join(dir, 'specs', 'test.md'), '## Requirements\n\n### Requirement: Test\n\nThe system SHALL test.\n\n#### Scenario: Test\n- **WHEN** test\n- **THEN** test\n');
   writeFileSync(join(dir, 'execution-contract.md'), '# Execution Contract\n\n## Intent Lock\nTest.\n');
   initializeGitRepository(dir);
   return dir;
@@ -55,13 +55,12 @@ function cleanup(dir) {
 // stdout and stderr for assertions.
 function runClosingGuard(dir, extraState = '') {
   try {
-    // `spec_merged: true` is in the base state so the #28 specs-merged gate
-    // passes — these tests isolate the tests-passing dimension only.
-    // (The specs-merged dimension is covered separately in
-    //  tests/lib/guard-specs-merged.test.mjs.)
+    // This fixture has no delta sections, so these tests isolate the
+    // tests-passing dimension. Receipt behavior is covered separately in
+    // tests/lib/guard-specs-merged.test.mjs.
     writeFileSync(
       join(dir, '.spec-superflow.yaml'),
-      `state: executing\nworkflow: full\nchange_name: test\nspec_merged: true\n${extraState}`,
+      `state: executing\nworkflow: full\nchange_name: test\n${extraState}`,
     );
     rmSync(join(dir, '.superpowers'), { recursive: true, force: true });
     execFileSync('node', [CLI, 'execution', 'recommend', dir,

@@ -390,7 +390,7 @@ describe('guard: execution control records', () => {
     writeFileSync(join(dir, 'proposal.md'), '## Why\nThis proposal has enough context to verify guard control records in a full workflow.\n## What Changes\n- Enforce recorded execution control data.\n');
     writeFileSync(join(dir, 'design.md'), '# Design\n\n## Context\nGuard control records.\n');
     writeFileSync(join(dir, 'tasks.md'), '# Tasks\n\n- [x] 1.1 First task\n- [x] 1.2 Second task\n');
-    writeFileSync(join(dir, 'specs', 'execution', 'spec.md'), '## ADDED Requirements\n\n### Requirement: Execution control records\nThe system SHALL require current execution control records.\n\n#### Scenario: Guard transition\n- **WHEN** execution starts\n- **THEN** the guard verifies control records.\n');
+    writeFileSync(join(dir, 'specs', 'execution', 'spec.md'), '## Requirements\n\n### Requirement: Execution control records\nThe system SHALL require current execution control records.\n\n#### Scenario: Guard transition\n- **WHEN** execution starts\n- **THEN** the guard verifies control records.\n');
     writeFileSync(join(dir, 'execution-contract.md'), '# Execution Contract\n\n## Intent Lock\n\nGuard control records.\n');
     writeFileSync(join(dir, '.spec-superflow.yaml'), 'state: approved-for-build\nworkflow: full\n');
     runNodeScript(CLI_PATH, ['state', 'init', dir]);
@@ -415,7 +415,6 @@ describe('guard: execution control records', () => {
 
   function recordPassingClosingPrerequisites() {
     runNodeScript(CLI_PATH, ['state', 'set', dir, 'test_result', 'pass: unit tests']);
-    runNodeScript(CLI_PATH, ['state', 'set', dir, 'spec_merged', 'true']);
   }
 
   function writeReviewReport(name, content = 'Review completed without blocking findings.\n') {

@@ -1,7 +1,15 @@
-// ssf sync <change-dir> — merge delta specs into main specs with conflict detection
+// ssf sync <change-dir> — publish a change delta as canonical root baseline specs.
 import { readFileSync, readdirSync, writeFileSync, existsSync, statSync, mkdirSync } from 'node:fs';
-import path, { join, basename } from 'node:path';
+import path, { join } from 'node:path';
 import { validateSpecPathLayout } from './spec-paths.mjs';
+import {
+  applyDeltaToBaseline,
+  createPublicationReceipt,
+  encodePublicationReceipt,
+  hashPublishedBaseline,
+  resolvePublicationContext,
+} from './spec-publication.mjs';
+import { readState, writeState } from './state-loader.mjs';
 
 function toPosix(value) {
   return value.replace(/\\/g, '/');
@@ -23,38 +31,45 @@ export async function run(args) {
     process.exit(2);
   }
 
-  const changeDir = args[0];
-  if (!existsSync(changeDir)) {
-    console.error(`Error: "${changeDir}" not found`);
+  const requestedChangeDir = args[0];
+  if (!existsSync(requestedChangeDir)) {
+    console.error(`Error: "${requestedChangeDir}" not found`);
     process.exit(2);
   }
 
+  const context = resolvePublicationContext(requestedChangeDir);
+  const { changeDir, projectRoot, baselineSpecsDir } = context;
   const { Validator } = await import('../../dist/index.js');
   const validator = new Validator();
 
-  // Collect all unsynced changes for conflict detection
-  const changesDir = join(process.cwd(), 'changes');
+  // Collect deltas from this project only. The active change path, not cwd,
+  // establishes both the publication destination and conflict scope.
+  const changesDir = join(projectRoot, 'changes');
   const allDeltas = [];
-
   if (existsSync(changesDir)) {
     for (const dir of readdirSync(changesDir)) {
       const dirPath = join(changesDir, dir);
       if (!statSync(dirPath).isDirectory()) continue;
+      const isActiveChange = dirPath === changeDir;
+      // Historical copies and closed changes are audit records, not competing
+      // publication inputs. Only the target plus other stateful, non-terminal
+      // changes can create a live publication conflict.
+      if (!isActiveChange) {
+        if (!existsSync(join(dirPath, '.spec-superflow.yaml'))) continue;
+        const otherState = readState(dirPath).state;
+        if (otherState === 'closing' || otherState === 'abandoned') continue;
+      }
       const layout = validateSpecPathLayout(dirPath, { requireSpecs: false });
       if (!layout.pass) {
         for (const failure of layout.failures) console.error(failure);
         process.exit(1);
       }
-      if (layout.specFiles.length === 0) continue;
-
       for (const specFile of layout.specFiles) {
-        const content = readFileSync(specFile, 'utf-8');
-        allDeltas.push({ changeName: dir, content });
+        allDeltas.push({ changeName: dir, content: readFileSync(specFile, 'utf-8') });
       }
     }
   }
 
-  // Check for conflicts
   if (allDeltas.length > 0) {
     const conflictReport = validator.detectSyncConflicts(allDeltas);
     if (conflictReport.hasConflicts) {
@@ -68,35 +83,40 @@ export async function run(args) {
     }
   }
 
-  // Perform sync: copy delta specs to main specs/
-  const changeSpecsDir = join(changeDir, 'specs');
-  const mainSpecsDir = join(process.cwd(), 'specs');
-  const changeName = basename(changeDir);
   const layout = validateSpecPathLayout(changeDir, { requireSpecs: true });
   if (!layout.pass) {
     for (const failure of layout.failures) console.error(failure);
     process.exit(1);
   }
 
-  if (!existsSync(mainSpecsDir)) {
-    mkdirSync(mainSpecsDir, { recursive: true });
-  }
-
-  let synced = 0;
+  const changeSpecsDir = join(changeDir, 'specs');
+  const capabilities = layout.specFiles.map(specFile => deriveCapabilityDir(changeSpecsDir, specFile)).sort();
+  const baselineBeforeHash = hashPublishedBaseline(projectRoot, capabilities);
+  mkdirSync(baselineSpecsDir, { recursive: true });
 
   for (const specFile of layout.specFiles) {
     const capabilityDir = deriveCapabilityDir(changeSpecsDir, specFile);
-    const targetDir = join(mainSpecsDir, capabilityDir);
-
-    if (!existsSync(targetDir)) {
-      mkdirSync(targetDir, { recursive: true });
-    }
-
-    const content = readFileSync(specFile, 'utf-8');
-    writeFileSync(join(targetDir, 'spec.md'), content);
-    console.log(`  📋 Synced: specs/${capabilityDir}/spec.md`);
-    synced++;
+    const targetDir = join(baselineSpecsDir, capabilityDir);
+    const targetFile = join(targetDir, 'spec.md');
+    const baseline = existsSync(targetFile) ? readFileSync(targetFile, 'utf-8') : '';
+    const delta = readFileSync(specFile, 'utf-8');
+    const published = applyDeltaToBaseline(baseline, delta, capabilityDir);
+    mkdirSync(targetDir, { recursive: true });
+    writeFileSync(targetFile, published);
+    console.log(`  📋 Published canonical baseline: specs/${capabilityDir}/spec.md`);
   }
 
-  console.log(`\n✅ Synced ${synced} spec(s) from ${changeName} to specs/`);
+  // A receipt belongs to the active change, never to the published baseline.
+  // Older callers without a state file still get canonical publication but do
+  // not gain a false closing proof.
+  if (existsSync(join(changeDir, '.spec-superflow.yaml'))) {
+    const state = readState(changeDir);
+    const receipt = createPublicationReceipt(changeDir, projectRoot, layout.specFiles, baselineBeforeHash);
+    state.spec_merged = true;
+    state.spec_publication_receipt = encodePublicationReceipt(receipt);
+    writeState(changeDir, state);
+    console.log('  🧾 Wrote publication receipt to .spec-superflow.yaml');
+  }
+
+  console.log(`\n✅ Published ${layout.specFiles.length} canonical spec(s) from ${path.basename(changeDir)} to specs/`);
 }

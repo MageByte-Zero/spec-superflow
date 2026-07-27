@@ -116,6 +116,26 @@ describe('cmd-state: transition', () => {
     assert.ok(result.stdout.includes('exploring -> specifying'));
   });
 
+  it('uses the caller project directory for a relative change path', () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'ssf-state-relative-project-'));
+    const changeDir = join(projectRoot, 'changes', 'relative-change');
+    try {
+      mkdirSync(join(changeDir, 'specs', 'test'), { recursive: true });
+      writeFileSync(join(changeDir, 'proposal.md'), '## Why\nA relative path transition must inspect artifacts in the caller project, not the plugin directory.\n## What Changes\n- Add a transition fixture.');
+      writeFileSync(join(changeDir, 'design.md'), '# Design\n## Context\nTest.\n## Goals\nTest.\n## Decisions\n### D1\n- Choice: Test\n- Rationale: Test\n\n## Risks And Trade-Offs\nNone.');
+      writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n- [x] Task 1');
+      writeFileSync(join(changeDir, 'specs', 'test', 'spec.md'), '## ADDED Requirements\n### Requirement: Relative transition\nThe system SHALL resolve relative change paths from the caller project.\n#### Scenario: Transition\n- **WHEN** a project invokes state transition with a relative path\n- **THEN** its artifacts are checked.');
+
+      assert.equal(ssf('state init changes/relative-change', { cwd: projectRoot }).exitCode, 0);
+      const result = ssf('state transition changes/relative-change specifying', { cwd: projectRoot });
+
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.match(result.stdout, /exploring -> specifying/);
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+    }
+  });
+
   it('--json outputs from/to', () => {
     // Re-init to ensure we start from exploring
     rmSync(join(tempDir, '.spec-superflow.yaml'), { force: true });
