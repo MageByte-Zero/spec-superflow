@@ -23,6 +23,7 @@
 | Gemini CLI | `gemini extensions install` | `gemini extensions update` | `gemini extensions uninstall` |
 | OpenCode | plugin entry / skills 目录 | `git pull` | 删除 plugin/skills |
 | WorkBuddy | `ssf install-workbuddy` | 重新运行安装器 | 删除 marketplace 插件并禁用 |
+| CodeBuddy Code CLI | `ssf install-codebuddy` | 重新运行安装器 | 删除 `~/.codebuddy/spec-superflow/` + skills + hooks |
 | Trae IDE / TRAE Work | `.trae/skills` / 上传 zip 或 .skill / marketplace | `git pull` + 重新导入 | UI 卸载或删除技能目录 |
 | Cline | `ssf install-cline` | 重新运行脚本 | 删除 `.cline/skills/`、`.clinerules/` |
 | Kiro | `ssf install-kiro` | 重新运行脚本 | 删除 `.kiro/skills/`、`.kiro/steering/` |
@@ -394,6 +395,87 @@ cat ~/.workbuddy/plugins/marketplaces/cb_teams_marketplace/plugins/spec-superflo
 ```
 
 重启 WorkBuddy 后，在对话中输入「用 workflow-start 开始」即可启动工作流。
+
+---
+
+## CodeBuddy Code CLI
+
+CodeBuddy Code CLI 直接从 `~/.codebuddy/skills/` 读取 skill，hooks 从 `~/.codebuddy/hooks/hooks.json`（Claude Code `SessionStart` 风格）加载。与 WorkBuddy 的 marketplace 插件模型不同，CodeBuddy CLI 把 skill 直接放进共享 `skills/` 目录，与其他 skill 共存；运行时依赖（scripts/docs/templates/dist/hooks）放在独立的 `~/.codebuddy/spec-superflow/` 目录下作为 `${CLAUDE_PLUGIN_ROOT}`。
+
+### 安装（推荐：一键脚本）
+
+```bash
+npx spec-superflow@latest install-codebuddy
+```
+
+本地仓库调试：
+
+```bash
+node /absolute/path/to/spec-superflow/scripts/spec-superflow.mjs install-codebuddy --local /absolute/path/to/spec-superflow
+```
+
+`--dry-run` 预览部署计划：
+
+```bash
+ssf install-codebuddy --dry-run
+```
+
+指定 CodeBuddy 配置目录（默认 `~/.codebuddy`）：
+
+```bash
+ssf install-codebuddy --config-dir /path/to/.codebuddy
+```
+
+### 部署结构
+
+```text
+~/.codebuddy/
+├── spec-superflow/              ← pluginRoot（运行时依赖；${CLAUDE_PLUGIN_ROOT} 目标）
+│   ├── scripts/  docs/  templates/  dist/  hooks/
+│   │   └── session-start
+│   ├── commands/ssf/{resume,save,switch}.md
+│   └── package.json
+├── skills/                      ← 部署的 skill（路径已重写；其他 skill 保留）
+│   ├── workflow-start/
+│   └── ... (9 skills)
+├── commands/ssf/                ← canonical recovery command adapters
+├── rules/
+│   └── phase-guard.md           ← phase-guard 规则（其他 rules 文件不受影响）
+└── hooks/
+    └── hooks.json               ← SessionStart hook 配置
+```
+
+安装器只会清理源仓库中存在的同名 skill 目录——其他 skill 会被保留。`hooks.json` 采用合并策略：保留非 spec-superflow 的 SessionStart 条目和其他事件 hook。
+
+### 升级
+
+重新运行安装命令即可覆盖运行时依赖、刷新 skill、更新 phase-guard 与 hooks：
+
+```bash
+npx spec-superflow@latest install-codebuddy
+```
+
+### 卸载
+
+```bash
+rm -rf ~/.codebuddy/spec-superflow
+rm -rf ~/.codebuddy/commands/ssf
+rm -f ~/.codebuddy/rules/phase-guard.md
+rm -f ~/.codebuddy/hooks/hooks.json   # 若有其他 hook，手动移除 spec-superflow 条目即可
+```
+
+然后逐个删除 `~/.codebuddy/skills/` 下的 9 个 spec-superflow skill 目录（`workflow-start`、`build-executor`、`code-reviewer`、`contract-builder`、`need-explorer`、`release-archivist`、`spec-merger`、`spec-writer`、`bug-investigator`）。
+
+### 验证
+
+```bash
+ls ~/.codebuddy/skills/                                       # 应包含 9 个 spec-superflow skill
+ls ~/.codebuddy/spec-superflow/hooks/session-start            # hook 脚本存在
+cat ~/.codebuddy/hooks/hooks.json                             # SessionStart 指向 spec-superflow/hooks/session-start
+cat ~/.codebuddy/spec-superflow/package.json | grep version   # 期望版本，如 0.12.1
+```
+
+重启 CodeBuddy Code CLI 后，在对话中输入「用 workflow-start 开始」即可启动工作流。
 
 ---
 
