@@ -115,6 +115,8 @@ For each example in `docs/examples/`:
     --expected-version <semver>
   ```
 
+- This check is a **blocking release CI gate**: the upstream marketplace PR must be submitted and merged, and its generated manifest must report the release version, before pushing the `v<semver>` tag. The gate runs before GitHub Release creation and npm publishing.
+
 - Use one 干净 Codex configuration directory for marketplace add, plugin add, and plugin list:
 
   ```bash
