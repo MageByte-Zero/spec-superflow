@@ -97,6 +97,14 @@ For each example in `docs/examples/`:
 
 - This check is a **blocking release CI gate**: the upstream marketplace PR must be submitted and merged, and its generated manifest must report the release version, before pushing the `v<semver>` tag. The gate runs before GitHub Release creation and npm publishing.
 
+- Before creating the marketplace sync branch, fast-forward the personal fork to the upstream default branch. After opening the PR, verify its diff is limited to the intended catalog entry (normally `README.md`); do not carry generated marketplace files or unrelated fork history into the PR.
+
+  ```bash
+  gh repo sync MageByte-Zero/awesome-codex-plugins \
+    --source hashgraph-online/awesome-codex-plugins
+  gh pr diff <pr-number> --repo hashgraph-online/awesome-codex-plugins --name-only
+  ```
+
 - Use one 干净 Codex configuration directory for marketplace add, plugin add, and plugin list:
 
   ```bash
