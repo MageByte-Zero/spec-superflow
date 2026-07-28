@@ -50,7 +50,7 @@ function containsShallOrMust(text: string): boolean {
 
 function countScenarios(blockRaw: string): number {
   return scanMarkdownLines(blockRaw).filter(
-    ({ text, fenced }) => !fenced && /^####\s+/.test(text)
+    ({ text, fenced }) => !fenced && SCENARIO_HEADER_REGEX.test(text)
   ).length;
 }
 

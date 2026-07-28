@@ -28,7 +28,7 @@ function containsShallOrMust(text) {
     return /\b(SHALL|MUST)\b/.test(text);
 }
 function countScenarios(blockRaw) {
-    return scanMarkdownLines(blockRaw).filter(({ text, fenced }) => !fenced && /^####\s+/.test(text)).length;
+    return scanMarkdownLines(blockRaw).filter(({ text, fenced }) => !fenced && SCENARIO_HEADER_REGEX.test(text)).length;
 }
 function isFieldMetadata(line) {
     return /^\s*(?:[-*]\s+)?\*\*[^*]+\*\*:\s*\S/.test(line);

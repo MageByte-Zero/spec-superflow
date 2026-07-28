@@ -175,6 +175,24 @@ The system SHALL require a real scenario.
     ));
   });
 
+  it('does not treat an unrelated level-four heading as a Scenario', () => {
+    const content = `## ADDED Requirements
+
+### Requirement: Scenario headings are explicit
+
+The system SHALL require an explicitly named scenario.
+
+#### Notes
+- This heading is supporting documentation, not a scenario.`;
+
+    const report = validator.validateDeltaSpec(content);
+
+    assert.equal(report.valid, false);
+    assert.ok(report.issues.some(issue =>
+      issue.message === 'ADDED "Scenario headings are explicit" must include at least one scenario'
+    ));
+  });
+
   it('validates a multi-line MUST assertion after field metadata', () => {
     const content = `## ADDED Requirements
 
