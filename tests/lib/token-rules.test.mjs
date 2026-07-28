@@ -3,9 +3,13 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { checkMaxLines, checkMaxChars, checkMaxEmphasisMarkers, checkMaxCodeBlockLength } from '../../scripts/lint/rules/token-rules.mjs';
 
 const CTX = { skillDirs: ['test-skill'], skillsDir: '/fake/skills' };
+const ROOT = process.cwd();
+const read = file => readFileSync(join(ROOT, file), 'utf8');
 
 describe('token-rules: checkMaxLines', () => {
   it('passes when under limit', async () => {
@@ -90,5 +94,28 @@ describe('token-rules: checkMaxCodeBlockLength', () => {
   it('handles content with no code blocks', async () => {
     const issues = await checkMaxCodeBlockLength('test', 'just text, no code', CTX, 15);
     assert.equal(issues.length, 0);
+  });
+});
+
+describe('spec publication documentation contract', () => {
+  it('keeps Purpose optional for delta specs while documenting deterministic publication behavior', () => {
+    const template = read('templates/spec.md');
+    const merger = read('skills/spec-merger/SKILL.md');
+    const artifactContract = read('docs/artifact-contract.md');
+
+    assert.match(template, /## Purpose[\s\S]*可选/,
+      'the delta template must present Purpose as an optional extension');
+    assert.match(template, /可省略/,
+      'legacy delta specs must remain valid without a Purpose section');
+    assert.match(merger, /only when creating a canonical main spec/i,
+      'Purpose handling must be limited to new main specs');
+    assert.match(merger, /deterministic default Purpose/i,
+      'missing Purpose must have an explicit deterministic fallback');
+    assert.match(merger, /must not overwrite an existing main spec Purpose/i,
+      'a delta Purpose must not rewrite an existing main spec');
+    assert.match(artifactContract, /no-op.*already synchronized/i,
+      'the artifact contract must identify an already-synchronized delta as a no-op');
+    assert.match(artifactContract, /near-match.*must fail/i,
+      'the artifact contract must keep near-match mistakes outside no-op handling');
   });
 });
