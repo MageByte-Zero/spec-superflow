@@ -1,10 +1,11 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { chmodSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { deriveCapabilityDir } from '../../scripts/lib/cmd-sync.mjs';
+import { decodePublicationReceipt } from '../../scripts/lib/spec-publication.mjs';
 
 const CLI = join(process.cwd(), 'scripts/spec-superflow.mjs');
 let tempRoot;
@@ -36,6 +37,10 @@ function requirement(name, text = name) {
 
 function writeChangeState(change) {
   writeFileSync(join(change, '.spec-superflow.yaml'), 'state: executing\nworkflow: full\nchange_name: canonical\n');
+}
+
+function canonicalSpec(capability, blocks) {
+  return `# ${capability}\n\n## Purpose\n\nThis capability documents enough published behavior for users and maintainers.\n\n## Requirements\n\n${blocks}\n`;
 }
 
 describe('cmd-sync: canonical spec publication', () => {
@@ -161,6 +166,93 @@ ${requirement('Missing', 'cannot modify an absent baseline requirement')}`);
     assert.match(result.stdout + result.stderr, /Cannot modify missing requirement/i);
     assert.equal(existsSync(join(repo, 'specs', 'first', 'spec.md')), false);
     assert.doesNotMatch(readFileSync(join(change, '.spec-superflow.yaml'), 'utf-8'), /spec_publication_receipt/);
+  });
+
+  it('validates every canonical candidate before writing any capability or receipt', () => {
+    const repo = mkdtempSync(join(tempRoot, 'repo-candidate-validation-'));
+    const change = join(repo, 'changes', 'candidate-validation');
+    mkdirSync(join(change, 'specs', 'first'), { recursive: true });
+    mkdirSync(join(change, 'specs', 'second'), { recursive: true });
+    mkdirSync(join(repo, 'specs', 'second'), { recursive: true });
+    writeChangeState(change);
+    writeSpec(join(repo, 'specs', 'second', 'spec.md'), canonicalSpec('Second', requirement('Only requirement', 'remain valid before removal')));
+    writeSpec(join(change, 'specs', 'first', 'spec.md'), `## ADDED Requirements\n\n${requirement('First', 'publish only after every candidate validates')}`);
+    writeSpec(join(change, 'specs', 'second', 'spec.md'), '## REMOVED Requirements\n\n### Requirement: Only requirement\n');
+
+    const beforeSecond = readFileSync(join(repo, 'specs', 'second', 'spec.md'), 'utf-8');
+    const result = runSync(repo, change);
+
+    assert.equal(result.exitCode, 1, result.stdout + result.stderr);
+    assert.match(result.stdout + result.stderr, /Spec must have at least one requirement/i);
+    assert.equal(existsSync(join(repo, 'specs', 'first', 'spec.md')), false);
+    assert.equal(readFileSync(join(repo, 'specs', 'second', 'spec.md'), 'utf-8'), beforeSecond);
+    assert.doesNotMatch(readFileSync(join(change, '.spec-superflow.yaml'), 'utf-8'), /spec_publication_receipt/);
+  });
+
+  it('reports an all-no-op sync without attempting to write an immutable baseline', () => {
+    const repo = mkdtempSync(join(tempRoot, 'repo-all-noop-'));
+    const change = join(repo, 'changes', 'all-noop');
+    const baselineDir = join(repo, 'specs', 'workflow');
+    const baselineFile = join(baselineDir, 'spec.md');
+    mkdirSync(join(change, 'specs', 'workflow'), { recursive: true });
+    mkdirSync(baselineDir, { recursive: true });
+    writeChangeState(change);
+    const sharedRequirement = requirement('Already published', 'keep the already published behavior');
+    writeSpec(baselineFile, canonicalSpec('Workflow', sharedRequirement));
+    writeSpec(join(change, 'specs', 'workflow', 'spec.md'), `## ADDED Requirements\n\n${sharedRequirement}`);
+
+    // An all-no-op publication must not need baseline-directory write access.
+    // The active change remains writable so receipt behavior is still exercised.
+    chmodSync(baselineFile, 0o444);
+    chmodSync(baselineDir, 0o555);
+    try {
+      const result = runSync(repo, change);
+      const state = readFileSync(join(change, '.spec-superflow.yaml'), 'utf-8');
+
+      assert.equal(result.exitCode, 0, result.stdout + result.stderr);
+      assert.match(result.stdout, /already synchronized|no canonical baseline changes/i);
+      const encodedReceipt = state.match(/^spec_publication_receipt: ([A-Za-z0-9_-]+)$/m)?.[1];
+      assert.ok(encodedReceipt, 'a compatible publication receipt is persisted for a no-op sync');
+      const receipt = decodePublicationReceipt(encodedReceipt);
+      assert.equal(receipt?.version, 1);
+      assert.deepEqual(receipt?.capabilities, ['workflow']);
+      assert.match(receipt?.source_hash || '', /^sha256:/);
+      assert.equal(receipt?.baseline_before_hash, receipt?.baseline_after_hash);
+    } finally {
+      chmodSync(baselineDir, 0o755);
+      chmodSync(baselineFile, 0o644);
+    }
+  });
+
+  it('publishes changed capabilities while leaving no-op immutable baselines untouched', () => {
+    const repo = mkdtempSync(join(tempRoot, 'repo-mixed-atomic-'));
+    const change = join(repo, 'changes', 'mixed-atomic');
+    const noOpDir = join(repo, 'specs', 'stable');
+    const noOpFile = join(noOpDir, 'spec.md');
+    mkdirSync(join(change, 'specs', 'new-capability'), { recursive: true });
+    mkdirSync(join(change, 'specs', 'stable'), { recursive: true });
+    mkdirSync(noOpDir, { recursive: true });
+    writeChangeState(change);
+    const stableRequirement = requirement('Stable', 'preserve the published stable behavior');
+    writeSpec(noOpFile, canonicalSpec('Stable', stableRequirement));
+    writeSpec(join(change, 'specs', 'new-capability', 'spec.md'), `## ADDED Requirements\n\n${requirement('New', 'publish the changed capability atomically')}`);
+    writeSpec(join(change, 'specs', 'stable', 'spec.md'), `## ADDED Requirements\n\n${stableRequirement}`);
+
+    chmodSync(noOpFile, 0o444);
+    chmodSync(noOpDir, 0o555);
+    try {
+      const result = runSync(repo, change);
+
+      assert.equal(result.exitCode, 0, result.stdout + result.stderr);
+      assert.match(result.stdout, /Published canonical baseline: specs\/new-capability\/spec\.md/);
+      assert.match(result.stdout, /already synchronized: specs\/stable\/spec\.md/i);
+      assert.match(readFileSync(join(repo, 'specs', 'new-capability', 'spec.md'), 'utf-8'), /Requirement: New/);
+      assert.equal(readFileSync(noOpFile, 'utf-8'), canonicalSpec('Stable', stableRequirement));
+      assert.match(readFileSync(join(change, '.spec-superflow.yaml'), 'utf-8'), /^spec_publication_receipt: [A-Za-z0-9_-]+$/m);
+    } finally {
+      chmodSync(noOpDir, 0o755);
+      chmodSync(noOpFile, 0o644);
+    }
   });
 
   it('ignores closing and state-less historical changes during conflict detection', () => {

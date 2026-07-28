@@ -3,7 +3,7 @@ import { readFileSync, readdirSync, writeFileSync, existsSync, statSync, mkdirSy
 import path, { join } from 'node:path';
 import { validateSpecPathLayout } from './spec-paths.mjs';
 import {
-  applyDeltaToBaseline,
+  applyDeltaToBaselineDetailed,
   createPublicationReceipt,
   encodePublicationReceipt,
   hashPublishedBaseline,
@@ -102,11 +102,33 @@ export async function run(args) {
     if (!report.valid) {
       throw new Error(`Invalid delta spec specs/${capabilityDir}/spec.md: ${report.issues.map(issue => issue.message).join('; ')}`);
     }
-    const published = applyDeltaToBaseline(baseline, delta, capabilityDir);
-    return { capabilityDir, targetDir, targetFile, published, original: existsSync(targetFile) ? baseline : null };
+    const publication = applyDeltaToBaselineDetailed(baseline, delta, capabilityDir);
+    const candidateReport = validator.validateSpecContent(capabilityDir, publication.content);
+    if (!candidateReport.valid) {
+      throw new Error(
+        `Invalid canonical spec specs/${capabilityDir}/spec.md: ${candidateReport.issues.map(issue => issue.message).join('; ')}`,
+      );
+    }
+    return {
+      capabilityDir,
+      targetDir,
+      targetFile,
+      published: publication.content,
+      changed: publication.changed,
+      operations: publication.operations,
+      warnings: publication.warnings,
+      original: existsSync(targetFile) ? baseline : null,
+    };
   });
-  publishAtomically(publications);
-  for (const { capabilityDir } of publications) console.log(`  📋 Published canonical baseline: specs/${capabilityDir}/spec.md`);
+  publishAtomically(publications.filter(publication => publication.changed));
+  for (const publication of publications) {
+    if (publication.changed) {
+      console.log(`  📋 Published canonical baseline: specs/${publication.capabilityDir}/spec.md`);
+    } else {
+      console.log(`  📋 Canonical baseline already synchronized: specs/${publication.capabilityDir}/spec.md`);
+    }
+    for (const warning of publication.warnings) console.log(`  ⚠️  ${warning}`);
+  }
 
   // A receipt belongs to the active change, never to the published baseline.
   // Older callers without a state file still get canonical publication but do
