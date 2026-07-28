@@ -94,4 +94,17 @@ describe('validate commands: spec paths', () => {
     assert.equal(result.exitCode, 0, result.stdout + result.stderr);
     assert.match(result.stdout, /specs\/ui-theme\/spec\.md/);
   });
+
+  it('ssf validate rejects nested spec.md even when a canonical spec is present', () => {
+    const dir = mkdtempSync(join(tempRoot, 'nested-'));
+    writeBaseChange(dir);
+    mkdirSync(join(dir, 'specs', 'auth', 'session'), { recursive: true });
+    writeValidSpec(join(dir, 'specs', 'auth', 'spec.md'));
+    writeValidSpec(join(dir, 'specs', 'auth', 'session', 'spec.md'));
+
+    const result = runNode([CLI, 'validate', dir]);
+
+    assert.equal(result.exitCode, 1, result.stdout + result.stderr);
+    assert.match(result.stdout + result.stderr, /specs\/auth\/session\/spec\.md/);
+  });
 });

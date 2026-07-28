@@ -86,6 +86,27 @@ describe('parseDeltaSpec', () => {
       to: 'REQ-AS-03: 新名称',
     }]);
   });
+
+  it('ignores delta sections and requirements shown only inside a fenced example', () => {
+    const content = `# Writing delta specs
+
+\`\`\`md
+## ADDED Requirements
+
+### Requirement: Example only
+
+The example MUST not become an operation.
+
+#### Scenario: Example
+- **WHEN** a reader copies the example
+- **THEN** it remains documentation
+\`\`\``;
+
+    const plan = parseDeltaSpec(content);
+
+    assert.equal(plan.added.length, 0);
+    assert.equal(plan.sectionPresence.added, false);
+  });
 });
 
 describe('parseChangeMarkdown', () => {
@@ -131,6 +152,45 @@ describe('Validator.validateDeltaSpec', () => {
 
     assert.equal(report.valid, true, `Expected valid but got issues: ${JSON.stringify(report.issues, null, 2)}`);
     assert.equal(report.summary.errors, 0);
+  });
+
+  it('does not count a Scenario header shown inside a fenced example', () => {
+    const content = `## ADDED Requirements
+
+### Requirement: Fenced scenario is documentation
+
+The system SHALL require a real scenario.
+
+\`\`\`md
+#### Scenario: Example only
+- **WHEN** an author reads this example
+- **THEN** it does not satisfy the requirement
+\`\`\``;
+
+    const report = validator.validateDeltaSpec(content);
+
+    assert.equal(report.valid, false);
+    assert.ok(report.issues.some(issue =>
+      issue.message === 'ADDED "Fenced scenario is documentation" must include at least one scenario'
+    ));
+  });
+
+  it('validates a multi-line MUST assertion after field metadata', () => {
+    const content = `## ADDED Requirements
+
+### Requirement: Continuous normative body
+
+**Owner**: Platform
+The system
+MUST preserve the complete first paragraph.
+
+#### Scenario: Content is read as one paragraph
+- **WHEN** the assertion spans consecutive lines
+- **THEN** validation accepts the requirement`;
+
+    const report = validator.validateDeltaSpec(content);
+
+    assert.equal(report.valid, true, `Expected valid but got issues: ${JSON.stringify(report.issues, null, 2)}`);
   });
 });
 
