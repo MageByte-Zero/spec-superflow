@@ -433,12 +433,11 @@ ssf install-codebuddy --config-dir /path/to/.codebuddy
 ├── spec-superflow/              ← pluginRoot（运行时依赖；${CLAUDE_PLUGIN_ROOT} 目标）
 │   ├── scripts/  docs/  templates/  dist/  hooks/
 │   │   └── session-start        ← 输出 hookSpecificOutput（CodeBuddy 分支）
-│   ├── commands/ssf/{resume,save,switch}.md
 │   └── package.json
 ├── skills/                      ← 部署的 skill（路径已重写；其他 skill 保留）
 │   ├── workflow-start/
 │   └── ... (9 skills)
-├── commands/ssf/                ← canonical recovery command adapters
+├── commands/ssf/                ← canonical recovery command adapters（共享目录，可含用户自建 command）
 │   ├── resume.md                ← 已重写：node <plugin>/scripts/spec-superflow.mjs（非 npx）
 │   ├── save.md                  ← allowed-tools: Bash(node:*)
 │   └── switch.md

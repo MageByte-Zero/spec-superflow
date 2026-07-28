@@ -39,7 +39,11 @@ describe('cmd-install-codebuddy', () => {
     const skillsDir = join(pluginRoot, 'skills');
     for (const name of skills) {
       mkdirSync(join(skillsDir, name), { recursive: true });
-      writeFileSync(join(skillsDir, name, 'SKILL.md'), `---\nname: ${name}\n---\n`);
+      // workflow-start carries an npx invocation so the install rewrite is exercised.
+      const body = name === 'workflow-start'
+        ? `---\nname: ${name}\n---\nRun \`npx --yes --package spec-superflow@0.12.1 ssf state init <change-dir>\`\n`
+        : `---\nname: ${name}\n---\n`;
+      writeFileSync(join(skillsDir, name, 'SKILL.md'), body);
     }
     for (const command of commands) {
       const commandFile = join(pluginRoot, 'commands', 'ssf', `${command}.md`);
@@ -107,6 +111,16 @@ describe('cmd-install-codebuddy', () => {
       assert.match(content, /allowed-tools: Bash\(node:\*\)/);
       assert.doesNotMatch(content, /Bash\(npx:\*\)/);
     }
+  });
+
+  it('rewrites npx invocations in deployed skills to use the local runtime', async () => {
+    const pluginRoot = makePluginRoot();
+    const configDir = join(tempDir, 'cb');
+    await installCodeBuddy({ pluginRoot, configDir });
+    const skillMd = readFileSync(join(configDir, 'skills', 'workflow-start', 'SKILL.md'), 'utf-8');
+    // Source SKILL.md used npx --yes --package spec-superflow@0.12.1 ssf; deployed must use node <pluginRoot>/scripts/spec-superflow.mjs
+    assert.doesNotMatch(skillMd, /npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf/);
+    assert.match(skillMd, /node .+spec-superflow[\\/]+scripts[\\/]+spec-superflow\.mjs/);
   });
 
   it('preserves existing settings.json fields and non-ssf SessionStart hooks', async () => {
@@ -224,9 +238,9 @@ describe('cmd-uninstall-codebuddy', () => {
     if (tempDir) rmSync(tempDir, { recursive: true, force: true });
   });
 
-  function makePluginRoot() {
+  function makePluginRoot({ skills = ['workflow-start', 'need-explorer'] } = {}) {
     const pluginRoot = join(tempDir, 'spec-superflow');
-    for (const name of ['workflow-start', 'need-explorer']) {
+    for (const name of skills) {
       mkdirSync(join(pluginRoot, 'skills', name), { recursive: true });
       writeFileSync(join(pluginRoot, 'skills', name, 'SKILL.md'), `---\nname: ${name}\n---\n`);
     }
@@ -280,6 +294,39 @@ describe('cmd-uninstall-codebuddy', () => {
       Array.isArray(e.hooks) && e.hooks.some(h => !h.command.includes('spec-superflow')),
     );
     assert.equal(userAfter.length, 1);
+  });
+
+  it('preserves user-created commands/ssf/custom.md and only removes managed files', async () => {
+    const pluginRoot = makePluginRoot();
+    const configDir = join(tempDir, 'cb');
+    await installCodeBuddy({ pluginRoot, configDir });
+
+    // Seed a user-created command in the shared commands/ssf/ directory.
+    const ssfCommandsDir = join(configDir, 'commands', 'ssf');
+    mkdirSync(ssfCommandsDir, { recursive: true });
+    writeFileSync(join(ssfCommandsDir, 'custom.md'), '---\ndescription: user command\n---\nbody\n');
+
+    await uninstallCodeBuddy({ configDir });
+
+    // Managed files removed
+    assert.ok(!existsSync(join(ssfCommandsDir, 'resume.md')), 'resume.md removed');
+    assert.ok(!existsSync(join(ssfCommandsDir, 'save.md')), 'save.md removed');
+    assert.ok(!existsSync(join(ssfCommandsDir, 'switch.md')), 'switch.md removed');
+    // User-created command preserved
+    assert.ok(existsSync(join(ssfCommandsDir, 'custom.md')), 'custom.md preserved');
+    // Directory preserved because it is non-empty
+    assert.ok(existsSync(ssfCommandsDir), 'commands/ssf dir preserved (non-empty)');
+  });
+
+  it('removes all 9 spec-superflow skill directories on uninstall', async () => {
+    const allSkills = ['workflow-start','build-executor','code-reviewer','contract-builder','need-explorer','release-archivist','spec-merger','spec-writer','bug-investigator'];
+    const pluginRoot = makePluginRoot({ skills: allSkills });
+    const configDir = join(tempDir, 'cb');
+    await installCodeBuddy({ pluginRoot, configDir });
+    await uninstallCodeBuddy({ configDir });
+    for (const name of allSkills) {
+      assert.ok(!existsSync(join(configDir, 'skills', name)), `${name} skill removed`);
+    }
   });
 
   it('is safe when nothing is installed', async () => {

@@ -12,7 +12,7 @@
 // Other skills, rules, hooks, and settings entries are preserved. Supports
 // --dry-run to preview, --config-dir to target a non-default data directory.
 
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -126,10 +126,24 @@ export async function uninstallCodeBuddy({ configDir } = {}) {
     removed.push(plan.targetPluginDir);
   }
 
-  // 3. Remove recovery command adapters.
+  // 3. Remove only the managed recovery command files (resume/save/switch.md).
+  //    The shared ~/.codebuddy/commands/ssf/ directory may hold user-created
+  //    commands (e.g. custom.md); those must NOT be deleted. Only remove the
+  //    directory when it is empty after dropping the managed files.
+  const managedCommandFiles = ['resume.md', 'save.md', 'switch.md'];
+  for (const file of managedCommandFiles) {
+    const filePath = join(plan.targetCommands, file);
+    if (existsSync(filePath)) {
+      rmSync(filePath, { force: true });
+      removed.push(filePath);
+    }
+  }
   if (existsSync(plan.targetCommands)) {
-    rmSync(plan.targetCommands, { recursive: true, force: true });
-    removed.push(plan.targetCommands);
+    const remaining = readdirSync(plan.targetCommands).filter(name => !name.startsWith('.'));
+    if (remaining.length === 0) {
+      rmSync(plan.targetCommands, { recursive: true, force: true });
+      removed.push(plan.targetCommands);
+    }
   }
 
   // 4. Remove phase-guard rule (other rules untouched).
