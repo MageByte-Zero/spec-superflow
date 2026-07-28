@@ -47,6 +47,10 @@ function canonicalSpecWithoutPurpose(capability, blocks) {
   return `# ${capability}\n\n## Requirements\n\n${blocks}\n`;
 }
 
+function canonicalSpecWithEmptyPurpose(capability, blocks) {
+  return `# ${capability}\n\n## Purpose\n\n## Requirements\n\n${blocks}\n`;
+}
+
 describe('cmd-sync: canonical spec publication', () => {
   before(() => {
     tempRoot = mkdtempSync(join(tmpdir(), 'ssf-sync-paths-'));
@@ -191,6 +195,25 @@ ${requirement('Missing', 'cannot modify an absent baseline requirement')}`);
     assert.match(result.stdout + result.stderr, /Spec must have at least one requirement/i);
     assert.equal(existsSync(join(repo, 'specs', 'first', 'spec.md')), false);
     assert.equal(readFileSync(join(repo, 'specs', 'second', 'spec.md'), 'utf-8'), beforeSecond);
+    assert.doesNotMatch(readFileSync(join(change, '.spec-superflow.yaml'), 'utf-8'), /spec_publication_receipt/);
+  });
+
+  it('rejects an existing baseline with an empty Purpose instead of treating it as a legacy missing-Purpose baseline', () => {
+    const repo = mkdtempSync(join(tempRoot, 'repo-empty-purpose-'));
+    const change = join(repo, 'changes', 'empty-purpose');
+    const baselineFile = join(repo, 'specs', 'workflow', 'spec.md');
+    mkdirSync(join(change, 'specs', 'workflow'), { recursive: true });
+    mkdirSync(join(repo, 'specs', 'workflow'), { recursive: true });
+    writeChangeState(change);
+    const before = canonicalSpecWithEmptyPurpose('Workflow', requirement('Existing', 'remain unchanged before validation fails'));
+    writeSpec(baselineFile, before);
+    writeSpec(join(change, 'specs', 'workflow', 'spec.md'), `## ADDED Requirements\n\n${requirement('New behavior', 'never publish through an empty Purpose')}`);
+
+    const result = runSync(repo, change);
+
+    assert.equal(result.exitCode, 1, result.stdout + result.stderr);
+    assert.match(result.stdout + result.stderr, /Purpose section cannot be empty/i);
+    assert.equal(readFileSync(baselineFile, 'utf-8'), before, 'an invalid empty Purpose candidate must not rewrite the baseline');
     assert.doesNotMatch(readFileSync(join(change, '.spec-superflow.yaml'), 'utf-8'), /spec_publication_receipt/);
   });
 

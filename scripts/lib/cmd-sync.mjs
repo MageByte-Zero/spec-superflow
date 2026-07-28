@@ -29,13 +29,44 @@ function isMissingPurposeIssue(issue, purposeErrorMessage) {
   return issue.level === 'ERROR' && issue.path === 'overview' && issue.message === purposeErrorMessage;
 }
 
+function openingFence(line) {
+  const match = line.match(/^ {0,3}(`{3,}|~{3,})/);
+  return match ? { marker: match[1][0], length: match[1].length } : undefined;
+}
+
+function closesFence(line, fence) {
+  const match = line.match(/^ {0,3}(`+|~+)\s*$/);
+  return Boolean(match && match[1][0] === fence.marker && match[1].length >= fence.length);
+}
+
+function hasUnfencedPurposeHeading(content) {
+  let activeFence;
+  for (const line of content.replace(/\r\n?/g, '\n').split('\n')) {
+    if (activeFence) {
+      if (closesFence(line, activeFence)) activeFence = undefined;
+      continue;
+    }
+    const fence = openingFence(line);
+    if (fence) {
+      activeFence = fence;
+      continue;
+    }
+    if (/^##\s+.*\bPurpose\b.*$/i.test(line)) return true;
+  }
+  return false;
+}
+
 function candidateValidationIssues(candidateReport, baseline, capabilityDir, validator, purposeErrorMessage) {
   if (!baseline.trim()) return candidateReport.issues;
 
   const baselineHasMissingPurpose = validator
     .validateSpecContent(capabilityDir, baseline)
     .issues.some(issue => isMissingPurposeIssue(issue, purposeErrorMessage));
-  if (!baselineHasMissingPurpose) return candidateReport.issues;
+  // The validator intentionally reports the same error for a missing heading
+  // and an empty Purpose section. Only pre-Purpose baselines with no real,
+  // top-level Purpose heading are legacy-compatible; an empty heading remains
+  // invalid and must stop publication before any baseline or receipt is written.
+  if (!baselineHasMissingPurpose || hasUnfencedPurposeHeading(baseline)) return candidateReport.issues;
 
   // Published baselines from before Purpose was introduced remain readable and
   // publishable. This narrowly preserves that history without weakening any
