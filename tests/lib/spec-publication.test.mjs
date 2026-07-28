@@ -11,6 +11,10 @@ function baseline(capability, blocks) {
   return `# ${capability}\n\n## Purpose\n\n${capability} keeps its published behavior clear for users.\n\n## Requirements\n\n${blocks.join('\n\n')}\n`;
 }
 
+function baselineWithoutPurpose(capability, blocks) {
+  return `# ${capability}\n\n## Requirements\n\n${blocks.join('\n\n')}\n`;
+}
+
 function detailed(baselineContent, deltaContent, capability) {
   assert.equal(
     typeof publication.applyDeltaToBaselineDetailed,
@@ -53,6 +57,18 @@ describe('spec-publication: detailed, idempotent publication candidates', () => 
     assert.ok(Array.isArray(first.warnings), 'fallback is observable to callers');
     assert.ok(first.warnings.some(warning => /default.*purpose|purpose.*default/i.test(String(warning))));
     assert.equal(new Validator().validateSpecContent('workflow', first.content).valid, true);
+  });
+
+  it('preserves an existing no-Purpose baseline byte-for-byte when an equivalent delta is replayed', () => {
+    const existing = baselineWithoutPurpose('workflow', [requirement('Already published', 'remain unchanged')]);
+    const delta = `## ADDED Requirements\n\n${requirement('Already published', 'remain unchanged')}`;
+
+    const result = detailed(existing, delta, 'workflow');
+
+    assert.equal(result.changed, false, 'an existing no-Purpose baseline is not upgraded during a no-op replay');
+    assert.equal(result.content, existing, 'a no-op replay preserves existing baseline bytes');
+    assertOperation(result, 'ADDED', 'skipped');
+    assert.deepEqual(result.warnings, [], 'no default Purpose warning is emitted for an existing baseline');
   });
 
   it('keeps applyDeltaToBaseline as the string-returning compatibility wrapper', () => {

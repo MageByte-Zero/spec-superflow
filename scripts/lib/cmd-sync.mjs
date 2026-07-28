@@ -25,6 +25,25 @@ export function deriveCapabilityDir(changeSpecsDir, specFile) {
   return relative.replace(/\/spec\.md$/, '');
 }
 
+function isMissingPurposeIssue(issue, purposeErrorMessage) {
+  return issue.level === 'ERROR' && issue.path === 'overview' && issue.message === purposeErrorMessage;
+}
+
+function candidateValidationIssues(candidateReport, baseline, capabilityDir, validator, purposeErrorMessage) {
+  if (!baseline.trim()) return candidateReport.issues;
+
+  const baselineHasMissingPurpose = validator
+    .validateSpecContent(capabilityDir, baseline)
+    .issues.some(issue => isMissingPurposeIssue(issue, purposeErrorMessage));
+  if (!baselineHasMissingPurpose) return candidateReport.issues;
+
+  // Published baselines from before Purpose was introduced remain readable and
+  // publishable. This narrowly preserves that history without weakening any
+  // other candidate validation rule or allowing a newly created baseline to
+  // omit Purpose.
+  return candidateReport.issues.filter(issue => !isMissingPurposeIssue(issue, purposeErrorMessage));
+}
+
 export async function run(args) {
   if (args.length < 1) {
     console.error('Usage: ssf sync <change-dir>');
@@ -39,7 +58,7 @@ export async function run(args) {
 
   const context = resolvePublicationContext(requestedChangeDir);
   const { changeDir, projectRoot, baselineSpecsDir } = context;
-  const { Validator } = await import('../../dist/index.js');
+  const { Validator, VALIDATION_MESSAGES } = await import('../../dist/index.js');
   const validator = new Validator();
 
   // Collect deltas from this project only. The active change path, not cwd,
@@ -104,9 +123,16 @@ export async function run(args) {
     }
     const publication = applyDeltaToBaselineDetailed(baseline, delta, capabilityDir);
     const candidateReport = validator.validateSpecContent(capabilityDir, publication.content);
-    if (!candidateReport.valid) {
+    const candidateIssues = candidateValidationIssues(
+      candidateReport,
+      baseline,
+      capabilityDir,
+      validator,
+      VALIDATION_MESSAGES.SPEC_PURPOSE_EMPTY,
+    );
+    if (candidateIssues.some(issue => issue.level === 'ERROR')) {
       throw new Error(
-        `Invalid canonical spec specs/${capabilityDir}/spec.md: ${candidateReport.issues.map(issue => issue.message).join('; ')}`,
+        `Invalid canonical spec specs/${capabilityDir}/spec.md: ${candidateIssues.map(issue => issue.message).join('; ')}`,
       );
     }
     return {

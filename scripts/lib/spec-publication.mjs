@@ -120,8 +120,8 @@ function defaultPurpose(capability) {
   return `The ${capability} capability documents the published behavior for users and maintainers.`;
 }
 
-function withCanonicalPurpose(before, capability, deltaContent, warnings) {
-  if (extractPurpose(before)) return before.trimEnd();
+function withCanonicalPurpose(before, capability, deltaContent, warnings, isNewBaseline) {
+  if (!isNewBaseline || extractPurpose(before)) return before.trimEnd();
   const purpose = extractPurpose(deltaContent) || defaultPurpose(capability);
   if (!extractPurpose(deltaContent)) {
     warnings.push(`No delta Purpose was supplied for '${capability}'; a deterministic default Purpose was used.`);
@@ -184,6 +184,7 @@ function baselineParts(content, capability) {
  */
 export function applyDeltaToBaselineDetailed(baselineContent, deltaContent, capability) {
   validateDeltaOrThrow(deltaContent);
+  const isNewBaseline = !baselineContent.trim();
   const parts = baselineParts(baselineContent, capability);
   const blocks = [...parts.bodyBlocks];
   const plan = parseDeltaSpec(deltaContent);
@@ -252,7 +253,7 @@ export function applyDeltaToBaselineDetailed(baselineContent, deltaContent, capa
     operations.push({ operation: 'ADDED', status: 'applied' });
   }
 
-  const before = withCanonicalPurpose(parts.before, capability, deltaContent, warnings);
+  const before = withCanonicalPurpose(parts.before, capability, deltaContent, warnings, isNewBaseline);
   const content = renderCanonicalBaseline({ ...parts, before, bodyBlocks: blocks }, capability);
   return {
     content,

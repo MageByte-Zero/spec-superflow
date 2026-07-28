@@ -43,6 +43,10 @@ function canonicalSpec(capability, blocks) {
   return `# ${capability}\n\n## Purpose\n\nThis capability documents enough published behavior for users and maintainers.\n\n## Requirements\n\n${blocks}\n`;
 }
 
+function canonicalSpecWithoutPurpose(capability, blocks) {
+  return `# ${capability}\n\n## Requirements\n\n${blocks}\n`;
+}
+
 describe('cmd-sync: canonical spec publication', () => {
   before(() => {
     tempRoot = mkdtempSync(join(tmpdir(), 'ssf-sync-paths-'));
@@ -69,6 +73,7 @@ describe('cmd-sync: canonical spec publication', () => {
     assert.match(baseline, /^## Requirements$/m);
     assert.match(baseline, /Requirement: Existing/);
     assert.match(baseline, /Requirement: Sync path/);
+    assert.doesNotMatch(baseline, /^## Purpose\s*$/m, 'a legacy baseline is not upgraded while applying a delta');
     assert.doesNotMatch(baseline, /^## ADDED Requirements$/m);
     assert.match(state, /^spec_publication_receipt: [A-Za-z0-9_-]+$/m);
   });
@@ -198,7 +203,8 @@ ${requirement('Missing', 'cannot modify an absent baseline requirement')}`);
     mkdirSync(baselineDir, { recursive: true });
     writeChangeState(change);
     const sharedRequirement = requirement('Already published', 'keep the already published behavior');
-    writeSpec(baselineFile, canonicalSpec('Workflow', sharedRequirement));
+    const existingBaseline = canonicalSpecWithoutPurpose('Workflow', sharedRequirement);
+    writeSpec(baselineFile, existingBaseline);
     writeSpec(join(change, 'specs', 'workflow', 'spec.md'), `## ADDED Requirements\n\n${sharedRequirement}`);
 
     // An all-no-op publication must not need baseline-directory write access.
@@ -211,6 +217,7 @@ ${requirement('Missing', 'cannot modify an absent baseline requirement')}`);
 
       assert.equal(result.exitCode, 0, result.stdout + result.stderr);
       assert.match(result.stdout, /already synchronized|no canonical baseline changes/i);
+      assert.equal(readFileSync(baselineFile, 'utf-8'), existingBaseline, 'an existing no-Purpose no-op is never rewritten');
       const encodedReceipt = state.match(/^spec_publication_receipt: ([A-Za-z0-9_-]+)$/m)?.[1];
       assert.ok(encodedReceipt, 'a compatible publication receipt is persisted for a no-op sync');
       const receipt = decodePublicationReceipt(encodedReceipt);
