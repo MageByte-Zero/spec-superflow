@@ -27,5 +27,7 @@ describe('marketplace release documentation', () => {
     assert.match(checklist, /verify-marketplace-release/);
     assert.match(checklist, /同步 PR/);
     assert.match(checklist, /干净 Codex/);
+    assert.match(checklist, /gh repo sync MageByte-Zero\/awesome-codex-plugins/);
+    assert.match(checklist, /gh pr diff <pr-number> --repo hashgraph-online\/awesome-codex-plugins --name-only/);
   });
 });
