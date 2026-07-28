@@ -85,6 +85,13 @@ jobs:
       - run: npm test
       - name: Check version consistency
         run: node scripts/check-version-consistency.mjs
+      - name: Verify marketplace release gate
+        env:
+          EXPECTED_VERSION: ${{ github.ref_name }}
+        run: |
+          node scripts/verify-marketplace-release.mjs \
+            --manifest-url https://raw.githubusercontent.com/hashgraph-online/awesome-codex-plugins/main/plugins/MageByte-Zero/spec-superflow/.codex-plugin/plugin.json \
+            --expected-version "${EXPECTED_VERSION#v}"
       - name: Token efficiency lint (warning only)
         run: node scripts/lint/lint-skills.mjs --include token
         continue-on-error: true
