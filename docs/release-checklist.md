@@ -79,6 +79,26 @@ For each example in `docs/examples/`:
   node --input-type=module -e 'import { readFileSync } from "node:fs"; const settings = JSON.parse(readFileSync(process.argv[1], "utf8")); if (settings.enabledPlugins?.["spec-superflow@cb_teams_marketplace"] !== true) throw new Error("WorkBuddy plugin is not enabled");' "$SSF_WORKBUDDY_SMOKE_HOME/.workbuddy/settings.json"
   node --test tests/lib/cmd-install-workbuddy.test.mjs
   ```
+- Run `install-codebuddy` against a temporary config dir and verify the `settings.json` SessionStart contract, command rewrite, phase-guard frontmatter, and safe uninstall.
+
+  ```bash
+  # Local release-candidate smoke for CodeBuddy (never writes ~/.codebuddy).
+  SSF_CODEBUDDY_SMOKE_HOME="$(mktemp -d)"
+  node scripts/spec-superflow.mjs install-codebuddy --local "$PWD" --config-dir "$SSF_CODEBUDDY_SMOKE_HOME"
+  test -f "$SSF_CODEBUDDY_SMOKE_HOME/settings.json"
+  grep -q '"SessionStart"' "$SSF_CODEBUDDY_SMOKE_HOME/settings.json"
+  grep -q 'alwaysApply: false' "$SSF_CODEBUDDY_SMOKE_HOME/rules/phase-guard.md"
+  ! grep -q 'npx --yes --package spec-superflow@' "$SSF_CODEBUDDY_SMOKE_HOME/commands/ssf/resume.md"
+  grep -q 'Bash(node:\*)' "$SSF_CODEBUDDY_SMOKE_HOME/commands/ssf/resume.md"
+  test "$(find "$SSF_CODEBUDDY_SMOKE_HOME/skills" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" = 9
+  # Uninstall must preserve unrelated skills/settings.
+  mkdir -p "$SSF_CODEBUDDY_SMOKE_HOME/skills/other-skill"
+  printf -- '---\nname: other-skill\n---\n' > "$SSF_CODEBUDDY_SMOKE_HOME/skills/other-skill/SKILL.md"
+  node scripts/spec-superflow.mjs uninstall-codebuddy --config-dir "$SSF_CODEBUDDY_SMOKE_HOME"
+  test -d "$SSF_CODEBUDDY_SMOKE_HOME/skills/other-skill"
+  test ! -d "$SSF_CODEBUDDY_SMOKE_HOME/spec-superflow"
+  node --test tests/lib/cmd-install-codebuddy.test.mjs
+  ```
 - `npm run test:raw-mode` — packs the current source and runs a canonical runtime in an empty directory with no plugin-root variables or global `ssf`.
 - Run a representative local-installer smoke test.
 - `spec-superflow.config.json` absence still works (backward compatible defaults)

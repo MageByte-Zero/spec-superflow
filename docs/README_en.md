@@ -95,6 +95,7 @@ gemini extensions update spec-superflow   # upgrade
 |----------|--------|--------|
 | **OpenCode** | `.opencode/plugins/spec-superflow.js` or `.agents/skills -> skills/` | Entry provided |
 | **WorkBuddy** | `npx spec-superflow@latest install-workbuddy` | Installer provided |
+| **CodeBuddy Code CLI** | `ssf install-codebuddy` | Installer provided |
 | **Trae IDE / TRAE Work** | `.trae/skills/`, `~/.trae/skills/`, or zip/.skill upload | Manual/import |
 
 > Full installation guide: [INSTALL.md](../INSTALL.md)
@@ -126,6 +127,8 @@ npm install -g spec-superflow
 | `ssf handoff resolve <dir> <id> --decision <decision>` | Record an explicit handoff decision |
 | `ssf install-cursor` | Deploy to `.cursor/` directory |
 | `ssf install-workbuddy` | Deploy to WorkBuddy marketplace and enable skills |
+| `ssf install-codebuddy` | Deploy to `~/.codebuddy/` (CodeBuddy Code CLI) |
+| `ssf uninstall-codebuddy` | Remove spec-superflow from `~/.codebuddy/` (CodeBuddy Code CLI) |
 
 ### Version
 
