@@ -1,7 +1,7 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -106,5 +106,21 @@ describe('validate commands: spec paths', () => {
 
     assert.equal(result.exitCode, 1, result.stdout + result.stderr);
     assert.match(result.stdout + result.stderr, /specs\/auth\/session\/spec\.md/);
+  });
+
+  it('ssf sync rejects the same nested layout before publishing the canonical spec', () => {
+    const repo = mkdtempSync(join(tempRoot, 'nested-sync-repo-'));
+    const dir = join(repo, 'changes', 'nested');
+    mkdirSync(dir, { recursive: true });
+    writeBaseChange(dir);
+    mkdirSync(join(dir, 'specs', 'auth', 'session'), { recursive: true });
+    writeValidSpec(join(dir, 'specs', 'auth', 'spec.md'));
+    writeValidSpec(join(dir, 'specs', 'auth', 'session', 'spec.md'));
+
+    const result = runNode([CLI, 'sync', dir]);
+
+    assert.equal(result.exitCode, 1, result.stdout + result.stderr);
+    assert.match(result.stdout + result.stderr, /specs\/auth\/session\/spec\.md/);
+    assert.equal(existsSync(join(repo, 'specs', 'auth', 'spec.md')), false);
   });
 });

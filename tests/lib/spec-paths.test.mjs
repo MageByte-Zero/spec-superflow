@@ -28,17 +28,40 @@ describe('spec-paths', () => {
     assert.deepEqual(files, ['specs/a-ui/spec.md', 'specs/z-auth/spec.md']);
   });
 
-  it('ignores nested spec.md files when finding canonical specs', () => {
+  it('keeps canonical discovery flat while rejecting a mixed canonical and nested layout', () => {
     const dir = mkdtempSync(join(tempDir, 'nested-'));
     mkdirSync(join(dir, 'specs', 'ui-theme', 'nested'), { recursive: true });
+    writeFileSync(join(dir, 'specs', 'ui-theme', 'spec.md'), 'canonical');
     writeFileSync(join(dir, 'specs', 'ui-theme', 'nested', 'spec.md'), 'nested');
 
-    assert.deepEqual(mod.findCanonicalSpecFiles(dir), []);
+    assert.deepEqual(
+      mod.findCanonicalSpecFiles(dir).map(file => file.replace(dir + '/', '')),
+      ['specs/ui-theme/spec.md'],
+    );
 
     const result = mod.validateSpecPathLayout(dir, { requireSpecs: true });
     assert.equal(result.pass, false);
-    assert.deepEqual(result.specFiles, []);
-    assert.ok(result.failures.some(f => f.includes('No canonical spec files found')));
+    assert.deepEqual(
+      result.specFiles.map(file => file.replace(dir + '/', '')),
+      ['specs/ui-theme/spec.md'],
+    );
+    assert.deepEqual(result.diagnostics, [{
+      code: 'unsupported-nested-spec-path',
+      path: 'specs/ui-theme/nested/spec.md',
+      expected: 'specs/<capability>/spec.md',
+    }]);
+    assert.ok(result.failures.some(f => f.includes('specs/ui-theme/nested/spec.md')));
+  });
+
+  it('accepts a layout containing only canonical spec files', () => {
+    const dir = mkdtempSync(join(tempDir, 'only-canonical-'));
+    mkdirSync(join(dir, 'specs', 'ui-theme'), { recursive: true });
+    writeFileSync(join(dir, 'specs', 'ui-theme', 'spec.md'), 'canonical');
+
+    const result = mod.validateSpecPathLayout(dir, { requireSpecs: true });
+    assert.equal(result.pass, true);
+    assert.deepEqual(result.failures, []);
+    assert.deepEqual(result.diagnostics, []);
   });
 
   it('reports flat capability specs with expected canonical path', () => {
@@ -49,6 +72,11 @@ describe('spec-paths', () => {
     const invalid = mod.findInvalidSpecFiles(dir);
     assert.deepEqual(invalid.map(i => i.path), ['specs/ui-theme.md']);
     assert.deepEqual(invalid.map(i => i.expected), ['specs/ui-theme/spec.md']);
+
+    const result = mod.validateSpecPathLayout(dir, { requireSpecs: true });
+    assert.equal(result.pass, false);
+    assert.deepEqual(result.diagnostics, []);
+    assert.ok(result.failures.some(f => f.includes('Invalid spec path: specs/ui-theme.md')));
   });
 
   it('reports root specs/spec.md as invalid', () => {
