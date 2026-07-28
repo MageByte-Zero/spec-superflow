@@ -119,7 +119,7 @@ gemini extensions update spec-superflow   # 升级
 | **WorkBuddy** | `npx spec-superflow@latest install-workbuddy` | 已提供安装器 |
 | **Trae IDE / TRAE Work** | `.trae/skills/`、`~/.trae/skills/` 或上传 zip/.skill | 手动/导入 |
 
-> 共支持 18 个平台，完整安装说明见 [INSTALL.md](INSTALL.md)，支持矩阵见 [docs/platform-matrix.md](docs/platform-matrix.md)。
+> 共支持 19 个平台，完整安装说明见 [INSTALL.md](INSTALL.md)，支持矩阵见 [docs/platform-matrix.md](docs/platform-matrix.md)。
 
 ### CLI 工具链
 

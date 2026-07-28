@@ -36,7 +36,7 @@ jobs:
         continue-on-error: true
 
   platform-install-smoke:
-    name: Platform Install Smoke (8 platforms)
+    name: Platform Install Smoke (9 platforms)
     runs-on: ubuntu-latest
     if: "!startsWith(github.ref, 'refs/tags/')"
     strategy:
@@ -47,7 +47,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ matrix.node-version }}
-      - name: Smoke test all 8 platform installers (--local)
+      - name: Smoke test all 9 platform installers (--local)
         shell: bash
         run: |
           set -e
@@ -64,7 +64,25 @@ jobs:
             fi
             echo "OK $id — 9 skills, rule=${RULES[$id]:-none}"
           done
-          echo "All 8 platform installers passed smoke test."
+          # CodeBuddy deploys to a user-level config dir via --config-dir (not the
+          # project-level layout used by the 8 installers above). Verify the
+          # settings.json SessionStart contract, the command adapter rewrite, and
+          # the phase-guard alwaysApply:false frontmatter.
+          cb_tmp="$(mktemp -d)"
+          node "$GITHUB_WORKSPACE/scripts/install-codebuddy.mjs" --local "$GITHUB_WORKSPACE" --config-dir "$cb_tmp" > /dev/null
+          [ -d "$cb_tmp/skills" ] || { echo "FAIL codebuddy: skills dir missing"; exit 1; }
+          cb_count="$(ls "$cb_tmp/skills" | wc -l | tr -d ' ')"
+          [ "$cb_count" -ge 9 ] || { echo "FAIL codebuddy: only $cb_count skills (expected 9)"; exit 1; }
+          [ -d "$cb_tmp/commands/ssf" ] || { echo "FAIL codebuddy: commands/ssf missing"; exit 1; }
+          [ -f "$cb_tmp/rules/phase-guard.md" ] || { echo "FAIL codebuddy: phase-guard missing"; exit 1; }
+          [ -f "$cb_tmp/settings.json" ] || { echo "FAIL codebuddy: settings.json missing"; exit 1; }
+          grep -q '"SessionStart"' "$cb_tmp/settings.json" || { echo "FAIL codebuddy: no SessionStart in settings.json"; exit 1; }
+          grep -q 'alwaysApply: false' "$cb_tmp/rules/phase-guard.md" || { echo "FAIL codebuddy: phase-guard frontmatter missing"; exit 1; }
+          ! grep -q 'npx --yes --package spec-superflow@' "$cb_tmp/commands/ssf/resume.md" || { echo "FAIL codebuddy: resume.md still uses npx"; exit 1; }
+          grep -q 'Bash(node:\*)' "$cb_tmp/commands/ssf/resume.md" || { echo "FAIL codebuddy: resume.md allowed-tools not rewritten to node"; exit 1; }
+          rm -rf "$cb_tmp"
+          echo "OK codebuddy — 9 skills, settings.json SessionStart, commands rewritten, phase-guard scoped"
+          echo "All 9 platform installers passed smoke test."
 
   release:
     name: Release

@@ -1,11 +1,13 @@
 // ssf install-codebuddy — deploy spec-superflow for CodeBuddy Code CLI.
 //
 // CodeBuddy Code CLI reads skills directly from ~/.codebuddy/skills/, rules
-// from ~/.codebuddy/rules/, and session hooks from ~/.codebuddy/hooks/hooks.json
-// (Claude Code SessionStart style). Unlike WorkBuddy, CodeBuddy CLI does NOT use
-// the marketplace plugin model — skills are placed directly in the shared skills/
-// directory and coexist with unrelated skills. Runtime dependencies live under a
-// dedicated spec-superflow/ directory that serves as ${CLAUDE_PLUGIN_ROOT}.
+// from ~/.codebuddy/rules/ (auto-loaded, but frontmatter controls application),
+// and session hooks from ~/.codebuddy/settings.json (the hooks field, NOT
+// ~/.codebuddy/hooks/hooks.json — the user-level hooks.json file is not
+// auto-loaded by CodeBuddy). Unlike WorkBuddy, CodeBuddy CLI does NOT use the
+// marketplace plugin model — skills are placed directly in the shared skills/
+// directory and coexist with unrelated skills. Runtime dependencies live under
+// a dedicated spec-superflow/ directory that serves as ${CLAUDE_PLUGIN_ROOT}.
 //
 // Deploy layout:
 //   ~/.codebuddy/
@@ -18,17 +20,16 @@
 //   │   ├── workflow-start/
 //   │   └── ... (9 skills)
 //   ├── commands/ssf/                ← canonical recovery command adapters
-//   │   ├── resume.md
-//   │   ├── save.md
+//   │   ├── resume.md                (npx→node <pluginRoot>/scripts/spec-superflow.mjs rewritten)
+//   │   ├── save.md                  (allowed-tools: Bash(node:*))
 //   │   └── switch.md
 //   ├── rules/
-//   │   └── phase-guard.md           ← phase-guard rule (other rules preserved)
-//   └── hooks/
-//       └── hooks.json               ← SessionStart hook config
+//   │   └── phase-guard.md           ← phase-guard rule (alwaysApply:false; other rules preserved)
+//   └── settings.json                ← SessionStart hook merged here (preserves other fields)
 //
 // Re-running the installer upgrades in place: it replaces the spec-superflow/
-// runtime dir, refreshes only the source-named skill directories, and
-// overwrites phase-guard.md + hooks.json.
+// runtime dir, refreshes only the source-named skill directories, rewrites the
+// recovery command adapters, and merges SessionStart into settings.json.
 
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { cp, writeFile, mkdtemp } from 'node:fs/promises';
@@ -171,11 +172,26 @@ function assertCanonicalCommands(commandNames) {
   }
 }
 
-async function copyValidatedCommands(commandAssets, targetCommands) {
+async function copyValidatedCommands(commandAssets, targetCommands, pluginRootAbs) {
+  const scriptPath = join(pluginRootAbs, 'scripts', 'spec-superflow.mjs');
+  const nodeCmd = `node ${shellQuote(scriptPath)}`;
   for (const asset of commandAssets) {
     const targetPath = join(targetCommands, ...asset.relativePath.split('/'));
     ensureDir(dirname(targetPath));
-    await writeFile(targetPath, asset.content, 'utf-8');
+    let content = asset.content;
+    // Rewrite npx invocations to call the deployed local runtime instead of a
+    // pinned npm package, so --local installs do not depend on npx fetching a
+    // fixed version at runtime.
+    content = content.replace(
+      /npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf/g,
+      nodeCmd,
+    );
+    // The command adapters no longer shell out to npx; allow node instead.
+    content = content.replace(
+      /^allowed-tools:\s*Bash\(npx:\*\)\s*$/m,
+      'allowed-tools: Bash(node:*)',
+    );
+    await writeFile(targetPath, content, 'utf-8');
   }
   return commandAssets.length;
 }
@@ -250,7 +266,13 @@ async function copySkillsWithRoot(sourceSkills, targetSkills, pluginRootAbs, sou
 
 /** Phase-guard rule content for CodeBuddy CLI (md format). */
 function phaseGuardContent() {
-  return `# Phase Guard — spec-superflow (codebuddy)
+  return `---
+alwaysApply: false
+---
+
+# Phase Guard — spec-superflow (codebuddy)
+
+> 仅在检测到 spec-superflow 变更工件（\`.spec-superflow.yaml\`、\`proposal.md\`、\`execution-contract.md\`、\`specs/\`）时应用此规则。普通项目无需走 workflow-start，CodeBuddy 不会强制加载本规则（\`alwaysApply: false\`）。
 
 ## 入口规则
 
@@ -282,65 +304,64 @@ function phaseGuardContent() {
 }
 
 /**
- * Build hooks.json content for CodeBuddy CLI (Claude Code SessionStart style).
- * The session-start script path points into the deployed spec-superflow runtime
- * directory so the hook stays valid across upgrades.
+ * Build the SessionStart hook command for CodeBuddy Code CLI.
+ *
+ * CodeBuddy loads hooks from ~/.codebuddy/settings.json (NOT hooks.json — the
+ * user-level hooks.json file is not auto-loaded). The session-start script
+ * path points into the deployed spec-superflow runtime directory so the hook
+ * stays valid across upgrades. Windows forces Git Bash for hook execution,
+ * so double-quoted forward-slash paths work cross-platform.
  */
-function buildHooksJson(sessionStartScript) {
-  // Use double quotes + forward slashes so the command works under both POSIX
-  // shells and Windows cmd.exe (CodeBuddy CLI's hook executor may use either).
-  // shellQuote's POSIX single quotes are not recognized by cmd.exe on Windows.
+function buildSessionStartCommand(sessionStartScript) {
   const normalized = String(sessionStartScript).replace(/\\/g, '/');
-  const command = `bash "${normalized}"`;
+  return `bash "${normalized}"`;
+}
+
+/**
+ * Build the hooks object to merge into ~/.codebuddy/settings.json.
+ */
+function buildSettingsHooks(sessionStartScript) {
   return {
-    description: 'spec-superflow session start hook - injects workflow-start as session context',
-    hooks: {
-      SessionStart: [
-        {
-          hooks: [
-            { type: 'command', command },
-          ],
-        },
-      ],
-    },
+    SessionStart: [
+      {
+        hooks: [{ type: 'command', command: buildSessionStartCommand(sessionStartScript) }],
+      },
+    ],
   };
 }
 
 /**
- * Merge the new spec-superflow SessionStart hook into an existing hooks.json.
+ * Merge the spec-superflow SessionStart hook into ~/.codebuddy/settings.json.
  * Preserves other event types (PreToolUse, PostToolUse, ...) and any
- * SessionStart hook entries that do not reference spec-superflow.
+ * SessionStart hook entries that do not reference spec-superflow, plus all
+ * non-hook top-level fields (permissions, enabledPlugins, ...).
  */
-function mergeHooksJson(existingPath, newConfig) {
+function mergeSettingsJson(existingPath, newHooks) {
   const existing = readJsonIfExists(existingPath);
-  if (!existing || typeof existing !== 'object' || !existing.hooks) {
-    return newConfig;
+  if (!existing || typeof existing !== 'object' || Array.isArray(existing)) {
+    return { hooks: newHooks };
   }
-  const merged = JSON.parse(JSON.stringify(newConfig));
+  const merged = { ...existing };
+  const existingHooks = existing.hooks && typeof existing.hooks === 'object' && !Array.isArray(existing.hooks)
+    ? { ...existing.hooks }
+    : {};
+  merged.hooks = existingHooks;
 
-  for (const event of Object.keys(existing.hooks)) {
-    if (event === 'SessionStart') continue;
-    if (!merged.hooks[event]) merged.hooks[event] = existing.hooks[event];
-  }
+  // Other event types are already preserved via the shallow copy above.
 
-  const preservedSessionEntries = [];
-  for (const entry of existing.hooks.SessionStart || []) {
+  // SessionStart: keep non-spec-superflow entries, replace ssf entry.
+  const preservedEntries = [];
+  for (const entry of existingHooks.SessionStart || []) {
     if (!entry || !Array.isArray(entry.hooks)) continue;
     const nonSsf = entry.hooks.filter(
       h => !h || typeof h !== 'object' || !h.command || !h.command.includes('spec-superflow'),
     );
     if (nonSsf.length) {
-      preservedSessionEntries.push({ hooks: nonSsf });
+      preservedEntries.push({ ...entry, hooks: nonSsf });
     }
   }
-  // New ssf entry first, then preserved non-ssf entries.
-  merged.hooks.SessionStart = [...newConfig.hooks.SessionStart, ...preservedSessionEntries];
+  merged.hooks.SessionStart = [...newHooks.SessionStart, ...preservedEntries];
 
-  // Preserve top-level non-hook fields (e.g. description overrides, metadata).
-  for (const key of Object.keys(existing)) {
-    if (key === 'hooks') continue;
-    if (!(key in merged)) merged[key] = existing[key];
-  }
   return merged;
 }
 
@@ -390,7 +411,7 @@ function planInstall({ pluginRoot = defaultPluginRoot, configDir } = {}) {
   const targetCommands = join(codebuddyRoot, 'commands');
   const targetRules = join(codebuddyRoot, 'rules');
   const targetHooks = join(codebuddyRoot, 'hooks');
-  const hooksJsonPath = join(targetHooks, 'hooks.json');
+  const settingsPath = join(codebuddyRoot, 'settings.json');
   const version = readVersion(root);
   const pluginRootAbs = resolve(targetPluginDir);
   const sessionStartScript = join(pluginRootAbs, 'hooks', 'session-start');
@@ -408,7 +429,7 @@ function planInstall({ pluginRoot = defaultPluginRoot, configDir } = {}) {
     targetCommands,
     targetRules,
     targetHooks,
-    hooksJsonPath,
+    settingsPath,
     version,
     pluginRootAbs,
     sessionStartScript,
@@ -429,7 +450,7 @@ async function installCodeBuddy({ pluginRoot, configDir, plan: providedPlan } = 
     targetCommands,
     targetRules,
     targetHooks,
-    hooksJsonPath,
+    settingsPath,
     version,
     pluginRootAbs,
     sessionStartScript,
@@ -461,8 +482,11 @@ async function installCodeBuddy({ pluginRoot, configDir, plan: providedPlan } = 
   }
 
   // 2. Copy canonical recovery commands as complete Markdown assets.
-  const commandCount = await copyValidatedCommands(commandAssets, targetCommands);
-  console.log(`   commands/ → ${targetCommands} (${commandCount} files, ${commandNames.length} commands)`);
+  //    Rewrite npx → node <local runtime> so --local installs do not pin a
+  //    fixed npm package version (P1: --local recovery commands must use the
+  //    deployed runtime).
+  const commandCount = await copyValidatedCommands(commandAssets, targetCommands, pluginRootAbs);
+  console.log(`   commands/ → ${targetCommands} (${commandCount} files, ${commandNames.length} commands, npx→node rewritten)`);
 
   // 3. Copy skills with ${CLAUDE_PLUGIN_ROOT} rewriting (preserves unrelated skills).
   const count = await copySkillsWithRoot(installPlan.skillsDir, targetSkills, pluginRootAbs, skillNames);
@@ -473,12 +497,15 @@ async function installCodeBuddy({ pluginRoot, configDir, plan: providedPlan } = 
   await writeFile(join(targetRules, 'phase-guard.md'), phaseGuardContent(), 'utf-8');
   console.log(`   phase-guard → ${join(targetRules, 'phase-guard.md')}`);
 
-  // 5. Write/merge hooks.json (SessionStart hook).
-  ensureDir(targetHooks);
-  const hooksConfig = buildHooksJson(sessionStartScript);
-  const mergedHooks = mergeHooksJson(hooksJsonPath, hooksConfig);
-  await writeFile(hooksJsonPath, JSON.stringify(mergedHooks, null, 2) + '\n', 'utf-8');
-  console.log(`   hooks.json → ${hooksJsonPath}`);
+  // 5. Write/merge SessionStart hook into ~/.codebuddy/settings.json.
+  //    CodeBuddy loads hooks from settings.json; user-level hooks.json is not
+  //    auto-loaded, so we target settings.json and merge to preserve other
+  //    fields (permissions, enabledPlugins, other event hooks, ...).
+  ensureDir(codebuddyRoot);
+  const settingsHooks = buildSettingsHooks(sessionStartScript);
+  const mergedSettings = mergeSettingsJson(settingsPath, settingsHooks);
+  await writeFile(settingsPath, JSON.stringify(mergedSettings, null, 2) + '\n', 'utf-8');
+  console.log(`   settings.json → ${settingsPath} (SessionStart hook merged)`);
 
   return installPlan;
 }
@@ -511,7 +538,7 @@ export async function run(args) {
     console.log(`  Skills dir:  ${plan.targetSkills}`);
     console.log(`  Rules:       ${plan.targetRules}/phase-guard.md`);
     console.log(`  Commands:    ${plan.targetCommands}`);
-    console.log(`  Hooks:       ${plan.hooksJsonPath}`);
+    console.log(`  Settings:    ${plan.settingsPath} (SessionStart hook, merged)`);
     return;
   }
 
@@ -544,7 +571,7 @@ export async function run(args) {
     console.log(`   Plugin root: ${plan.targetPluginDir}`);
     console.log(`   Skills dir:  ${plan.targetSkills}`);
     console.log(`   Rules:       ${plan.targetRules}/phase-guard.md`);
-    console.log(`   Hooks:       ${plan.hooksJsonPath}`);
+    console.log(`   Settings:    ${plan.settingsPath} (SessionStart hook merged)`);
     if (installedTag) {
       console.log(`   Version:     ${installedTag}`);
     }
