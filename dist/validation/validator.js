@@ -1,22 +1,23 @@
 import { MIN_PURPOSE_LENGTH, MIN_WHY_SECTION_LENGTH, MAX_WHY_SECTION_LENGTH, MAX_REQUIREMENT_TEXT_LENGTH, MAX_DELTAS_PER_CHANGE, VALIDATION_MESSAGES, VERIFICATION_MESSAGES, } from './constants.js';
 import { tokenize } from './tokenizer.js';
-import { parseDeltaSpec, normalizeRequirementName, extractRequirementsSection, } from '../parsing/requirement-blocks.js';
+import { parseDeltaSpec, normalizeRequirementName, extractRequirementsSection, scanMarkdownLines, } from '../parsing/requirement-blocks.js';
 const SCENARIO_HEADER_REGEX = /^####\s+Scenario:/i;
 function normalizeLineEndings(content) {
     return content.replace(/\r\n?/g, '\n');
 }
 function extractSection(content, heading) {
     const normalized = normalizeLineEndings(content);
-    const lines = normalized.split('\n');
+    const structure = scanMarkdownLines(normalized);
+    const lines = structure.map(({ text }) => text);
     // Match headings that contain the English keyword — supports both
     // "## Why" and "## 背景（Why）" style bilingual headings.
     const headingRegex = new RegExp(`^##\\s+.*\\b${heading.replace(/\s+/g, '\\s+')}\\b.*$`, 'i');
-    const idx = lines.findIndex((l) => headingRegex.test(l));
+    const idx = structure.findIndex(({ text, fenced }) => !fenced && headingRegex.test(text));
     if (idx === -1)
         return undefined;
     let endIdx = lines.length;
     for (let i = idx + 1; i < lines.length; i++) {
-        if (/^##\s+/.test(lines[i])) {
+        if (!structure[i].fenced && /^##\s+/.test(lines[i])) {
             endIdx = i;
             break;
         }
@@ -27,23 +28,31 @@ function containsShallOrMust(text) {
     return /\b(SHALL|MUST)\b/.test(text);
 }
 function countScenarios(blockRaw) {
-    const matches = blockRaw.match(/^####\s+/gm);
-    return matches ? matches.length : 0;
+    return scanMarkdownLines(blockRaw).filter(({ text, fenced }) => !fenced && /^####\s+/.test(text)).length;
+}
+function isFieldMetadata(line) {
+    return /^\s*(?:[-*]\s+)?\*\*[^*]+\*\*:\s*\S/.test(line);
 }
 function extractRequirementText(blockRaw) {
-    const lines = blockRaw.split('\n');
+    const lines = scanMarkdownLines(blockRaw);
+    const paragraph = [];
     for (let i = 1; i < lines.length; i++) {
-        const line = lines[i];
+        const { text: line, fenced } = lines[i];
+        if (fenced)
+            continue;
         if (/^####\s+/.test(line))
             break;
         const trimmed = line.trim();
-        if (trimmed.length === 0)
+        if (trimmed.length === 0) {
+            if (paragraph.length > 0)
+                break;
             continue;
-        if (/^\*\*[^*]+\*\*:/.test(trimmed))
+        }
+        if (paragraph.length === 0 && isFieldMetadata(line))
             continue;
-        return trimmed;
+        paragraph.push(trimmed);
     }
-    return undefined;
+    return paragraph.length > 0 ? paragraph.join(' ') : undefined;
 }
 function buildMissingShallOrMustMessage(action, blockName) {
     const base = `${action} "${blockName}" must contain SHALL or MUST`;

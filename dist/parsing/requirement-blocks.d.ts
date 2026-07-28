@@ -12,6 +12,12 @@ export interface RequirementsSectionParts {
 }
 export declare function normalizeRequirementName(name: string): string;
 export declare const REQUIREMENT_HEADER_REGEX: RegExp;
+interface MarkdownLine {
+    text: string;
+    lineNumber: number;
+    fenced: boolean;
+}
+export declare function scanMarkdownLines(content: string): MarkdownLine[];
 export declare function extractRequirementsSection(content: string): RequirementsSectionParts;
 export interface DeltaPlan {
     added: RequirementBlock[];
@@ -29,3 +35,4 @@ export interface DeltaPlan {
     };
 }
 export declare function parseDeltaSpec(content: string): DeltaPlan;
+export {};
