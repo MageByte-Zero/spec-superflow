@@ -1,11 +1,12 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   getCheckpoint, saveCheckpoint, listCheckpoints, createHandoff, listHandoffs, finishHandoff, resolveHandoff,
 } from '../../scripts/lib/sdd-overlay.mjs';
+import * as sddOverlay from '../../scripts/lib/sdd-overlay.mjs';
 
 let changeDir;
 
@@ -133,6 +134,40 @@ describe('handoff storage', () => {
   });
 });
 
+describe('plan-scoped overlay paths', () => {
+  it('isolates mutable records for two plan revisions while retaining root control files', () => {
+    const root = sddOverlay.getOverlayPaths(changeDir);
+    const first = planPaths({ hash: `sha256:${'a'.repeat(64)}`, revision: 1 });
+    const second = planPaths({ hash: `sha256:${'a'.repeat(64)}`, revision: 2 });
+
+    assert.equal(root.executionPlan, join(changeDir, '.superpowers', 'sdd', 'execution-plan.json'));
+    assert.equal(root.executionRecommendation, join(changeDir, '.superpowers', 'sdd', 'execution-recommendation.json'));
+    assert.equal(root.workflowSelection, join(changeDir, '.superpowers', 'sdd', 'workflow-selection.json'));
+    assert.notEqual(first.planRoot, second.planRoot);
+    for (const field of ['workspace', 'checkpoints', 'handoffs', 'reviews', 'repairState']) {
+      assert.equal(typeof first[field], 'string', `${field} is resolved from the plan identity`);
+      assert.notEqual(first[field], second[field], `${field} is not shared across revisions`);
+      assert.notEqual(first[field], root[field], `${field} is not a legacy root-level mutable path`);
+    }
+  });
+
+  it('resolves the same regenerable workspace after generated files are discarded', () => {
+    const plan = { hash: `sha256:${'b'.repeat(64)}`, revision: 3 };
+    const first = planPaths(plan);
+    mkdirSync(first.workspace, { recursive: true });
+    writeFileSync(join(first.workspace, 'task-1-brief.md'), 'generated task brief\n');
+
+    rmSync(first.workspace, { recursive: true, force: true });
+    assert.equal(existsSync(first.workspace), false);
+
+    const recovered = planPaths(plan);
+    assert.equal(recovered.workspace, first.workspace);
+    mkdirSync(recovered.workspace, { recursive: true });
+    writeFileSync(join(recovered.workspace, 'task-1-brief.md'), 'regenerated task brief\n');
+    assert.equal(readFileSync(join(recovered.workspace, 'task-1-brief.md'), 'utf8'), 'regenerated task brief\n');
+  });
+});
+
 function createReadyHandoff() {
   const handoff = createHandoff(changeDir, validHandoffInput);
   const resultPath = join(changeDir, '.superpowers', 'sdd', 'handoffs', handoff.id, 'HANDOFF_RESULT.md');
@@ -149,4 +184,10 @@ function validResult() {
     '## Suggested Changes\nProceed with the selected approach.',
     '',
   ].join('\n');
+}
+
+function planPaths(plan) {
+  assert.equal(typeof sddOverlay.getPlanScopedPaths, 'function',
+    'plan-scoped path resolution is a public overlay helper');
+  return sddOverlay.getPlanScopedPaths(changeDir, plan);
 }
