@@ -5,8 +5,9 @@
 # tasks intact.
 #
 # Usage: review-package BASE HEAD [OUTFILE]
-# Default OUTFILE: <repo-root>/.superpowers/sdd/review-<base7>..<head7>.diff
-# (named per range, so a re-review after fixes gets a distinct fresh file).
+# Default OUTFILE: <change>/.superpowers/sdd/plans/<plan-identity>/workspace/review-<base7>..<head7>.diff
+# Set SSF_CHANGE_DIR when running outside the change directory. When it is not
+# set, the script resolves the sole persisted execution plan below ./changes.
 set -euo pipefail
 
 if [ $# -lt 2 ] || [ $# -gt 3 ]; then
@@ -23,9 +24,30 @@ git rev-parse --verify --quiet "$head" >/dev/null || { echo "bad HEAD: $head" >&
 if [ $# -eq 3 ]; then
   out=$3
 else
-  dir="$(cd "$(dirname "$0")" && pwd)/sdd-workspace"
+  script_dir="$(cd "$(dirname "$0")" && pwd)"
+  if [ -n "${SSF_CHANGE_DIR:-}" ]; then
+    change_dir="$SSF_CHANGE_DIR"
+  elif [ -f ".superpowers/sdd/execution-plan.json" ]; then
+    change_dir="$PWD"
+  else
+    plan_files=(changes/*/.superpowers/sdd/execution-plan.json)
+    if [ ${#plan_files[@]} -ne 1 ] || [ ! -f "${plan_files[0]}" ]; then
+      echo "set SSF_CHANGE_DIR or run from a change directory with one persisted execution plan" >&2
+      exit 2
+    fi
+    change_dir="$(cd "$(dirname "$(dirname "$(dirname "${plan_files[0]}")")")" && pwd)"
+  fi
+  dir="$(node --input-type=module -e '
+    import { pathToFileURL } from "node:url";
+    const overlay = await import(pathToFileURL(process.argv[1]).href);
+    const scope = overlay.getCurrentPlanScopedPaths(process.argv[2]);
+    if (!scope) throw new Error("review-package requires a persisted execution plan");
+    process.stdout.write(scope.workspace);
+  ' "$script_dir/lib/sdd-overlay.mjs" "$change_dir")"
   out="$dir/review-$(git rev-parse --short "$base")..$(git rev-parse --short "$head").diff"
 fi
+
+mkdir -p "$(dirname "$out")"
 
 {
   echo "# Review package: ${base}..${head}"

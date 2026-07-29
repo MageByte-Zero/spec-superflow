@@ -166,6 +166,33 @@ describe('plan-scoped overlay paths', () => {
     writeFileSync(join(recovered.workspace, 'task-1-brief.md'), 'regenerated task brief\n');
     assert.equal(readFileSync(join(recovered.workspace, 'task-1-brief.md'), 'utf8'), 'regenerated task brief\n');
   });
+
+  it('writes under the current plan and only reads a provably matching legacy checkpoint', () => {
+    writeFileSync(join(changeDir, 'tasks.md'), [
+      '# Tasks',
+      '',
+      '- [ ] 1.1 Matching legacy task',
+      '- [ ] 1.2 Stale legacy task',
+      '',
+    ].join('\n'));
+    saveCheckpoint(changeDir, { taskId: '1.1', next: 'Use proven legacy evidence' });
+    saveCheckpoint(changeDir, { taskId: '1.2', next: 'Do not use stale evidence' });
+
+    const plan = { hash: `sha256:${'d'.repeat(64)}`, revision: 4 };
+    stampCheckpointPlan(changeDir, '1.1', plan.hash, plan.revision);
+    stampCheckpointPlan(changeDir, '1.2', `sha256:${'e'.repeat(64)}`, plan.revision - 1);
+    writeFileSync(join(changeDir, '.superpowers', 'sdd', 'execution-plan.json'), `${JSON.stringify(plan)}\n`);
+
+    assert.deepEqual(listCheckpoints(changeDir).map(checkpoint => checkpoint.task_id), ['1.1']);
+
+    const scoped = planPaths(plan);
+    const saved = saveCheckpoint(changeDir, { taskId: '1.2', next: 'Write current plan evidence' });
+    assert.equal(existsSync(join(scoped.checkpoints, '1.2.md')), true);
+    assert.equal(existsSync(join(changeDir, '.superpowers', 'sdd', 'checkpoints', '1.2.md')), true);
+    assert.equal(saved.plan_hash, plan.hash);
+    assert.equal(saved.plan_revision, plan.revision);
+    assert.deepEqual(listCheckpoints(changeDir).map(checkpoint => checkpoint.task_id), ['1.2']);
+  });
 });
 
 function createReadyHandoff() {
@@ -190,4 +217,15 @@ function planPaths(plan) {
   assert.equal(typeof sddOverlay.getPlanScopedPaths, 'function',
     'plan-scoped path resolution is a public overlay helper');
   return sddOverlay.getPlanScopedPaths(changeDir, plan);
+}
+
+function stampCheckpointPlan(changeDir, taskId, planHash, planRevision) {
+  const path = join(changeDir, '.superpowers', 'sdd', 'checkpoints', `${taskId}.md`);
+  const record = readFileSync(path, 'utf8');
+  writeFileSync(path, record.replace('---\n', [
+    '---',
+    `plan_hash: ${JSON.stringify(planHash)}`,
+    `plan_revision: ${JSON.stringify(planRevision)}`,
+    '',
+  ].join('\n')));
 }
