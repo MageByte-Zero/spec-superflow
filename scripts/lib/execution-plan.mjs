@@ -3,13 +3,14 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { computeArtifactsHash, computeContractHash } from './hash.mjs';
-import { getOverlayPaths } from './sdd-overlay.mjs';
+import { getOverlayPaths, getPlanScopedPaths } from './sdd-overlay.mjs';
 import { readState } from './state-loader.mjs';
 
 export const EXECUTION_MODES = ['inline', 'batch-inline', 'sdd'];
 
 const WAVE_STRATEGIES = new Set(['parallel', 'serial']);
 const REVIEW_STATUSES = new Set(['pass', 'fail']);
+const MAX_REPAIR_FAILURES = 5;
 
 export function createPlan(changeDir, input) {
   const state = readState(changeDir);
@@ -51,12 +52,6 @@ export function writePlan(changeDir, plan) {
 
   const paths = getOverlayPaths(changeDir);
   mkdirSync(paths.root, { recursive: true });
-  const previousPlan = readPlan(changeDir);
-  if (previousPlan && (previousPlan.revision !== plan.revision || previousPlan.hash !== plan.hash)) {
-    // Review evidence is scoped to exactly one plan revision. Removing it on
-    // revision prevents an old wave ID from satisfying a changed plan.
-    rmSync(paths.reviews, { recursive: true, force: true });
-  }
   atomicWrite(paths.executionPlan, `${JSON.stringify(plan, null, 2)}\n`);
   writeExecutionPlanSummary(changeDir, plan);
   return readPlan(changeDir);
@@ -132,6 +127,15 @@ export function recordReview(changeDir, waveId, receipt) {
   for (const field of ['base', 'head']) requireText(receipt?.[field], `receipt.${field}`);
   const report = validateReviewReportEvidence(changeDir, receipt?.report);
   const { base, head } = validateReviewRange(changeDir, receipt.base, receipt.head);
+  const previousReceipt = readCurrentReview(changeDir, waveId, plan);
+  const previousRepair = readRepairState(changeDir, plan, waveId);
+  if (previousRepair?.status === 'adjudication-required') {
+    throw new Error(`Wave '${waveId}' requires adjudication before another review can be recorded`);
+  }
+  if (previousReceipt?.status === 'pass') {
+    throw new Error(`Wave '${waveId}' already has a passing review receipt`);
+  }
+  validateRepairContinuity(previousReceipt, previousRepair, { status: receipt.status, base, head, report });
 
   const savedReceipt = {
     status: receipt.status,
@@ -142,9 +146,23 @@ export function recordReview(changeDir, waveId, receipt) {
     plan_revision: plan.revision,
     recorded_at: new Date().toISOString(),
   };
+  // Keep the established root receipt as a compatibility mirror, while the
+  // authoritative current-plan copy preserves history across plan revisions.
+  // Both retain the exact old receipt shape.
   const paths = getOverlayPaths(changeDir);
+  const planPaths = getPlanScopedPaths(changeDir, plan);
   mkdirSync(paths.reviews, { recursive: true });
-  atomicWrite(join(paths.reviews, `${safeFileName(waveId)}.json`), `${JSON.stringify(savedReceipt, null, 2)}\n`);
+  mkdirSync(planPaths.reviews, { recursive: true });
+  const serializedReceipt = `${JSON.stringify(savedReceipt, null, 2)}\n`;
+  atomicWrite(join(paths.reviews, `${safeFileName(waveId)}.json`), serializedReceipt);
+  atomicWrite(join(planPaths.reviews, `${safeFileName(waveId)}.json`), serializedReceipt);
+  updateRepairState(changeDir, plan, waveId, previousRepair, previousReceipt, savedReceipt);
+  if (savedReceipt.status === 'pass') {
+    // Task briefs, diff packages, and progress notes are regenerable for this
+    // exact plan. Receipt and repair evidence deliberately live beside, not in,
+    // this directory and must remain available to closing/repair guards.
+    rmSync(getPlanScopedPaths(changeDir, plan).workspace, { recursive: true, force: true });
+  }
   return savedReceipt;
 }
 
@@ -154,7 +172,13 @@ export function recordReview(changeDir, waveId, receipt) {
  */
 export function readCurrentReview(changeDir, waveId, plan = readPlan(changeDir)) {
   if (!plan) return null;
-  const filePath = join(getOverlayPaths(changeDir).reviews, `${safeFileName(waveId)}.json`);
+  const currentScope = getPlanScopedPaths(changeDir, plan);
+  const currentPath = join(currentScope.reviews, `${safeFileName(waveId)}.json`);
+  const legacyPath = join(getOverlayPaths(changeDir).reviews, `${safeFileName(waveId)}.json`);
+  // Newer callers may have written a scoped receipt, but the established
+  // root receipt remains the compatibility source until a future format
+  // migration. In either case the plan identity below is mandatory.
+  const filePath = existsSync(currentPath) ? currentPath : legacyPath;
   if (!existsSync(filePath)) return null;
   try {
     const receipt = JSON.parse(readFileSync(filePath, 'utf8'));
@@ -181,7 +205,8 @@ export function describeWaves(changeDir, plan = readPlan(changeDir)) {
   return plan.waves.map(wave => {
     const receipt = readCurrentReview(changeDir, wave.id, plan);
     const blockers = blockedDependencies(changeDir, plan, wave);
-    const retryable = receipt?.status === 'fail';
+    const repair = describeRepairState(changeDir, plan, wave.id, receipt);
+    const retryable = receipt?.status === 'fail' && repair.status !== 'adjudication-required';
     return {
       id: wave.id,
       strategy: wave.strategy,
@@ -191,8 +216,112 @@ export function describeWaves(changeDir, plan = readPlan(changeDir)) {
       retryable,
       receipt,
       blockers,
+      repair,
     };
   });
+}
+
+function validateRepairContinuity(previousReceipt, previousRepair, nextReceipt) {
+  if (previousReceipt?.status !== 'fail') return;
+  const previousHead = previousRepair?.previous_head ?? previousReceipt.head;
+  if (!previousHead) throw new Error('Repair state is missing the previous review head');
+
+  // A failed re-review must examine a repair that starts at the prior review
+  // head. A pass may also certify the exact original range: this preserves the
+  // established fail→pass receipt flow for a corrected review finding.
+  const repeatsPreviousRange = nextReceipt.status === 'pass'
+    && nextReceipt.base === previousReceipt.base
+    && nextReceipt.head === previousReceipt.head;
+  if (nextReceipt.base !== previousHead && !repeatsPreviousRange) {
+    throw new Error('Repair review base must equal the previous review head so repair ranges are continuous');
+  }
+}
+
+function updateRepairState(changeDir, plan, waveId, previousRepair, previousReceipt, receipt) {
+  const paths = getPlanScopedPaths(changeDir, plan);
+  mkdirSync(paths.repairState, { recursive: true });
+  const statePath = join(paths.repairState, `${safeFileName(waveId)}.json`);
+  const now = new Date().toISOString();
+  const priorFailures = Array.isArray(previousRepair?.failures) ? previousRepair.failures : [];
+  let state;
+
+  if (receipt.status === 'fail') {
+    const failures = [...priorFailures, reviewEvidence(receipt)];
+    state = {
+      plan_hash: plan.hash,
+      plan_revision: plan.revision,
+      wave_id: waveId,
+      status: failures.length >= MAX_REPAIR_FAILURES ? 'adjudication-required' : 'repairing',
+      failure_count: failures.length,
+      previous_head: receipt.head,
+      previous_report: receipt.report,
+      failures,
+      updated_at: now,
+    };
+  } else if (previousReceipt?.status === 'fail' || previousRepair?.failure_count > 0) {
+    state = {
+      plan_hash: plan.hash,
+      plan_revision: plan.revision,
+      wave_id: waveId,
+      status: 'resolved',
+      failure_count: priorFailures.length,
+      previous_head: receipt.head,
+      previous_report: previousRepair?.previous_report ?? priorFailures.at(-1)?.report ?? null,
+      failures: priorFailures,
+      resolution: reviewEvidence(receipt),
+      updated_at: now,
+    };
+  } else {
+    // A first-pass receipt does not begin a repair chain. Do not manufacture
+    // repair evidence for it, but still leave no stale state for this wave.
+    if (existsSync(statePath)) rmSync(statePath, { force: true });
+    return null;
+  }
+  atomicWrite(statePath, `${JSON.stringify(state, null, 2)}\n`);
+  return state;
+}
+
+function reviewEvidence(receipt) {
+  return {
+    base: receipt.base,
+    head: receipt.head,
+    report: receipt.report,
+    recorded_at: receipt.recorded_at,
+  };
+}
+
+function readRepairState(changeDir, plan, waveId) {
+  if (!plan) return null;
+  const statePath = join(getPlanScopedPaths(changeDir, plan).repairState, `${safeFileName(waveId)}.json`);
+  if (!existsSync(statePath)) return null;
+  try {
+    const state = JSON.parse(readFileSync(statePath, 'utf8'));
+    if (state?.plan_hash !== plan.hash || state?.plan_revision !== plan.revision || state?.wave_id !== waveId) return null;
+    if (!['repairing', 'resolved', 'adjudication-required'].includes(state.status)) return null;
+    if (!Number.isInteger(state.failure_count) || state.failure_count < 1 || !Array.isArray(state.failures)
+      || state.failures.length !== state.failure_count || !isNonEmptyText(state.previous_head)
+      || !isNonEmptyText(state.previous_report)) return null;
+    return state;
+  } catch {
+    return null;
+  }
+}
+
+function describeRepairState(changeDir, plan, waveId, receipt) {
+  const state = readRepairState(changeDir, plan, waveId);
+  if (state) return state;
+  if (receipt?.status === 'fail') {
+    // A valid legacy fail receipt predates repair-state. It remains retryable
+    // for compatibility, but has no fabricated audit history.
+    return {
+      status: 'repairing', failure_count: 1, previous_head: receipt.head,
+      previous_report: receipt.report, failures: [],
+    };
+  }
+  return {
+    status: 'not-needed', failure_count: 0, previous_head: null,
+    previous_report: null, failures: [],
+  };
 }
 
 function validateReviewReportEvidence(changeDir, report) {
