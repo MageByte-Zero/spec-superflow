@@ -27,6 +27,15 @@ Subagent (general-purpose):
     label permits concurrent dispatch only when the controller confirms the
     platform supports it; never change the saved wave strategy yourself.
 
+    ## Repair Assignment (only when this is a repair)
+
+    The controller supplies the CLI repair round, previous review report, prior
+    review head, and the scoped repair range. Treat those as evidence and fix
+    only the documented finding in that scoped diff. Do not edit receipt or
+    repair-state files, choose a new wave, or dispatch dependent work. For an
+    escalated repair round, explain in your report why the earlier recovery
+    rounds did not resolve the finding.
+
     ## Before You Begin
 
     If you have questions about:

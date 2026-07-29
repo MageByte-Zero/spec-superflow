@@ -119,3 +119,36 @@ describe('spec publication documentation contract', () => {
       'the artifact contract must keep near-match mistakes outside no-op handling');
   });
 });
+
+describe('SDD focused re-review documentation contract', () => {
+  it('keeps repair dispatch CLI-governed and escalates a bounded re-review loop', () => {
+    const executor = read('skills/build-executor/SKILL.md');
+    const implementer = read('skills/build-executor/implementer-prompt.md');
+    const reviewer = read('skills/build-executor/task-reviewer-prompt.md');
+    const rereviewer = read('skills/build-executor/re-review-prompt.md');
+
+    assert.match(executor, /execution show <change-dir> --json[\s\S]*repair/i,
+      'the controller must read CLI repair state before dispatching a repair');
+    assert.match(executor, /rounds? 1[–-]3[\s\S]*recovery/i,
+      'the first three failed reviews must remain focused recovery rounds');
+    assert.match(executor, /rounds? 4[–-]5[\s\S]*escalat/i,
+      'rounds four and five must be explicitly escalated');
+    assert.match(executor, /adjudication-required/i,
+      'a fifth unresolved review must stop automatic dispatch for adjudication');
+    assert.match(executor, /ssf execution review[\s\S]*--verdict <pass\|fail>/i,
+      'every re-review must be persisted through the CLI receipt command');
+    assert.doesNotMatch(executor, /(?:write|edit|modify) a repair-state file to (?:continue|resolve|record)/i,
+      'the controller must not be instructed to mutate repair-state files directly');
+
+    assert.match(rereviewer, /scoped diff/i,
+      'the re-review prompt must constrain review to the repair diff');
+    assert.match(rereviewer, /previous review/i,
+      'the re-review prompt must retain the prior finding as review context');
+    assert.match(rereviewer, /adjudication-required/i,
+      'the re-review prompt must stop at the circuit-breaker state');
+    assert.match(implementer, /repair round/i,
+      'implementers must receive the repair round as additional evidence');
+    assert.match(reviewer, /repair scope/i,
+      'reviewers must verify that a repair stays within its declared scope');
+  });
+});

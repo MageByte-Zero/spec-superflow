@@ -37,6 +37,15 @@ Subagent (general-purpose):
 
     **Planned wave:** [WAVE_ID]
 
+    ## Repair Scope (only when this is a re-review)
+
+    Read the CLI-provided repair round, previous review report, and prior review
+    head supplied by the controller. Review the scoped diff from that head, and
+    decide whether it resolves the recorded finding without unrelated changes.
+    Do not inspect or alter receipt or repair-state files. A fifth unresolved
+    review is `adjudication-required`, so report the unresolved evidence rather
+    than requesting another automatic repair.
+
     Read the diff file once — it contains the commit list, a stat summary,
     and the full diff with surrounding context, and it is your view of the
     change. The diff's context lines ARE the changed files: do not Read a

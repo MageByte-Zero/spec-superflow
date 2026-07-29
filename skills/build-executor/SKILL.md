@@ -100,11 +100,37 @@ For Full/legacy Hotfix by default. Dispatch according to the persisted plan, rev
    Do not begin a dependent wave until its predecessor receipt is `pass`.
 5. Critical/Important findings require a `fail` receipt, a focused repair, re-review, then a replacement `pass` receipt. Never advance or close with a missing or failed receipt.
 
+### Repair and focused re-review protocol
+
+Before dispatching any repair, read `ssf execution show <change-dir> --json` and
+use the CLI-provided `waves[].repair` state together with `eligible` and
+`retryable`. The controller does not infer a repair round from filenames or
+history, and must not write, edit, or modify a repair-state file directly.
+
+- **Rounds 1–3 — recovery:** dispatch only the focused repair for the current
+  wave. Give the implementer the CLI repair round, previous review report, and
+  the prior review head. Generate a scoped diff from that head, then dispatch
+  the `re-review-prompt.md` reviewer against the prior finding and that scoped
+  diff. Do not redispatch dependent waves.
+- **Rounds 4–5 — escalation:** keep the same focused repair and scoped
+  re-review, but explicitly mark the dispatch as escalated and require the
+  report to explain why earlier recovery rounds did not resolve the finding.
+  The fifth unresolved receipt yields CLI status `adjudication-required`; stop
+  automatic dispatch and request a human adjudication rather than attempting a
+  sixth repair.
+- Every focused re-review still writes its separate persisted report and is
+  recorded only through `ssf execution review <change-dir> --wave <id> --base
+  <sha> --head <sha> --report <review-report-path> --verdict <pass|fail>`.
+  A replacement `pass` receipt is the only evidence that resolves the wave.
+
 ### Per-Task Loop
 1. **Dispatch implementer**: Load the template with `npx --yes --package spec-superflow@0.12.1 ssf runtime asset read skills/build-executor/implementer-prompt.md`. Extract task brief with `scripts/task-brief PLAN_FILE N`. Include: where task fits, brief path, interfaces from prior tasks, report file path.
 2. **Handle response**: DONE → generate review package + dispatch reviewer. DONE_WITH_CONCERNS → assess. NEEDS_CONTEXT → provide context. BLOCKED → re-dispatch with better model or escalate.
 3. **Review**: Load `npx --yes --package spec-superflow@0.12.1 ssf runtime asset read skills/build-executor/task-reviewer-prompt.md`. Reviewer returns spec compliance + code quality verdicts with the wave ID, git range, report path, and `pass`/`fail` receipt command.
-4. **Fix**: If Critical or Important issues, write the `fail` receipt, dispatch fix subagent, re-review, and write the replacement `pass` receipt.
+4. **Fix**: If Critical or Important issues, write the `fail` receipt, read the
+   CLI repair state, then dispatch only the focused repair and re-review path
+   permitted by the repair protocol above. Write the replacement `pass` receipt
+   only after that re-review passes.
 5. **Mark complete**: Append to `.superpowers/sdd/progress.md`: `Task N: complete (commits <base7>..<head7>, review clean)`
 
 ### Model Selection
