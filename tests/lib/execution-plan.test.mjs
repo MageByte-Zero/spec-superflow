@@ -1,14 +1,15 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
-  createPlan as createRawPlan, readPlan, recordReview, validatePlan, writePlan,
+  createPlan as createRawPlan, describeWaves, readPlan, recordReview, validatePlan, writePlan,
 } from '../../scripts/lib/execution-plan.mjs';
 import { createRecommendationReceipt, recommendExecutionModes } from '../../scripts/lib/execution-recommendation.mjs';
 import { readState } from '../../scripts/lib/state-loader.mjs';
+import { getPlanScopedPaths } from '../../scripts/lib/sdd-overlay.mjs';
 
 let changeDir;
 let gitRefs;
@@ -48,6 +49,14 @@ function initializeGitRepository(directory) {
   runGit(directory, ['add', 'git-range-marker.txt']);
   runGit(directory, ['commit', '--quiet', '--message', 'second execution plan change']);
   return { base, head: runGit(directory, ['rev-parse', 'HEAD']) };
+}
+
+function createRepairCommit(label) {
+  const marker = join(changeDir, `repair-${label}.txt`);
+  writeFileSync(marker, `${label}\n`);
+  runGit(changeDir, ['add', marker]);
+  runGit(changeDir, ['commit', '--quiet', '--message', `repair ${label}`]);
+  return runGit(changeDir, ['rev-parse', 'HEAD']);
 }
 
 function createPlan(directory, input) {
@@ -451,6 +460,85 @@ describe('execution plan data contract', () => {
     });
 
     assert.equal(receipt.report, join('.superpowers', 'sdd', 'reviews', 'audit.md'));
+  });
+
+  it('starts repair state from the first failed review and rejects a non-contiguous repair range', () => {
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'repair ranges must be auditable',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+    writePlan(changeDir, plan);
+    recordReview(changeDir, 'wave-1', {
+      status: 'fail', base: gitRefs.base, head: gitRefs.head, report: writeReviewReport('initial-fail.md'),
+    });
+
+    const afterFailure = describeWaves(changeDir, plan)[0];
+    assert.equal(afterFailure.repair.status, 'repairing');
+    assert.equal(afterFailure.repair.failure_count, 1);
+    assert.equal(afterFailure.repair.previous_head, gitRefs.head);
+
+    const repairedHead = createRepairCommit('non-contiguous');
+    assert.throws(() => recordReview(changeDir, 'wave-1', {
+      status: 'fail', base: gitRefs.base, head: repairedHead, report: writeReviewReport('non-contiguous.md'),
+    }), /repair.*base|previous.*head|continuous/i);
+  });
+
+  it('opens an adjudication circuit breaker after five unresolved review failures and blocks dependents', () => {
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'fifth failed repair requires adjudication',
+      waves: [
+        { id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] },
+        { id: 'wave-2', strategy: 'serial', tasks: ['1.2'], depends_on: ['wave-1'] },
+      ],
+    });
+    writePlan(changeDir, plan);
+
+    let base = gitRefs.base;
+    let head = gitRefs.head;
+    for (let failure = 1; failure <= 5; failure += 1) {
+      recordReview(changeDir, 'wave-1', {
+        status: 'fail', base, head, report: writeReviewReport(`failure-${failure}.md`),
+      });
+      base = head;
+      head = createRepairCommit(`failure-${failure}`);
+    }
+
+    const [blocked, dependent] = describeWaves(changeDir, plan);
+    assert.equal(blocked.repair.status, 'adjudication-required');
+    assert.equal(blocked.repair.failure_count, 5);
+    assert.equal(blocked.retryable, false);
+    assert.equal(blocked.eligible, false);
+    assert.equal(dependent.eligible, false);
+    assert.deepEqual(dependent.blockers, ['wave-1']);
+  });
+
+  it('cleans only the current plan workspace after a repaired pass while retaining its receipt and repair evidence', () => {
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'only generated current-plan files are disposable',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+    writePlan(changeDir, plan);
+    const current = getPlanScopedPaths(changeDir, plan);
+    const historical = getPlanScopedPaths(changeDir, { hash: `sha256:${'f'.repeat(64)}`, revision: plan.revision + 1 });
+    mkdirSync(current.workspace, { recursive: true });
+    mkdirSync(historical.workspace, { recursive: true });
+    writeFileSync(join(current.workspace, 'task-brief.md'), 'regenerable current workspace file\n');
+    writeFileSync(join(historical.workspace, 'task-brief.md'), 'historic workspace file\n');
+
+    recordReview(changeDir, 'wave-1', {
+      status: 'fail', base: gitRefs.base, head: gitRefs.head, report: writeReviewReport('cleanup-fail.md'),
+    });
+    const repairedHead = createRepairCommit('cleanup-pass');
+    recordReview(changeDir, 'wave-1', {
+      status: 'pass', base: gitRefs.head, head: repairedHead, report: writeReviewReport('cleanup-pass.md'),
+    });
+
+    const completed = describeWaves(changeDir, plan)[0];
+    assert.equal(completed.receipt.status, 'pass');
+    assert.equal(completed.repair.status, 'resolved');
+    assert.equal(existsSync(current.workspace), false);
+    assert.equal(existsSync(historical.workspace), true);
+    assert.equal(existsSync(current.repairState), true);
   });
 
   it('returns validation failures instead of throwing for malformed plans', () => {
