@@ -152,3 +152,35 @@ describe('SDD focused re-review documentation contract', () => {
       'reviewers must verify that a repair stays within its declared scope');
   });
 });
+
+describe('test-quality guidance contract', () => {
+  it('teaches falsifiable behavior tests without changing the existing mode boundaries', () => {
+    const guide = read('skills/build-executor/writing-good-tests.md');
+    const executor = read('skills/build-executor/SKILL.md');
+    const implementer = read('skills/build-executor/implementer-prompt.md');
+    const reviewer = read('skills/build-executor/task-reviewer-prompt.md');
+
+    assert.match(guide, /可观察行为/,
+      'the guide must make the behavior under test observable');
+    assert.match(guide, /独立预期/,
+      'the guide must require expectations that do not restate the implementation');
+    assert.match(guide, /变异检查/,
+      'the guide must require a concrete change that would make a behavior test fail');
+    assert.match(guide, /文本存在断言/,
+      'the guide must reject text-presence assertions as behavior tests');
+    assert.match(guide, /纯文档[\s\S]*不需要[\s\S]*单元测试/,
+      'documentation-only tasks must not be asked to invent unit tests');
+
+    for (const [name, content] of Object.entries({ executor, implementer, reviewer })) {
+      assert.match(content, /writing-good-tests\.md/,
+        `${name} must point agents to the shared test-quality guide`);
+    }
+
+    assert.match(executor, /Quick follows the verification strategy persisted in its receipt/,
+      'Quick must retain its user-selected verification strategy');
+    assert.match(executor, /## Tweak Mode[\s\S]*Skip TDD/,
+      'Tweak must retain its direct-edit boundary');
+    assert.match(executor, /Full and legacy Hotfix still require RED → GREEN → REFACTOR/,
+      'Full work must retain the TDD iron law');
+  });
+});

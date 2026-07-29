@@ -114,6 +114,12 @@ Subagent (general-purpose):
     - Did I follow existing patterns in the codebase?
 
     **Testing:**
+    - Read `skills/build-executor/writing-good-tests.md` before judging test evidence.
+    - Does each behavior test state an observable behavior, use an independent expectation,
+      and name a plausible production change that would make it fail?
+    - Have I labeled documentation-contract checks as such instead of presenting text-presence
+      assertions as runtime behavior tests? For documentation-only work, did I use the applicable
+      format, link, lint, or build evidence without inventing unit tests?
     - Do tests actually verify behavior (not just mock behavior)?
     - Did I follow TDD if required?
     - Are tests comprehensive?

@@ -39,6 +39,14 @@ Quick follows the verification strategy persisted in its receipt: `tdd`, `new-te
 
 **Red Flags**: ignoring the selected verification strategy, reporting a manual check as if it were automated evidence, or silently expanding a bounded Quick change. Full and legacy Hotfix still require RED → GREEN → REFACTOR.
 
+### Test Quality Reference
+
+Before selecting or reviewing test evidence, read
+`skills/build-executor/writing-good-tests.md`. Apply its behavior-falsifiability
+rules to Full and legacy Hotfix work without changing the persisted Quick
+strategy or the Tweak boundary. Documentation-only work uses appropriate
+format, link, lint, or build evidence; do not require invented unit tests.
+
 ### Law 3: Review Before Drift
 Block on: logic defects, spec violations, missing required tests, unintended scope expansion.
 

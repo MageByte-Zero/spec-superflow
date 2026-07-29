@@ -110,6 +110,12 @@ Subagent (general-purpose):
     - Edge cases handled?
 
     **Tests:**
+    - Read `skills/build-executor/writing-good-tests.md` before assessing test evidence.
+    - Does each claimed behavior test state an observable behavior, use an independent
+      expectation, and identify a plausible production change it would catch?
+    - Are text-presence assertions correctly limited to documentation-contract checks rather
+      than presented as runtime behavior tests? For documentation-only work, is the evidence
+      appropriate without invented unit tests?
     - Do the new and changed tests verify real behavior, not mocks?
     - Are the task's edge cases covered?
 
