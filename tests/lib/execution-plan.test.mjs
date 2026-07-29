@@ -483,6 +483,32 @@ describe('execution plan data contract', () => {
     }), /repair.*base|previous.*head|continuous/i);
   });
 
+  it('blocks a failed wave instead of reopening its repair chain when the report is deleted or replaced', () => {
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'failed review evidence must remain auditable',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+    writePlan(changeDir, plan);
+    const reportPath = writeReviewReport('failed-evidence.md', 'Original failed review finding.\n');
+    recordReview(changeDir, 'wave-1', {
+      status: 'fail', base: gitRefs.base, head: gitRefs.head, report: reportPath,
+    });
+
+    rmSync(reportPath);
+    let wave = describeWaves(changeDir, plan)[0];
+    assert.equal(wave.receipt, null);
+    assert.equal(wave.retryable, false);
+    assert.equal(wave.eligible, false);
+    assert.match(wave.blockers.join('\n'), /failed review report evidence is invalid|cannot be read/i);
+
+    writeFileSync(reportPath, 'Replacement report with different content.\n');
+    wave = describeWaves(changeDir, plan)[0];
+    assert.equal(wave.receipt, null);
+    assert.equal(wave.retryable, false);
+    assert.equal(wave.eligible, false);
+    assert.match(wave.blockers.join('\n'), /content no longer matches/i);
+  });
+
   it('opens an adjudication circuit breaker after five unresolved review failures and blocks dependents', () => {
     const plan = createPlan(changeDir, {
       mode: 'sdd', source: 'default', rationale: 'fifth failed repair requires adjudication',

@@ -125,9 +125,13 @@ export function recordReview(changeDir, waveId, receipt) {
     throw new Error("Review receipt status must be 'pass' or 'fail'");
   }
   for (const field of ['base', 'head']) requireText(receipt?.[field], `receipt.${field}`);
-  const report = validateReviewReportEvidence(changeDir, receipt?.report);
+  const reportEvidence = validateReviewReportEvidence(changeDir, receipt?.report);
   const { base, head } = validateReviewRange(changeDir, receipt.base, receipt.head);
-  const previousReceipt = readCurrentReview(changeDir, waveId, plan);
+  const currentReview = readCurrentReviewEvidence(changeDir, waveId, plan);
+  if (currentReview.blocker) {
+    throw new Error(`Wave '${waveId}' cannot be reviewed while its failed report evidence is invalid: ${currentReview.blocker}`);
+  }
+  const previousReceipt = currentReview.receipt;
   const previousRepair = readRepairState(changeDir, plan, waveId);
   if (previousRepair?.status === 'adjudication-required') {
     throw new Error(`Wave '${waveId}' requires adjudication before another review can be recorded`);
@@ -135,20 +139,21 @@ export function recordReview(changeDir, waveId, receipt) {
   if (previousReceipt?.status === 'pass') {
     throw new Error(`Wave '${waveId}' already has a passing review receipt`);
   }
-  validateRepairContinuity(previousReceipt, previousRepair, { status: receipt.status, base, head, report });
+  validateRepairContinuity(previousReceipt, previousRepair, { status: receipt.status, base, head, report: reportEvidence.path });
 
   const savedReceipt = {
     status: receipt.status,
     base,
     head,
-    report,
+    report: reportEvidence.path,
+    report_sha256: reportEvidence.sha256,
     plan_hash: plan.hash,
     plan_revision: plan.revision,
     recorded_at: new Date().toISOString(),
   };
   // Keep the established root receipt as a compatibility mirror, while the
   // authoritative current-plan copy preserves history across plan revisions.
-  // Both retain the exact old receipt shape.
+  // Both retain the same receipt shape, including report integrity evidence.
   const paths = getOverlayPaths(changeDir);
   const planPaths = getPlanScopedPaths(changeDir, plan);
   mkdirSync(paths.reviews, { recursive: true });
@@ -171,7 +176,11 @@ export function recordReview(changeDir, waveId, receipt) {
  * revision/hash are never evidence for the current plan.
  */
 export function readCurrentReview(changeDir, waveId, plan = readPlan(changeDir)) {
-  if (!plan) return null;
+  return readCurrentReviewEvidence(changeDir, waveId, plan).receipt;
+}
+
+function readCurrentReviewEvidence(changeDir, waveId, plan = readPlan(changeDir)) {
+  if (!plan) return { receipt: null, blocker: null };
   const currentScope = getPlanScopedPaths(changeDir, plan);
   const currentPath = join(currentScope.reviews, `${safeFileName(waveId)}.json`);
   const legacyPath = join(getOverlayPaths(changeDir).reviews, `${safeFileName(waveId)}.json`);
@@ -179,19 +188,33 @@ export function readCurrentReview(changeDir, waveId, plan = readPlan(changeDir))
   // root receipt remains the compatibility source until a future format
   // migration. In either case the plan identity below is mandatory.
   const filePath = existsSync(currentPath) ? currentPath : legacyPath;
-  if (!existsSync(filePath)) return null;
+  if (!existsSync(filePath)) return { receipt: null, blocker: null };
   try {
     const receipt = JSON.parse(readFileSync(filePath, 'utf8'));
-    if (receipt?.plan_hash !== plan.hash || receipt?.plan_revision !== plan.revision) return null;
+    if (receipt?.plan_hash !== plan.hash || receipt?.plan_revision !== plan.revision) return { receipt: null, blocker: null };
     const range = validateReviewRange(changeDir, receipt?.base, receipt?.head);
-    if (receipt.base !== range.base || receipt.head !== range.head) return null;
-    // A passing receipt is current evidence only while its referenced report
-    // remains safe and readable. Recheck it here because reports can be
-    // deleted or replaced after the receipt was recorded.
-    if (receipt?.status === 'pass') validateReviewReportEvidence(changeDir, receipt.report);
-    return receipt;
-  } catch {
-    return null;
+    if (receipt.base !== range.base || receipt.head !== range.head) return { receipt: null, blocker: null };
+    // Reports remain evidence only while their safety and content identity can
+    // be re-established. A missing hash is accepted for legacy receipts, but
+    // all newly written receipts bind the report body to the review result.
+    const evidence = validateReviewReportEvidence(changeDir, receipt.report);
+    if (receipt.report_sha256 !== undefined && receipt.report_sha256 !== evidence.sha256) {
+      throw new Error('review report evidence content no longer matches its receipt');
+    }
+    return { receipt, blocker: null };
+  } catch (error) {
+    // A corrupted pass receipt is treated as absent so the wave can be
+    // reviewed again. A failed receipt is different: reopening it would erase
+    // the repair-chain evidence and permit an unaudited retry.
+    try {
+      const receipt = JSON.parse(readFileSync(filePath, 'utf8'));
+      if (receipt?.plan_hash === plan.hash && receipt?.plan_revision === plan.revision && receipt?.status === 'fail') {
+        return { receipt: null, blocker: `failed review report evidence is invalid: ${error.message}` };
+      }
+    } catch {
+      // An unreadable receipt has no trustworthy status to preserve.
+    }
+    return { receipt: null, blocker: null };
   }
 }
 
@@ -203,8 +226,12 @@ export function readCurrentReview(changeDir, waveId, plan = readPlan(changeDir))
 export function describeWaves(changeDir, plan = readPlan(changeDir)) {
   if (!plan || !Array.isArray(plan.waves)) return [];
   return plan.waves.map(wave => {
-    const receipt = readCurrentReview(changeDir, wave.id, plan);
-    const blockers = blockedDependencies(changeDir, plan, wave);
+    const review = readCurrentReviewEvidence(changeDir, wave.id, plan);
+    const receipt = review.receipt;
+    const blockers = [
+      ...blockedDependencies(changeDir, plan, wave),
+      ...(review.blocker ? [review.blocker] : []),
+    ];
     const repair = describeRepairState(changeDir, plan, wave.id, receipt);
     const retryable = receipt?.status === 'fail' && repair.status !== 'adjudication-required';
     return {
@@ -350,7 +377,10 @@ function validateReviewReportEvidence(changeDir, report) {
   if (realOverlayRelativePath === '' || realOverlayRelativePath === '..' || realOverlayRelativePath.startsWith(`..${sep}`) || isAbsolute(realOverlayRelativePath)) {
     throw new Error('Review report evidence must resolve inside the change review overlay');
   }
-  return relative(changeRoot, realReportPath);
+  return {
+    path: relative(changeRoot, realReportPath),
+    sha256: `sha256:${createHash('sha256').update(readFileSync(realReportPath)).digest('hex')}`,
+  };
 }
 
 function getPhysicalReviewsDirectory(changeDir) {
