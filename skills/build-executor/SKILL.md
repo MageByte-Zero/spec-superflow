@@ -56,6 +56,27 @@ Return to `specifying` or `bridging` if: new behavior appears, interfaces change
 For Quick/direct Hotfix, stop instead of creating or rewinding a contract; refresh
 `workflow recommend` with the observed risk, then select `full --confirm`.
 
+## Controller Continuity Protocol
+
+This protocol is a host controller responsibility. The skill does not create autonomous background execution, retain control after a host turn ends, or guarantee that a dispatched subtask continues without the host.
+
+- While an active subtask exists or a planned wave has a pending wave receipt,
+  the controller remains in execution. Send only concise commentary progress;
+  do not send a final response or end the control turn as though the change
+  were waiting for the user.
+- On a user interruption or resume, first read `ssf execution show <change-dir>
+  --json` and the progress ledger at `.superpowers/sdd/progress.md`. Reconcile
+  those records before dispatching anything, then continue the current eligible
+  repair or eligible task according to the persisted plan. Do not restart a
+  completed task, skip a retryable repair, or infer completion from chat text.
+- A controller may end its control turn or request user input only when the
+  change is completed, an external blocker prevents meaningful progress, or
+  user authorization is genuinely required. A dispatched task, pending review,
+  or routine internal transition is not a terminal condition.
+- Commentary must state the current wave/task, evidence or receipt status, and
+  the automatic next gate. It must not imply that the skill itself will run in
+  the background after the host has ended the turn.
+
 ## Execution Mode Selection
 
 For Full or legacy Hotfix, generate proposed waves from the approved contract, then use the recommendation as a decision aid rather than silently defaulting a mode:

@@ -153,6 +153,31 @@ describe('SDD focused re-review documentation contract', () => {
   });
 });
 
+describe('build executor continuity protocol contract', () => {
+  it('keeps execution under host-controller control until a real terminal condition', () => {
+    const executor = read('skills/build-executor/SKILL.md');
+
+    assert.match(executor, /## Controller Continuity Protocol/,
+      'the executor must define an explicit continuity protocol for the host controller');
+    assert.match(executor, /active subtask|pending wave receipt/i,
+      'active subtasks and pending wave receipts must keep the controller in an active execution state');
+    assert.match(executor, /commentary/i,
+      'non-terminal progress must be communicated as commentary');
+    assert.match(executor, /must not.*final|do not.*final/i,
+      'the controller must not send a final response while execution work remains active');
+    assert.match(executor, /User interruption.*execution show[\s\S]*progress ledger/i,
+      'resume must recover current execution state from both the CLI and progress ledger');
+    assert.match(executor, /eligible repair|eligible task/i,
+      'resume must continue the current eligible repair or task');
+    assert.match(executor, /only.*completed|external blocker|user authorization/i,
+      'only completion, an external blocker, or required user authorization may end the control turn');
+    assert.match(executor, /host controller responsibility/i,
+      'the protocol must attribute continuity to the host controller');
+    assert.match(executor, /does not create.*background/i,
+      'the skill must not claim that it creates autonomous background execution');
+  });
+});
+
 describe('test-quality guidance contract', () => {
   it('teaches falsifiable behavior tests without changing the existing mode boundaries', () => {
     const guide = read('skills/build-executor/writing-good-tests.md');
