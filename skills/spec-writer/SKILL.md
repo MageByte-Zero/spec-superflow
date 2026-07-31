@@ -40,7 +40,7 @@ Must include a delivery/proof map and dependency-aware tasks. Each task names th
 
 ## Artifact Generation
 
-When DP-0 has made the scope clear, generate the planning pack in the configured order without pausing between individual artifacts. Validate the pack, then request one DP-2 review. Pause earlier only for a material missing decision or a detected scope conflict.
+When DP-0 has made the scope clear, generate the configured planning pack (proposal, delta specs from `templates/spec.md`, design, and tasks) in order without pausing between individual artifacts. Validate the pack, then request one DP-2 review. Pause earlier only when the missing decision can change user-visible behavior, compatibility, security, delivery scope, or the selected design; or when artifacts state incompatible scope.
 
 ## Validation Checklist
 
