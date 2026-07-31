@@ -178,6 +178,24 @@ describe('build executor continuity protocol contract', () => {
   });
 });
 
+describe('planning document readability contract', () => {
+  it('keeps one human review gate and moves execution ritual out of planning documents', () => {
+    const writer = read('skills/spec-writer/SKILL.md');
+    const proposal = read('templates/proposal.md');
+    const design = read('templates/design.md');
+    const tasks = read('templates/tasks.md');
+
+    assert.match(writer, /without pausing between individual artifacts/i);
+    assert.match(writer, /one DP-2/i);
+    assert.match(writer, /five-question blind reader check/i);
+    assert.match(proposal, /完成证明/);
+    assert.match(design, /后果/);
+    assert.match(tasks, /交付与证明/);
+    assert.match(tasks, /execution contract \/ task brief/i);
+    assert.doesNotMatch(tasks, /1\.2 运行测试并确认失败/);
+  });
+});
+
 describe('test-quality guidance contract', () => {
   it('teaches falsifiable behavior tests without changing the existing mode boundaries', () => {
     const guide = read('skills/build-executor/writing-good-tests.md');

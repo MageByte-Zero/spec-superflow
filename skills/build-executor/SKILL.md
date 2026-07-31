@@ -77,6 +77,14 @@ This protocol is a host controller responsibility. The skill does not create aut
   the automatic next gate. It must not imply that the skill itself will run in
   the background after the host has ended the turn.
 
+## Planning-document boundary
+
+Treat proposal, design, and tasks as reader-facing decision records. Do not add
+per-test RED/GREEN ritual, receipt paths, or dispatch scripts to them during
+implementation; keep that evidence in the execution contract, task brief, and
+review report. For a Full change, confirm that the one DP-2 blind-reader result
+is recorded before treating the contract as the implementation authority.
+
 ## Execution Mode Selection
 
 For Full or legacy Hotfix, generate proposed waves from the approved contract, then use the recommendation as a decision aid rather than silently defaulting a mode:
