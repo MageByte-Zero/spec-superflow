@@ -285,6 +285,10 @@ describe('ssf resume and switch', () => {
       wave: null,
       reason: 'A current execution plan is required',
     });
+
+    const text = runSsf(['resume', change]);
+    assert.equal(text.status, 0, text.stderr);
+    assert.match(text.stdout, /Continuation: blocked: A current execution plan is required/);
   });
 
   it('returns a terminal continuation as JSON', () => {

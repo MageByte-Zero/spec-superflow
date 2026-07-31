@@ -86,8 +86,7 @@ function printRecoverySummary(json, summary) {
   const handoffs = summary.handoffs;
   const nextAction = summary.next_action.command
     ?? `${summary.next_action.skill}: ${summary.next_action.reason}`;
-  const continuation = summary.continuation.command
-    ?? `${summary.continuation.kind}${summary.continuation.wave ? ` (wave: ${summary.continuation.wave})` : ''}: ${summary.continuation.reason}`;
+  const continuation = `${summary.continuation.kind}${summary.continuation.wave ? ` (wave: ${summary.continuation.wave})` : ''}: ${summary.continuation.reason}${summary.continuation.command ? `; command: ${summary.continuation.command}` : ''}`;
 
   console.log([
     `Change: ${summary.change.name}`,
