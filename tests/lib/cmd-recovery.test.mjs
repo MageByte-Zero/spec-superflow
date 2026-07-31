@@ -79,9 +79,9 @@ describe('ssf resume and switch', () => {
     const value = JSON.parse(result.stdout);
     assert.deepEqual(
       Object.keys(value).filter(key =>
-        ['ok', 'command', 'change', 'state', 'terminal', 'blockers', 'next_action'].includes(key),
+        ['ok', 'command', 'change', 'state', 'terminal', 'blockers', 'next_action', 'continuation'].includes(key),
       ),
-      ['ok', 'command', 'change', 'state', 'terminal', 'blockers', 'next_action'],
+      ['ok', 'command', 'change', 'state', 'terminal', 'blockers', 'next_action', 'continuation'],
     );
     assert.equal(value.command, 'resume');
   });
@@ -222,6 +222,7 @@ describe('ssf resume and switch', () => {
     assert.match(result.stdout, /Next eligible wave: none/);
     assert.match(result.stdout, /Execution failures: not required/);
     assert.match(result.stdout, /Blockers: none/);
+    assert.match(result.stdout, /Continuation: automatic/);
     assert.match(result.stdout, /Next action:/);
     assert.doesNotMatch(result.stdout, /undefined/);
     assert.equal(readFileSync(join(change, '.spec-superflow.yaml'), 'utf8'), stateBefore);
@@ -254,8 +255,49 @@ describe('ssf resume and switch', () => {
     assert.match(result.stdout, /Execution current: yes/);
     assert.match(result.stdout, new RegExp(`Execution revision: ${plan.revision}`));
     assert.match(result.stdout, /Next eligible wave: recovery-cli/);
+    assert.match(result.stdout, /Continuation: automatic \(wave: recovery-cli\)/);
     assert.match(result.stdout, /Execution failures: none/);
     assert.doesNotMatch(result.stdout, /undefined/);
+  });
+
+  it('returns an automatic continuation with the eligible wave as JSON', () => {
+    const change = makeChange('automatic-alpha', 'executing');
+    makeCurrentPlan(change);
+
+    const result = runSsf(['resume', change, '--json']);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout).continuation, {
+      kind: 'automatic',
+      wave: 'recovery-cli',
+      reason: 'Current execution plan has an eligible wave',
+    });
+  });
+
+  it('returns a blocked continuation with the required operator action as JSON', () => {
+    const change = makeChange('blocked-alpha', 'executing');
+
+    const result = runSsf(['resume', change, '--json']);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout).continuation, {
+      kind: 'blocked',
+      wave: null,
+      reason: 'A current execution plan is required',
+    });
+  });
+
+  it('returns a terminal continuation as JSON', () => {
+    const change = makeChange('terminal-alpha', 'closing');
+
+    const result = runSsf(['resume', change, '--json']);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout).continuation, {
+      kind: 'terminal',
+      wave: null,
+      reason: 'Change is terminal',
+    });
   });
 });
 

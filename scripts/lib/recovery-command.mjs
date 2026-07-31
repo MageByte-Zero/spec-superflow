@@ -61,6 +61,7 @@ export async function runRecoveryCommand(command, args, { requireTarget = false 
       execution: summary.execution,
       blockers: summary.blockers,
       next_action: summary.next_action,
+      continuation: summary.continuation,
     });
   } catch (error) {
     printRecoveryError(command, error, values.json);
@@ -85,6 +86,8 @@ function printRecoverySummary(json, summary) {
   const handoffs = summary.handoffs;
   const nextAction = summary.next_action.command
     ?? `${summary.next_action.skill}: ${summary.next_action.reason}`;
+  const continuation = summary.continuation.command
+    ?? `${summary.continuation.kind}${summary.continuation.wave ? ` (wave: ${summary.continuation.wave})` : ''}: ${summary.continuation.reason}`;
 
   console.log([
     `Change: ${summary.change.name}`,
@@ -101,6 +104,7 @@ function printRecoverySummary(json, summary) {
     summary.blockers.length === 0
       ? 'Blockers: none'
       : `Blockers: ${summary.blockers.map(blocker => blocker.message).join('; ')}`,
+    `Continuation: ${continuation}`,
     `Next action: ${nextAction}`,
   ].join('\n'));
 }
