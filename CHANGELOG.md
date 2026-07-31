@@ -6,6 +6,14 @@ The format loosely follows Keep a Changelog.
 
 ## [Unreleased]
 
+### Added
+
+- **CodeBuddy Code CLI installer**: `ssf install-codebuddy` deploys spec-superflow to `~/.codebuddy/` for CodeBuddy Code CLI. SessionStart hook is written to `~/.codebuddy/settings.json` (CodeBuddy's canonical hook location — the user-level `hooks/hooks.json` is not auto-loaded), recovery command adapters are rewritten to call the deployed local runtime instead of a pinned `npx` package, and `phase-guard.md` uses `alwaysApply:false` frontmatter so ordinary projects are not forced into the workflow. Adds `ssf uninstall-codebuddy` for precise, safe teardown.
+
+### Fixed
+
+- **CodeBuddy install/teardown safety**: `ssf uninstall-codebuddy` precisely removes spec-superflow's own artifacts (SessionStart entries in `settings.json`, runtime dir, commands, phase-guard rule, 9 skills) while preserving other skills, rules, hooks, and settings fields. The previous `rm -f ~/.codebuddy/hooks/hooks.json` advice, which deleted unrelated hooks, is replaced by the dedicated uninstall command. CI `platform-install-smoke` now covers CodeBuddy (settings.json SessionStart, command rewrite, phase-guard frontmatter).
+
 ## [0.12.1] - 2026-07-27
 
 ### Fixed

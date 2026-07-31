@@ -35,6 +35,8 @@ const COMMANDS = {
   'install-pi':       () => import('./lib/cmd-install-pi.mjs'),
   'install-qoder':    () => import('./lib/cmd-install-qoder.mjs'),
   'install-zcode':     () => import('./lib/cmd-install-zcode.mjs'),
+  'install-codebuddy': () => import('./lib/cmd-install-codebuddy.mjs'),
+  'uninstall-codebuddy': () => import('./lib/cmd-uninstall-codebuddy.mjs'),
 };
 
 const HELP = `spec-superflow (ssf) — Spec-first workflow CLI
@@ -107,6 +109,8 @@ Commands:
   install-continue      Deploy to .continue/ + .continue/rules/ (Continue)
   install-pi            Deploy to .pi/skills/ (Pi agent; no rules dir)
   install-qoder         Deploy to .qoder/ + .qoder/rules/ (Qoder)
+  install-codebuddy     Deploy to ~/.codebuddy/skills/ + settings.json (CodeBuddy Code CLI)
+  uninstall-codebuddy   Remove spec-superflow from ~/.codebuddy/ (CodeBuddy Code CLI)
 
 Options:
   --help, -h            Show this help message
@@ -136,6 +140,8 @@ Examples:
   ssf install-cursor
   ssf install-workbuddy
   ssf install-cline --local /path/to/spec-superflow
+  ssf install-codebuddy
+  ssf uninstall-codebuddy --dry-run
 `;
 
 async function main() {

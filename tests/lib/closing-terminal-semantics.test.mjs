@@ -192,7 +192,10 @@ describe('closing terminal lifecycle', () => {
     const unreleased = section(changelog, '## [Unreleased]');
     const repairedRelease = section(changelog, '## [0.11.0] - 2026-07-21');
 
-    assert.equal(unreleased.trim(), '## [Unreleased]');
+    // The #64 repair must remain in its v0.11.0 record; [Unreleased] may carry
+    // other pending changes (e.g. the CodeBuddy installer), so we only assert
+    // the #64 repair was not leaked into [Unreleased].
+    assert.doesNotMatch(unreleased, /#64/, 'the #64 repair must stay in v0.11.0, not in [Unreleased]');
     assert.match(repairedRelease, /#64/);
     assert.match(repairedRelease, /closing/i);
     assert.match(repairedRelease, /终态/);

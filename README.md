@@ -102,7 +102,7 @@ gemini extensions install https://github.com/MageByte-Zero/spec-superflow
 gemini extensions update spec-superflow   # 升级
 ```
 
-### 更多平台（Cline / Kiro / Windsurf / Qwen / Amazon Q / Roo Code / Continue / Pi / Qoder / OpenCode / WorkBuddy / Trae）
+### 更多平台（Cline / Kiro / Windsurf / Qwen / Amazon Q / Roo Code / Continue / Pi / Qoder / OpenCode / WorkBuddy / CodeBuddy / Trae）
 
 | 平台 | 安装方式 | 状态 |
 |------|---------|------|
@@ -117,9 +117,10 @@ gemini extensions update spec-superflow   # 升级
 | **Qoder** | `npx spec-superflow@latest install-qoder` | 已提供安装器 |
 | **OpenCode** | `.opencode/plugins/spec-superflow.js` 或 `.agents/skills -> skills/` | 已提供入口 |
 | **WorkBuddy** | `npx spec-superflow@latest install-workbuddy` | 已提供安装器 |
+| **CodeBuddy Code CLI** | `ssf install-codebuddy` | 已提供安装器 |
 | **Trae IDE / TRAE Work** | `.trae/skills/`、`~/.trae/skills/` 或上传 zip/.skill | 手动/导入 |
 
-> 共支持 18 个平台，完整安装说明见 [INSTALL.md](INSTALL.md)，支持矩阵见 [docs/platform-matrix.md](docs/platform-matrix.md)。
+> 共支持 19 个平台，完整安装说明见 [INSTALL.md](INSTALL.md)，支持矩阵见 [docs/platform-matrix.md](docs/platform-matrix.md)。
 
 ### CLI 工具链
 
@@ -154,6 +155,8 @@ npx spec-superflow list          # 或通过 npx 使用
 | `ssf execution review <dir> ...` | 为一个计划 wave 记录 review receipt |
 | `ssf install-cursor` | 部署到 Cursor `.cursor/` 目录 |
 | `ssf install-workbuddy` | 部署到 WorkBuddy marketplace 插件（含 skills/rules/runtime） |
+| `ssf install-codebuddy` | 部署到 `~/.codebuddy/`（CodeBuddy Code CLI） |
+| `ssf uninstall-codebuddy` | 从 `~/.codebuddy/` 移除 spec-superflow（CodeBuddy Code CLI） |
 | `ssf install-cline` | 部署到 Cline `.cline/` + `.clinerules/` |
 | `ssf install-kiro` | 部署到 Kiro `.kiro/` + `.kiro/steering/` |
 | `ssf install-windsurf` | 部署到 Windsurf `.windsurf/` + `.windsurf/rules/` |

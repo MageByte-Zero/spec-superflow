@@ -2,9 +2,15 @@
 # v0.12.1: conditional injection — detects artifacts, injects workflow-start pointer
 msg="<EXTREMELY_IMPORTANT>\nYou have spec-superflow installed. Use /spec-superflow:workflow-start ONLY when you detect an active spec-superflow change in the workspace (look for \`.spec-superflow.yaml\`, \`proposal.md\`, \`execution-contract.md\`, or \`specs/\` directories), OR when the user explicitly invokes it by name. For ordinary coding tasks without spec-superflow artifacts, do NOT invoke workflow-start — just handle the request directly.\n</EXTREMELY_IMPORTANT>"
 
-# Three platforms share the same message, only output format differs.
+# Four platforms share the same message, only output format differs.
+# CodeBuddy Code CLI (detected via CODEBUDDY_PROJECT_DIR) loads hooks from
+# ~/.codebuddy/settings.json and requires hookSpecificOutput for SessionStart;
+# Claude Code uses the same shape. Cursor and the generic fallback use the
+# top-level additional_context / additionalContext form.
 if [ -n "${CURSOR_PLUGIN_ROOT:-}" ]; then
   printf '{\n  "additional_context": "%s"\n}\n' "$msg"
+elif [ -n "${CODEBUDDY_PROJECT_DIR:-}" ]; then
+  printf '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$msg"
 elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -z "${COPILOT_CLI:-}" ]; then
   printf '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$msg"
 else
