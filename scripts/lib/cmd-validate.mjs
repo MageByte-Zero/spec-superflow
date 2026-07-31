@@ -1,8 +1,9 @@
 // ssf validate <dir> — validate artifacts in a change directory
 import { readFileSync, existsSync, statSync } from 'node:fs';
-import { join, basename } from 'node:path';
+import { join, basename, dirname, resolve } from 'node:path';
 import { loadConfig } from './config-loader.mjs';
 import { validateSpecPathLayout, relativeSpecPath } from './spec-paths.mjs';
+import { applyDeltaToBaselineDetailed } from './spec-publication.mjs';
 
 async function getValidator() {
   const mod = await import('../../dist/index.js');
@@ -22,6 +23,25 @@ function printReport(label, report) {
   }
 }
 
+function projectRootForStandardChange(changeDir) {
+  const resolvedChangeDir = resolve(changeDir);
+  const changesDir = dirname(resolvedChangeDir);
+  return basename(changesDir) === 'changes' ? dirname(changesDir) : null;
+}
+
+function preflightDeltaBaseline(projectRoot, specFile, content) {
+  if (!projectRoot) return null;
+  const capability = basename(dirname(specFile));
+  const baselinePath = join(projectRoot, 'specs', capability, 'spec.md');
+  const baseline = existsSync(baselinePath) ? readFileSync(baselinePath, 'utf-8') : '';
+  try {
+    applyDeltaToBaselineDetailed(baseline, content, capability);
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
 export async function run(args) {
   if (args.length < 1) {
     console.error('Usage: ssf validate <change-dir>');
@@ -36,6 +56,7 @@ export async function run(args) {
 
   const config = loadConfig(process.cwd());
   const changeName = basename(changeDir);
+  const projectRoot = projectRootForStandardChange(changeDir);
   const validator = await getValidator();
 
   console.log(`🔍 Validating: ${changeDir}`);
@@ -69,6 +90,17 @@ export async function run(args) {
     const rel = relativeSpecPath(changeDir, specFile);
     printReport(rel, report);
     if (!report.valid) hasErrors = true;
+    if (report.valid) {
+      const preflightFailure = preflightDeltaBaseline(projectRoot, specFile, content);
+      if (preflightFailure) {
+        printReport(`${rel} (baseline preflight)`, {
+          valid: false,
+          issues: [{ level: 'ERROR', path: rel, message: preflightFailure }],
+          summary: { errors: 1, warnings: 0, info: 0 },
+        });
+        hasErrors = true;
+      }
+    }
   }
 
   // Basic structural validation for design.md and tasks.md (shared pattern)

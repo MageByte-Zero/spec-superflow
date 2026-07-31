@@ -35,7 +35,7 @@ Subagent (general-purpose):
 
     ## Output
 
-    Write a distinct non-empty review report to [REVIEW_REPORT_FILE], with the
+    Write a distinct non-empty review report to `[CHANGE_DIR]/.superpowers/sdd/reviews/[WAVE_ID]-rereview.md`, with the
     prior finding, scoped-diff evidence, verdict, and file:line references.
     Then provide exactly this receipt command to the controller:
 

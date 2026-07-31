@@ -7,10 +7,9 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execSync } from 'node:child_process';
 import { mkdtempSync, rmSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { dirname } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
@@ -55,5 +54,23 @@ describe('BUG/#15: ensure-branch enforces isolation', () => {
     const r = run(`"${repoDir}"`);
     assert.equal(r.ok, true, `ensure-branch should pass on feature branch, got: ${r.out}`);
     assert.match(r.out, /already isolated/i);
+  });
+
+  it('SHALL create a sibling worktree and carry only the active change artifacts from main', () => {
+    const changeDir = join(repoDir, 'changes', 'planned-change');
+    mkdirSync(changeDir, { recursive: true });
+    writeFileSync(join(changeDir, 'proposal.md'), 'Uncommitted planning artifact.');
+    git(repoDir, 'checkout', '-q', 'main');
+
+    const r = run(`"${changeDir}" planned-change`);
+    const worktree = join(dirname(repoDir), `${basename(repoDir)}-planned-change`);
+
+    try {
+      assert.equal(r.ok, true, r.out);
+      assert.equal(existsSync(join(worktree, 'changes', 'planned-change', 'proposal.md')), true);
+      assert.equal(existsSync(join(worktree, 'changes', 'planned-change', 'README.md')), false);
+    } finally {
+      if (existsSync(worktree)) git(repoDir, 'worktree', 'remove', '--force', worktree);
+    }
   });
 });

@@ -16,7 +16,7 @@ Two responsibilities: requesting review (dispatching a reviewer subagent) and re
 1. Get SHAs: `BASE_SHA=$(git rev-parse HEAD~1)` and `HEAD_SHA=$(git rev-parse HEAD)`
 2. Dispatch `general-purpose` subagent using template at `skills/code-reviewer/code-reviewer-prompt.md`
 3. Fill placeholders: `[DESCRIPTION]` (what was built), `[PLAN_OR_REQUIREMENTS]` (contract/spec reference), `[BASE_SHA]`, `[HEAD_SHA]`, `[WAVE_ID]`, and a distinct `[REVIEW_REPORT_FILE]`.
-4. Require the reviewer to write a non-empty persisted review report at `[REVIEW_REPORT_FILE]`, then record that exact path in the wave receipt: `ssf execution review <change-dir> --wave <id> --base <sha> --head <sha> --report <review-report-path> --verdict <pass|fail>`.
+4. Require the reviewer to write a non-empty persisted review report at `.superpowers/sdd/reviews/<wave-id>.md`, then record that exact in-overlay path in the wave receipt. The execution plan initializes this directory; paths outside it are rejected for audit safety.
 5. Act on feedback: Critical/Important findings require a `fail` receipt, focused repair, re-review, and replacement `pass` receipt before a dependent wave or closing can proceed. Note Minor for later, push back with reasoning if reviewer is wrong.
 
 ### Minimality And Scope

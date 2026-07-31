@@ -132,8 +132,9 @@ For Full/legacy Hotfix by default. Dispatch according to the persisted plan, rev
 4. After every wave, write a non-empty persisted regular-file review report (separate from the implementer's report), then record exactly one receipt that names that review report:
    ```bash
    ssf execution review <change-dir> \
-     --wave <wave-id> --base <sha> --head <sha> --report <review-report-path> --verdict <pass|fail>
+     --wave <wave-id> --base <sha> --head <sha> --report .superpowers/sdd/reviews/<wave-id>.md --verdict <pass|fail>
    ```
+   `ssf execution plan` creates this review overlay. Store report evidence in it; paths outside the overlay are rejected for audit safety.
    Do not begin a dependent wave until its predecessor receipt is `pass`.
 5. Critical/Important findings require a `fail` receipt, a focused repair, re-review, then a replacement `pass` receipt. Never advance or close with a missing or failed receipt.
 
@@ -157,7 +158,7 @@ history, and must not write, edit, or modify a repair-state file directly.
   sixth repair.
 - Every focused re-review still writes its separate persisted report and is
   recorded only through `ssf execution review <change-dir> --wave <id> --base
-  <sha> --head <sha> --report <review-report-path> --verdict <pass|fail>`.
+  <sha> --head <sha> --report .superpowers/sdd/reviews/<wave-id>-rereview.md --verdict <pass|fail>`.
   A replacement `pass` receipt is the only evidence that resolves the wave.
 
 ### Per-Task Loop

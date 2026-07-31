@@ -1,0 +1,46 @@
+# .spec-superflow.yaml — lightweight state machine
+# Derived data. Always rebuildable from artifacts. Lost/corrupt → fall back to content-level detection.
+
+# === Core state ===
+state: executing
+workflow: full
+revision: 1
+
+# === Hashes (fast staleness detection) ===
+artifacts_hash: sha256:8ac845ced825308a3face093a4aa3ee883755bdce1b2d586ea136102a6be12bc
+contract_hash: sha256:c9792965ddd8c3066a9f09949809b0d4495301ade2e4eeac8977fe8a8c4977eb
+
+# === Execution progress ===
+execution_mode: sdd
+execution_plan_hash: sha256:c60fb2e941c76d37c98dfcd724e7dba7b60417307685a922d176303b951e96ce
+execution_plan_revision: 1
+batches_completed: 0
+test_result: null
+spec_merged: false
+spec_publication_receipt: null
+
+# === Metadata ===
+change_name: fix-full-flow-friction
+last_transition: 2026-07-31T13:45:16.970Z
+last_transition_from: approved-for-build
+last_transition_to: executing
+
+# === Decision points ===
+dp_0_decisions: scope=修复隔离 worktree、审查回执初始化、Delta 基线预检与状态哈希同步；constraints=兼容现有 CLI 与多平台；artifact_language=zh-CN；workflow_path=full；recommended=full；communication=自动推进并报告门禁
+dp_0_result: confirmed
+dp_0_confirmed: true
+dp_0_timestamp: 2026-07-31T13:42:35Z
+dp_1_result: null
+dp_1_timestamp: null
+dp_2_result: approved: planning artifacts cover all four observed failures and remain concise
+dp_2_timestamp: 2026-07-31T13:45:00Z
+dp_3_result: approved: user approval covers the P0→P1 execution contract
+dp_3_timestamp: 2026-07-31T13:45:00Z
+dp_4_result: sdd: plan revision 1; user-confirmed; 用户批准 P0→P1 全链路修复；采用 CLI 对五项跨模块任务的推荐模式
+dp_4_timestamp: 2026-07-31T13:45:16.200Z
+dp_5_result: null
+dp_5_timestamp: null
+dp_6_result: null
+dp_6_timestamp: null
+dp_7_result: null
+dp_7_timestamp: null

@@ -400,6 +400,17 @@ describe('execution plan data contract', () => {
     );
   });
 
+  it('initializes the review overlay when an execution plan is written', () => {
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'first review must not need mkdir',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+
+    writePlan(changeDir, plan);
+
+    assert.equal(existsSync(join(changeDir, '.superpowers', 'sdd', 'reviews')), true);
+  });
+
   it('persists receipts independently for wave IDs with encoded-name collisions', () => {
     const plan = createPlan(changeDir, {
       mode: 'sdd', source: 'default', rationale: 'review receipt naming',

@@ -52,6 +52,7 @@ export function writePlan(changeDir, plan) {
 
   const paths = getOverlayPaths(changeDir);
   mkdirSync(paths.root, { recursive: true });
+  mkdirSync(paths.reviews, { recursive: true });
   atomicWrite(paths.executionPlan, `${JSON.stringify(plan, null, 2)}\n`);
   writeExecutionPlanSummary(changeDir, plan);
   return readPlan(changeDir);
@@ -125,6 +126,10 @@ export function recordReview(changeDir, waveId, receipt) {
     throw new Error("Review receipt status must be 'pass' or 'fail'");
   }
   for (const field of ['base', 'head']) requireText(receipt?.[field], `receipt.${field}`);
+  const paths = getOverlayPaths(changeDir);
+  const planPaths = getPlanScopedPaths(changeDir, plan);
+  mkdirSync(paths.reviews, { recursive: true });
+  mkdirSync(planPaths.reviews, { recursive: true });
   const reportEvidence = validateReviewReportEvidence(changeDir, receipt?.report);
   const { base, head } = validateReviewRange(changeDir, receipt.base, receipt.head);
   const currentReview = readCurrentReviewEvidence(changeDir, waveId, plan);
@@ -154,10 +159,6 @@ export function recordReview(changeDir, waveId, receipt) {
   // Keep the established root receipt as a compatibility mirror, while the
   // authoritative current-plan copy preserves history across plan revisions.
   // Both retain the same receipt shape, including report integrity evidence.
-  const paths = getOverlayPaths(changeDir);
-  const planPaths = getPlanScopedPaths(changeDir, plan);
-  mkdirSync(paths.reviews, { recursive: true });
-  mkdirSync(planPaths.reviews, { recursive: true });
   const serializedReceipt = `${JSON.stringify(savedReceipt, null, 2)}\n`;
   atomicWrite(join(paths.reviews, `${safeFileName(waveId)}.json`), serializedReceipt);
   atomicWrite(join(planPaths.reviews, `${safeFileName(waveId)}.json`), serializedReceipt);

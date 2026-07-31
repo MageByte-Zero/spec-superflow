@@ -28,6 +28,10 @@ function writeValidSpec(file) {
   writeFileSync(file, '## ADDED Requirements\n\n### Requirement: Canonical path\n\nThe system SHALL validate canonical specs.\n\n#### Scenario: Valid spec\n- **WHEN** validation runs\n- **THEN** the spec is checked');
 }
 
+function writeModifiedSpec(file, name = 'Existing requirement') {
+  writeFileSync(file, `## MODIFIED Requirements\n\n### Requirement: ${name}\n\nThe system SHALL validate the published baseline.\n\n#### Scenario: Existing baseline\n- **WHEN** validation runs\n- **THEN** the requirement is present`);
+}
+
 describe('validate commands: spec paths', () => {
   before(() => {
     tempRoot = mkdtempSync(join(tmpdir(), 'ssf-validate-paths-'));
@@ -93,6 +97,19 @@ describe('validate commands: spec paths', () => {
     const result = runNode([CLI, 'validate', dir]);
     assert.equal(result.exitCode, 0, result.stdout + result.stderr);
     assert.match(result.stdout, /specs\/ui-theme\/spec\.md/);
+  });
+
+  it('ssf validate rejects a MODIFIED delta whose standard-project baseline is missing', () => {
+    const repo = mkdtempSync(join(tempRoot, 'missing-baseline-repo-'));
+    const dir = join(repo, 'changes', 'missing-baseline');
+    mkdirSync(join(dir, 'specs', 'ui-theme'), { recursive: true });
+    writeBaseChange(dir);
+    writeModifiedSpec(join(dir, 'specs', 'ui-theme', 'spec.md'));
+
+    const result = runNode([CLI, 'validate', dir]);
+
+    assert.equal(result.exitCode, 1, result.stdout + result.stderr);
+    assert.match(result.stdout + result.stderr, /Cannot modify missing requirement 'Existing requirement'/);
   });
 
   it('ssf validate rejects nested spec.md even when a canonical spec is present', () => {

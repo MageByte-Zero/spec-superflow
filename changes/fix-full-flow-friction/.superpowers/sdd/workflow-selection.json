@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "available_modes": [
+    "full",
+    "hotfix",
+    "tweak",
+    "quick"
+  ],
+  "facts": {
+    "task_count": 4,
+    "file_count": 8,
+    "config_doc_only": "no",
+    "schema_api_change": "no",
+    "new_module": "no",
+    "behavioral_constraint_change": "yes",
+    "cross_module_change": "yes",
+    "uncertainty": "low",
+    "request_kind": "standard"
+  },
+  "missing_facts": [],
+  "status": "ready",
+  "recommendation": {
+    "mode": "full",
+    "reasons": [
+      "Risk signals require the user to choose Quick or Full."
+    ],
+    "risk_reasons": [
+      "behavioral constraint changed (PRD, spec, design, data, or permission)",
+      "cross-module change"
+    ]
+  },
+  "created_at": "2026-07-31T13:42:35.552Z",
+  "selection": {
+    "mode": "full",
+    "reason": "用户批准按 P0→P1 修复全流程可靠性与开销问题",
+    "followed_recommendation": true,
+    "acknowledged_non_recommendation": false,
+    "accepted_automatically": false,
+    "risk_override": false,
+    "verification_strategy": null,
+    "selected_at": "2026-07-31T13:42:35.666Z"
+  },
+  "hash": "sha256:d224fb114fe6401be95224ec3f59752cb5c209b56acc59448187e0cea936cbee"
+}

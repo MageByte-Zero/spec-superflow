@@ -114,6 +114,20 @@ describe('cmd-state: transition', () => {
     const result = ssf(`state transition ${tempDir} specifying`);
     assert.equal(result.exitCode, 0);
     assert.ok(result.stdout.includes('exploring -> specifying'));
+    assert.equal(ssf(`state check ${tempDir}`).exitCode, 0, 'a successful transition must refresh artifact hashes');
+  });
+
+  it('allows a Full change to enter specifying before planning artifacts exist and refreshes hashes', () => {
+    const emptyChange = mkdtempSync(join(tmpdir(), 'ssf-state-empty-specifying-'));
+    try {
+      assert.equal(ssf(`state init ${emptyChange}`).exitCode, 0);
+      assert.equal(ssf(`state set ${emptyChange} workflow full`).exitCode, 0);
+      const transition = ssf(`state transition ${emptyChange} specifying`);
+      assert.equal(transition.exitCode, 0, transition.stderr);
+      assert.equal(ssf(`state check ${emptyChange}`).exitCode, 0);
+    } finally {
+      rmSync(emptyChange, { recursive: true, force: true });
+    }
   });
 
   it('uses the caller project directory for a relative change path', () => {
