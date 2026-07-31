@@ -706,9 +706,10 @@ describe('guard: artifacts-exist check', () => {
     }
   }
 
-  it('fails when no artifacts exist', () => {
-    const result = runGuard('exploring', 'specifying');
-    // artifacts-exist should fail — no proposal, specs, etc.
+  it('fails when a transition that requires artifacts has none', () => {
+    const result = runGuard('specifying', 'bridging');
+    // Intake is artifact-free; bridging is the first full-workflow transition
+    // that must reject a change without proposal/spec artifacts.
     const artifactsCheck = result.output.checks.find(c => c.dimension === 'artifacts-exist');
     assert.ok(artifactsCheck);
     assert.equal(artifactsCheck.pass, false);

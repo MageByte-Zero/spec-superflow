@@ -1,7 +1,7 @@
 {
   "mode": "sdd",
-  "source": "user-confirmed",
-  "rationale": "用户批准 P0→P1 全链路修复；采用 CLI 对五项跨模块任务的推荐模式",
+  "source": "user-confirmed-revision",
+  "rationale": "完成任务记录补充全量验证证据；范围和实现不变，刷新当前执行计划哈希",
   "waves": [
     {
       "id": "wave-1",
@@ -11,15 +11,17 @@
         "1.2",
         "2.1",
         "2.2",
-        "2.3"
+        "2.3",
+        "3.1",
+        "3.2"
       ],
       "depends_on": []
     }
   ],
-  "artifacts_hash": "sha256:8ac845ced825308a3face093a4aa3ee883755bdce1b2d586ea136102a6be12bc",
-  "contract_hash": "sha256:c9792965ddd8c3066a9f09949809b0d4495301ade2e4eeac8977fe8a8c4977eb",
+  "artifacts_hash": "sha256:7693e010ec1f533dec4e3af108674c2785f2cb7ded9b089132a45842100834af",
+  "contract_hash": "sha256:9381f13b937436653782bc59950653367500be839b92ef9b87a217591fc2f04e",
   "workflow": "full",
-  "revision": 1,
+  "revision": 3,
   "recommendation": {
     "available_modes": [
       "inline",
@@ -29,13 +31,13 @@
     "recommendation": {
       "mode": "sdd",
       "reasons": [
-        "The 5 tasks exceed the configured inline threshold of 3."
+        "The 7 tasks exceed the configured inline threshold of 3."
       ]
     },
     "facts": {
       "workflow": "full",
-      "documented_task_count": 5,
-      "planned_task_count": 5,
+      "documented_task_count": 7,
+      "planned_task_count": 7,
       "planned_wave_count": 1,
       "has_parallel_wave": false,
       "inline_threshold": 3
@@ -51,13 +53,13 @@
       "recommendation": {
         "mode": "sdd",
         "reasons": [
-          "The 5 tasks exceed the configured inline threshold of 3."
+          "The 7 tasks exceed the configured inline threshold of 3."
         ]
       },
       "facts": {
         "workflow": "full",
-        "documented_task_count": 5,
-        "planned_task_count": 5,
+        "documented_task_count": 7,
+        "planned_task_count": 7,
         "planned_wave_count": 1,
         "has_parallel_wave": false,
         "inline_threshold": 3
@@ -72,22 +74,24 @@
           "1.2",
           "2.1",
           "2.2",
-          "2.3"
+          "2.3",
+          "3.1",
+          "3.2"
         ],
         "depends_on": []
       }
     ],
-    "artifacts_hash": "sha256:8ac845ced825308a3face093a4aa3ee883755bdce1b2d586ea136102a6be12bc",
-    "contract_hash": "sha256:c9792965ddd8c3066a9f09949809b0d4495301ade2e4eeac8977fe8a8c4977eb",
+    "artifacts_hash": "sha256:7693e010ec1f533dec4e3af108674c2785f2cb7ded9b089132a45842100834af",
+    "contract_hash": "sha256:9381f13b937436653782bc59950653367500be839b92ef9b87a217591fc2f04e",
     "workflow": "full",
-    "execution_plan_revision_at_recommendation": null,
-    "created_at": "2026-07-31T13:45:05.685Z",
-    "hash": "sha256:d36a655ce664e66523deb4652f39e63d905ce749bc85ca6162cfa4a44c05f29b"
+    "execution_plan_revision_at_recommendation": 2,
+    "created_at": "2026-07-31T15:24:36.256Z",
+    "hash": "sha256:64f1ce0bb9c6bc9049e7ca08742bd3b27797c2e75505045f2e02c489e2b07580"
   },
   "selection": {
     "confirmed": true,
     "followed_recommendation": true,
     "acknowledged_non_recommendation": false
   },
-  "hash": "sha256:c60fb2e941c76d37c98dfcd724e7dba7b60417307685a922d176303b951e96ce"
+  "hash": "sha256:e6c2ad664930f4769e76d2fa0319fb1cd5b556a65a46970f41ad7d0b53ff07cf"
 }

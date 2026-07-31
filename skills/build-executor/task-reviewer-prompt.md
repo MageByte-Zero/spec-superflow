@@ -156,7 +156,7 @@ Subagent (general-purpose):
     ## Output Format
 
     Write your full review to `[CHANGE_DIR]/.superpowers/sdd/reviews/[WAVE_ID].md`.
-    This distinct review report must be non-empty and persisted before the
+    This review report path must point to a non-empty, persisted review report before the
     controller records a receipt. After the verdict, provide the exact receipt
     command for the controller:
 
