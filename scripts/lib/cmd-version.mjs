@@ -28,21 +28,6 @@ const TEXT_FILES = [
   { file: 'llms.txt',               pattern: /(Current version: v)0\.\d+\.\d+(\.)/g,             replacement: '$10.%MINOR%.%PATCH%$2' },
   { file: '.claude/always/phase-guard.md', pattern: /(# spec-superflow v)0\.\d+\.\d+( \|)/g,      replacement: '$10.%MINOR%.%PATCH%$2' },
   { file: 'GEMINI.md',              pattern: /(# spec-superflow v)0\.\d+\.\d+( \|)/g,              replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'skills/workflow-start/SKILL.md', pattern: /(npx --yes --package spec-superflow@)0\.\d+\.\d+( ssf)/g, replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'skills/need-explorer/SKILL.md', pattern: /(npx --yes --package spec-superflow@)0\.\d+\.\d+( ssf)/g, replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'skills/spec-writer/SKILL.md', pattern: /(npx --yes --package spec-superflow@)0\.\d+\.\d+( ssf)/g, replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'skills/contract-builder/SKILL.md', pattern: /(npx --yes --package spec-superflow@)0\.\d+\.\d+( ssf)/g, replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'skills/build-executor/SKILL.md', pattern: /(npx --yes --package spec-superflow@)0\.\d+\.\d+( ssf)/g, replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'skills/build-executor/implementer-prompt.md', pattern: /(npx --yes --package spec-superflow@)0\.\d+\.\d+( ssf)/g, replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'skills/build-executor/task-reviewer-prompt.md', pattern: /(npx --yes --package spec-superflow@)0\.\d+\.\d+( ssf)/g, replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'skills/code-reviewer/SKILL.md', pattern: /(npx --yes --package spec-superflow@)0\.\d+\.\d+( ssf)/g, replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'skills/code-reviewer/code-reviewer-prompt.md', pattern: /(npx --yes --package spec-superflow@)0\.\d+\.\d+( ssf)/g, replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'skills/bug-investigator/SKILL.md', pattern: /(npx --yes --package spec-superflow@)0\.\d+\.\d+( ssf)/g, replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'skills/release-archivist/SKILL.md', pattern: /(npx --yes --package spec-superflow@)0\.\d+\.\d+( ssf)/g, replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'skills/spec-merger/SKILL.md', pattern: /(npx --yes --package spec-superflow@)0\.\d+\.\d+( ssf)/g, replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'commands/ssf/resume.md', pattern: /(npx --yes --package spec-superflow@)0\.\d+\.\d+( ssf)/g, replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'commands/ssf/switch.md', pattern: /(npx --yes --package spec-superflow@)0\.\d+\.\d+( ssf)/g, replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'commands/ssf/save.md', pattern: /(npx --yes --package spec-superflow@)0\.\d+\.\d+( ssf)/g, replacement: '$10.%MINOR%.%PATCH%$2' },
 ];
 
 function getNestedValue(obj, pathParts) {

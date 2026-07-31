@@ -1,0 +1,29 @@
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const workflow = readFileSync('.github/workflows/hol-plugin-scanner.yml', 'utf8');
+const runtimeDistributionTest = readFileSync('tests/lib/platform-runtime-distribution.test.mjs', 'utf8');
+const shellInjectionPattern = /`[^`]*\$\{[^}]+\}[^`]*`[\s\S]{0,30}\b(exec|spawn|execSync|spawnSync|os\.system|subprocess)\b/;
+
+describe('plugin scanner observability', () => {
+  it('publishes actionable findings without weakening the high-severity gate', () => {
+    assert.match(workflow, /fail_on_severity: high/);
+    assert.match(workflow, /format: json/);
+    assert.match(workflow, /output: plugin-scanner-report\.json/);
+    assert.match(workflow, /pr_comment: always/);
+    assert.match(workflow, /pr_comment_style: detailed/);
+    assert.match(workflow, /if: \$\{\{ always\(\) \}\}/);
+    assert.match(workflow, /actions\/upload-artifact@[0-9a-f]{40}/);
+    assert.match(workflow, /name: plugin-scanner-report/);
+    assert.match(workflow, /path: plugin-scanner-report\.json/);
+  });
+
+  it('does not execute generated skill content through a shell interpreter', () => {
+    assert.doesNotMatch(runtimeDistributionTest, /execFileSync\('sh', \['-c'/);
+  });
+
+  it('does not match the scanner shell-injection rule in runtime deployment tests', () => {
+    assert.doesNotMatch(runtimeDistributionTest, shellInjectionPattern);
+  });
+});

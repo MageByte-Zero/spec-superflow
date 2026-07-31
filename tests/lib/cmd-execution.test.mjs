@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { getPlanScopedPaths } from '../../scripts/lib/sdd-overlay.mjs';
 
 const CLI = join(process.cwd(), 'scripts/spec-superflow.mjs');
 let changeDir;
@@ -87,6 +88,11 @@ function writeReviewReport(name, content = 'Review completed without blocking fi
   return reportPath;
 }
 
+function currentReceiptPath(waveId) {
+  const plan = JSON.parse(readFileSync(join(changeDir, '.superpowers', 'sdd', 'execution-plan.json'), 'utf8'));
+  return join(getPlanScopedPaths(changeDir, plan).reviews, `${Buffer.from(waveId, 'utf8').toString('base64url')}.json`);
+}
+
 function initializeGitRepository(directory) {
   runGit(directory, ['init', '--quiet']);
   runGit(directory, ['config', 'user.email', 'tests@example.invalid']);
@@ -101,6 +107,14 @@ function initializeGitRepository(directory) {
   const head = runGit(directory, ['rev-parse', 'HEAD']);
   const divergent = runGit(directory, ['commit-tree', `${head}^{tree}`, '-m', 'independent execution change']);
   return { base, head, divergent };
+}
+
+function createRepairCommit(label) {
+  const marker = join(changeDir, `repair-${label}.txt`);
+  writeFileSync(marker, `${label}\n`);
+  runGit(changeDir, ['add', marker]);
+  runGit(changeDir, ['commit', '--quiet', '--message', `repair ${label}`]);
+  return runGit(changeDir, ['rev-parse', 'HEAD']);
 }
 
 beforeEach(() => {
@@ -238,6 +252,7 @@ describe('ssf execution', () => {
       retryable: false,
       receipt: null,
       blockers: [],
+      repair: { status: 'not-needed', failure_count: 0, previous_head: null, previous_report: null, failures: [] },
     }]);
   });
 
@@ -355,7 +370,7 @@ describe('ssf execution', () => {
       '--base', gitRefs.base, '--head', gitRefs.head, '--report', writeReviewReport('wave-1.md'), '--verdict', 'pass']);
     assert.equal(reviewed.exitCode, 0, reviewed.stderr);
 
-    const receiptPath = join(changeDir, '.superpowers', 'sdd', 'reviews', Buffer.from('wave-1', 'utf8').toString('base64url') + '.json');
+    const receiptPath = currentReceiptPath('wave-1');
     const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
     receipt.base = '0000000000000000000000000000000000000001';
     writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
@@ -375,7 +390,7 @@ describe('ssf execution', () => {
       '--base', gitRefs.base, '--head', gitRefs.head, '--report', writeReviewReport('wave-1.md'), '--verdict', 'pass']);
     assert.equal(reviewed.exitCode, 0, reviewed.stderr);
 
-    const receiptPath = join(changeDir, '.superpowers', 'sdd', 'reviews', Buffer.from('wave-1', 'utf8').toString('base64url') + '.json');
+    const receiptPath = currentReceiptPath('wave-1');
     const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
     receipt.base = gitRefs.head;
     receipt.head = gitRefs.divergent;
@@ -575,6 +590,8 @@ describe('ssf execution', () => {
     let shown = runSsf(['execution', 'show', changeDir, '--json']);
     assert.equal(shown.exitCode, 0, shown.stderr);
     assert.equal(shown.json.waves[0].receipt.status, 'fail');
+    assert.equal(shown.json.waves[0].repair.status, 'repairing');
+    assert.equal(shown.json.waves[0].repair.failure_count, 1);
     assert.equal(shown.json.waves[0].retryable, true);
     assert.equal(shown.json.waves[0].eligible, true);
     assert.equal(shown.json.waves[1].eligible, false);
@@ -587,9 +604,38 @@ describe('ssf execution', () => {
     shown = runSsf(['execution', 'show', changeDir, '--json']);
     assert.equal(shown.exitCode, 0, shown.stderr);
     assert.equal(shown.json.waves[0].receipt.status, 'pass');
+    assert.equal(shown.json.waves[0].repair.status, 'resolved');
     assert.equal(shown.json.waves[0].retryable, false);
     assert.equal(shown.json.waves[0].eligible, false);
     assert.equal(shown.json.waves[1].eligible, true);
+  });
+
+  it('shows a fifth unresolved repair as adjudication-required rather than dispatching another retry', () => {
+    const planned = runSsf(['execution', 'plan', changeDir, '--mode', 'sdd',
+      '--reason', 'five failed repairs require a controller decision',
+      '--wave', 'wave-1:serial:1.1',
+      '--wave', 'wave-2:serial:1.2:wave-1']);
+    assert.equal(planned.exitCode, 0, planned.stderr);
+
+    let base = gitRefs.base;
+    let head = gitRefs.head;
+    for (let failure = 1; failure <= 5; failure += 1) {
+      const failed = runSsf(['execution', 'review', changeDir, '--wave', 'wave-1',
+        '--base', base, '--head', head,
+        '--report', writeReviewReport(`adjudication-${failure}.md`), '--verdict', 'fail']);
+      assert.equal(failed.exitCode, 0, failed.stderr);
+      base = head;
+      head = createRepairCommit(`adjudication-${failure}`);
+    }
+
+    const shown = runSsf(['execution', 'show', changeDir, '--json']);
+    assert.equal(shown.exitCode, 0, shown.stderr);
+    assert.equal(shown.json.waves[0].repair.status, 'adjudication-required');
+    assert.equal(shown.json.waves[0].repair.failure_count, 5);
+    assert.equal(shown.json.waves[0].retryable, false);
+    assert.equal(shown.json.waves[0].eligible, false);
+    assert.equal(shown.json.waves[1].eligible, false);
+    assert.deepEqual(shown.json.waves[1].blockers, ['wave-1']);
   });
 
   it('keeps the Task 1 state revision aligned through plan, show, revise, and show', () => {

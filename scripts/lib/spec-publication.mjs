@@ -6,6 +6,7 @@ import { basename, dirname, join, relative, resolve } from 'node:path';
 import {
   extractRequirementsSection,
   parseDeltaSpec,
+  Validator,
 } from '../../dist/index.js';
 import { findCanonicalSpecFiles, relativeSpecPath, validateSpecPathLayout } from './spec-paths.mjs';
 
@@ -38,6 +39,101 @@ function targetPath(projectRoot, capability) {
 
 function requirementIndex(blocks, name) {
   return blocks.findIndex(block => block.name === name);
+}
+
+function normalizeNearRequirementName(name) {
+  return name.toLocaleLowerCase().replace(/[\s\p{P}\p{S}_]+/gu, '');
+}
+
+function assertNoNearRequirementMatch(blocks, name, operation) {
+  const normalized = normalizeNearRequirementName(name);
+  const nearMatch = blocks.find(block =>
+    block.name !== name && normalizeNearRequirementName(block.name) === normalized
+  );
+  if (nearMatch) {
+    throw new Error(
+      `Cannot ${operation} requirement '${name}' in published baseline: it is a near-match for existing requirement '${nearMatch.name}'. Use the exact published requirement name.`,
+    );
+  }
+}
+
+function sameRequirement(left, right) {
+  return left.raw.trimEnd() === right.raw.trimEnd();
+}
+
+function openingFence(line) {
+  const match = line.match(/^ {0,3}(`{3,}|~{3,})/);
+  return match ? { marker: match[1][0], length: match[1].length } : undefined;
+}
+
+function closesFence(line, fence) {
+  const match = line.match(/^ {0,3}(`+|~+)\s*$/);
+  return Boolean(match && match[1][0] === fence.marker && match[1].length >= fence.length);
+}
+
+/** Extract a top-level purpose without treating Markdown examples as structure. */
+function extractPurpose(content) {
+  const lines = content.replace(/\r\n?/g, '\n').split('\n');
+  let activeFence;
+  let start = -1;
+
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    if (activeFence) {
+      if (closesFence(line, activeFence)) activeFence = undefined;
+      continue;
+    }
+    const fence = openingFence(line);
+    if (fence) {
+      activeFence = fence;
+      continue;
+    }
+    if (/^##\s+Purpose\s*$/i.test(line)) {
+      start = index + 1;
+      break;
+    }
+  }
+
+  if (start === -1) return '';
+  activeFence = undefined;
+  const purpose = [];
+  for (let index = start; index < lines.length; index++) {
+    const line = lines[index];
+    if (activeFence) {
+      purpose.push(line);
+      if (closesFence(line, activeFence)) activeFence = undefined;
+      continue;
+    }
+    const fence = openingFence(line);
+    if (fence) {
+      activeFence = fence;
+      purpose.push(line);
+      continue;
+    }
+    if (/^##\s+/.test(line)) break;
+    purpose.push(line);
+  }
+  return purpose.join('\n').trim();
+}
+
+function defaultPurpose(capability) {
+  return `The ${capability} capability documents the published behavior for users and maintainers.`;
+}
+
+function withCanonicalPurpose(before, capability, deltaContent, warnings, isNewBaseline) {
+  if (!isNewBaseline || extractPurpose(before)) return before.trimEnd();
+  const purpose = extractPurpose(deltaContent) || defaultPurpose(capability);
+  if (!extractPurpose(deltaContent)) {
+    warnings.push(`No delta Purpose was supplied for '${capability}'; a deterministic default Purpose was used.`);
+  }
+  return `${before.trimEnd() || `# ${capability}`}\n\n## Purpose\n\n${purpose}`;
+}
+
+function validateDeltaOrThrow(deltaContent) {
+  const report = new Validator().validateDeltaSpec(deltaContent);
+  if (!report.valid) {
+    throw new Error(`Invalid delta spec: ${report.issues.map(issue => issue.message).join('; ')}`);
+  }
 }
 
 function renderCanonicalBaseline(parts, capability) {
@@ -81,16 +177,33 @@ function baselineParts(content, capability) {
   return { before, preamble: '', bodyBlocks: blocks, after: '' };
 }
 
-/** Apply one delta spec to a canonical baseline and return canonical Markdown. */
-export function applyDeltaToBaseline(baselineContent, deltaContent, capability) {
+/**
+ * Apply one delta spec and return a publication candidate plus an auditable
+ * description of which delta operations changed it. This is intentionally
+ * separate from the established string-returning public wrapper below.
+ */
+export function applyDeltaToBaselineDetailed(baselineContent, deltaContent, capability) {
+  validateDeltaOrThrow(deltaContent);
+  const isNewBaseline = !baselineContent.trim();
   const parts = baselineParts(baselineContent, capability);
   const blocks = [...parts.bodyBlocks];
   const plan = parseDeltaSpec(deltaContent);
+  const operations = [];
+  const warnings = [];
 
   for (const { from, to } of plan.renamed) {
     const fromIndex = requirementIndex(blocks, from);
-    if (fromIndex === -1) throw new Error(`Cannot rename missing requirement '${from}' in '${capability}'.`);
-    if (requirementIndex(blocks, to) !== -1) throw new Error(`Cannot rename '${from}' to existing requirement '${to}' in '${capability}'.`);
+    const toIndex = requirementIndex(blocks, to);
+    if (fromIndex === -1) {
+      assertNoNearRequirementMatch(blocks, from, 'rename');
+      if (toIndex !== -1) {
+        operations.push({ operation: 'RENAMED', status: 'skipped' });
+        continue;
+      }
+      throw new Error(`Cannot rename missing requirement '${from}' in '${capability}'.`);
+    }
+    assertNoNearRequirementMatch(blocks, to, 'rename to');
+    if (toIndex !== -1) throw new Error(`Cannot rename '${from}' to existing requirement '${to}' in '${capability}'.`);
     const original = blocks[fromIndex];
     blocks[fromIndex] = {
       ...original,
@@ -98,28 +211,61 @@ export function applyDeltaToBaseline(baselineContent, deltaContent, capability) 
       headerLine: `### Requirement: ${to}`,
       raw: `### Requirement: ${to}${original.raw.slice(original.headerLine.length)}`,
     };
+    operations.push({ operation: 'RENAMED', status: 'applied' });
   }
 
   for (const block of plan.modified) {
     const index = requirementIndex(blocks, block.name);
-    if (index === -1) throw new Error(`Cannot modify missing requirement '${block.name}' in '${capability}'.`);
-    blocks[index] = block;
+    if (index === -1) {
+      assertNoNearRequirementMatch(blocks, block.name, 'modify');
+      throw new Error(`Cannot modify missing requirement '${block.name}' in '${capability}'.`);
+    }
+    if (sameRequirement(blocks[index], block)) {
+      operations.push({ operation: 'MODIFIED', status: 'skipped' });
+    } else {
+      blocks[index] = block;
+      operations.push({ operation: 'MODIFIED', status: 'applied' });
+    }
   }
 
   for (const name of plan.removed) {
     const index = requirementIndex(blocks, name);
-    if (index === -1) throw new Error(`Cannot remove missing requirement '${name}' in '${capability}'.`);
-    blocks.splice(index, 1);
+    if (index === -1) {
+      assertNoNearRequirementMatch(blocks, name, 'remove');
+      operations.push({ operation: 'REMOVED', status: 'skipped' });
+    } else {
+      blocks.splice(index, 1);
+      operations.push({ operation: 'REMOVED', status: 'applied' });
+    }
   }
 
   for (const block of plan.added) {
-    if (requirementIndex(blocks, block.name) !== -1) {
+    const index = requirementIndex(blocks, block.name);
+    if (index !== -1 && sameRequirement(blocks[index], block)) {
+      operations.push({ operation: 'ADDED', status: 'skipped' });
+      continue;
+    }
+    assertNoNearRequirementMatch(blocks, block.name, 'add');
+    if (index !== -1) {
       throw new Error(`Cannot add existing requirement '${block.name}' in '${capability}'.`);
     }
     blocks.push(block);
+    operations.push({ operation: 'ADDED', status: 'applied' });
   }
 
-  return renderCanonicalBaseline({ ...parts, bodyBlocks: blocks }, capability);
+  const before = withCanonicalPurpose(parts.before, capability, deltaContent, warnings, isNewBaseline);
+  const content = renderCanonicalBaseline({ ...parts, before, bodyBlocks: blocks }, capability);
+  return {
+    content,
+    changed: content !== baselineContent,
+    operations,
+    warnings,
+  };
+}
+
+/** Apply one delta spec to a canonical baseline and return canonical Markdown. */
+export function applyDeltaToBaseline(baselineContent, deltaContent, capability) {
+  return applyDeltaToBaselineDetailed(baselineContent, deltaContent, capability).content;
 }
 
 export function resolvePublicationContext(changeDir) {

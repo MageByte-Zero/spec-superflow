@@ -43,6 +43,7 @@ export function createRecoverySummary(changeDir) {
   const execution = inspectExecution(changeDir, state.state);
   const blockers = terminal ? [] : buildBlockers(changeDir, handoffs, execution);
 
+  const nextAction = selectNextAction(changeDir, state, terminal, checkpoints[0], blockers);
   return {
     ok: blockers.length === 0,
     change: { name: basename(changeDir), path: resolve(changeDir) },
@@ -55,7 +56,8 @@ export function createRecoverySummary(changeDir) {
     handoffs,
     execution,
     blockers,
-    next_action: selectNextAction(changeDir, state, terminal, checkpoints[0], blockers),
+    next_action: nextAction,
+    continuation: selectContinuation(terminal, blockers, execution, nextAction),
   };
 }
 
@@ -167,6 +169,29 @@ function selectNextAction(changeDir, state, terminal, checkpoint, blockers) {
     command: null,
     reason: `Route from ${state.state}.${checkpointContext}`,
   };
+}
+
+function selectContinuation(terminal, blockers, execution, nextAction) {
+  if (terminal) {
+    return { kind: 'terminal', wave: null, reason: 'Change is terminal' };
+  }
+  if (blockers.length > 0) {
+    const blocker = blockers[0];
+    return {
+      kind: 'blocked',
+      wave: null,
+      reason: blocker.message,
+      ...(blocker.command ? { command: blocker.command } : {}),
+    };
+  }
+  if (execution.next_eligible_wave) {
+    return {
+      kind: 'automatic',
+      wave: execution.next_eligible_wave,
+      reason: 'Current execution plan has an eligible wave',
+    };
+  }
+  return { kind: 'automatic', wave: null, reason: nextAction.reason };
 }
 
 function hasText(value) {

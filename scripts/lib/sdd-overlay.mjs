@@ -2,8 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync,
 } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { computeArtifactsHash } from './hash.mjs';
+import { join } from 'node:path';
+import { computeArtifactsHash, normalizeTaskCheckboxes } from './hash.mjs';
 import { readState } from './state-loader.mjs';
 
 export const HANDOFF_TYPES = new Set(['prototype', 'research', 'experiment']);
@@ -26,19 +26,59 @@ export function getOverlayPaths(changeDir) {
   };
 }
 
+/**
+ * Resolves the mutable execution workspace for one persisted plan. Root-level
+ * plan/selection files intentionally stay in getOverlayPaths() so callers can
+ * find the current plan before resolving this scope.
+ */
+export function getPlanScopedPaths(changeDir, plan) {
+  const rootPaths = getOverlayPaths(changeDir);
+  const planIdentity = getPlanIdentity(plan);
+  const planRoot = join(rootPaths.root, 'plans', planIdentity);
+  return {
+    root: rootPaths.root,
+    planIdentity,
+    identity: planIdentity,
+    planRoot,
+    workspace: join(planRoot, 'workspace'),
+    checkpoints: join(planRoot, 'checkpoints'),
+    handoffs: join(planRoot, 'handoffs'),
+    reviews: join(planRoot, 'reviews'),
+    repairState: join(planRoot, 'repair-state'),
+  };
+}
+
+/**
+ * Reads the root control plan and delegates all mutable-path derivation to
+ * getPlanScopedPaths(). It returns null before execution planning exists so
+ * legacy checkpoint and handoff commands retain their established behavior.
+ */
+export function getCurrentPlanScopedPaths(changeDir) {
+  const planPath = getOverlayPaths(changeDir).executionPlan;
+  if (!existsSync(planPath)) return null;
+  let plan;
+  try {
+    plan = JSON.parse(readFileSync(planPath, 'utf8'));
+  } catch (error) {
+    throw new Error(`Unable to read execution plan for SDD workspace: ${error.message}`);
+  }
+  return { plan, ...getPlanScopedPaths(changeDir, plan) };
+}
+
 export function computeTaskHash(changeDir, taskId) {
   const tasks = readFileSync(join(changeDir, 'tasks.md'), 'utf8');
   const escaped = taskId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = tasks.match(new RegExp(`^- \\[([ xX])\\] ${escaped}\\s+.+$`, 'm'));
   if (!match) throw new Error(`Task '${taskId}' was not found in tasks.md`);
-  return `sha256:${createHash('sha256').update(match[0]).digest('hex')}`;
+  return `sha256:${createHash('sha256').update(normalizeTaskCheckboxes(match[0])).digest('hex')}`;
 }
 
 export function saveCheckpoint(changeDir, input) {
   requireText(input?.taskId, 'taskId');
   requireText(input?.next, 'next');
   const taskHash = computeTaskHash(changeDir, input.taskId);
-  const paths = getOverlayPaths(changeDir);
+  const currentScope = getCurrentPlanScopedPaths(changeDir);
+  const paths = currentScope ?? getOverlayPaths(changeDir);
   mkdirSync(paths.checkpoints, { recursive: true });
   const record = {
     task_id: input.taskId,
@@ -52,22 +92,29 @@ export function saveCheckpoint(changeDir, input) {
     commit_end: input.commitEnd ?? 'Not recorded',
     created_at: new Date().toISOString(),
   };
+  if (currentScope) {
+    record.plan_hash = currentScope.plan.hash;
+    record.plan_revision = currentScope.plan.revision;
+  }
   const targetPath = join(paths.checkpoints, `${safeName(input.taskId)}.md`);
   atomicWrite(targetPath, renderRecord(record, `# Checkpoint: ${input.taskId}`, checkpointBody(record)));
   return { ...record, stale: false };
 }
 
 export function listCheckpoints(changeDir) {
-  const directory = getOverlayPaths(changeDir).checkpoints;
+  const { directory, legacyPlan } = resolveRecordDirectory(changeDir, 'checkpoints');
   if (!existsSync(directory)) return [];
   return readdirSync(directory).filter(name => name.endsWith('.md')).sort()
-    .map(name => readCheckpoint(join(directory, name)));
+    .map(name => readCheckpoint(join(directory, name), changeDir))
+    .filter(checkpoint => !legacyPlan || hasMatchingPlan(checkpoint, legacyPlan));
 }
 
 export function getCheckpoint(changeDir, taskId) {
-  const filePath = join(getOverlayPaths(changeDir).checkpoints, `${safeName(taskId)}.md`);
+  const { directory, legacyPlan } = resolveRecordDirectory(changeDir, 'checkpoints');
+  const filePath = join(directory, `${safeName(taskId)}.md`);
   if (!existsSync(filePath)) return null;
-  return readCheckpoint(filePath);
+  const checkpoint = readCheckpoint(filePath, changeDir);
+  return legacyPlan && !hasMatchingPlan(checkpoint, legacyPlan) ? null : checkpoint;
 }
 
 export function createHandoff(changeDir, input) {
@@ -75,7 +122,8 @@ export function createHandoff(changeDir, input) {
   if (!HANDOFF_TYPES.has(input.type)) throw new Error(`Unsupported handoff type '${input.type}'`);
   requireText(input?.title, 'title');
   requireText(input?.question, 'question');
-  const paths = getOverlayPaths(changeDir);
+  const currentScope = getCurrentPlanScopedPaths(changeDir);
+  const paths = currentScope ?? getOverlayPaths(changeDir);
   const id = input.id || `${Date.now()}-${randomUUID().slice(0, 8)}`;
   const directory = join(paths.handoffs, safeName(id));
   mkdirSync(directory, { recursive: true });
@@ -93,6 +141,10 @@ export function createHandoff(changeDir, input) {
     status: 'active',
     created_at: new Date().toISOString(),
   };
+  if (currentScope) {
+    metadata.plan_hash = currentScope.plan.hash;
+    metadata.plan_revision = currentScope.plan.revision;
+  }
   atomicWrite(join(directory, 'HANDOFF.md'), renderRecord(
     metadata,
     `# Handoff: ${input.title}`,
@@ -103,11 +155,12 @@ export function createHandoff(changeDir, input) {
 }
 
 export function listHandoffs(changeDir) {
-  const directory = getOverlayPaths(changeDir).handoffs;
+  const { directory, legacyPlan } = resolveRecordDirectory(changeDir, 'handoffs');
   if (!existsSync(directory)) return [];
   return readdirSync(directory, { withFileTypes: true }).filter(entry => entry.isDirectory())
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map(entry => readHandoff(join(directory, entry.name)));
+    .map(entry => readHandoff(join(directory, entry.name)))
+    .filter(handoff => !legacyPlan || hasMatchingPlan(handoff, legacyPlan));
 }
 
 export function finishHandoff(changeDir, id) {
@@ -177,13 +230,13 @@ function renderResultTemplate() {
   return `${RESULT_HEADINGS.map(heading => `## ${heading}\n`).join('\n')}\n`;
 }
 
-function readCheckpoint(filePath) {
+function readCheckpoint(filePath, changeDir) {
   const { metadata } = parseRecord(readFileSync(filePath, 'utf8'));
   metadata.commit_start ??= 'Not recorded';
   metadata.commit_end ??= 'Not recorded';
   let currentHash;
   try {
-    currentHash = computeTaskHash(dirname(dirname(dirname(dirname(filePath)))), metadata.task_id);
+    currentHash = computeTaskHash(changeDir, metadata.task_id);
   } catch (error) {
     if (error instanceof Error && error.message === `Task '${metadata.task_id}' was not found in tasks.md`) {
       return { ...metadata, stale: true };
@@ -199,10 +252,47 @@ function readHandoff(directory) {
 }
 
 function getHandoff(changeDir, id) {
-  const directory = join(getOverlayPaths(changeDir).handoffs, safeName(id));
+  const { directory: handoffsDirectory, legacyPlan } = resolveRecordDirectory(changeDir, 'handoffs');
+  const directory = join(handoffsDirectory, safeName(id));
   if (!existsSync(join(directory, 'HANDOFF.md'))) return null;
   const { metadata } = parseRecord(readFileSync(join(directory, 'HANDOFF.md'), 'utf8'));
+  if (legacyPlan && !hasMatchingPlan(metadata, legacyPlan)) return null;
   return { ...metadata, directory, metadata };
+}
+
+function getPlanIdentity(plan) {
+  if (typeof plan?.hash !== 'string' || !/^sha256:[a-f0-9]{64}$/i.test(plan.hash)) {
+    throw new Error('Execution plan hash must be a sha256 digest');
+  }
+  if (!Number.isSafeInteger(plan?.revision) || plan.revision < 1) {
+    throw new Error('Execution plan revision must be a positive integer');
+  }
+  return `r${plan.revision}-${plan.hash.slice('sha256:'.length).toLowerCase()}`;
+}
+
+function resolveRecordDirectory(changeDir, field) {
+  let currentScope;
+  try {
+    currentScope = getCurrentPlanScopedPaths(changeDir);
+  } catch {
+    // Recovery surfaces report malformed execution plans themselves. Keep the
+    // established checkpoint/handoff reads available so that diagnostic can be
+    // surfaced instead of being masked by an overlay parsing exception.
+    return { directory: getOverlayPaths(changeDir)[field], legacyPlan: null };
+  }
+  if (!currentScope) return { directory: getOverlayPaths(changeDir)[field], legacyPlan: null };
+  // A plan scope is the cutover marker. Once it exists, never mix flat
+  // records into the current plan even if this particular subdirectory is
+  // empty or has been regenerated.
+  if (existsSync(currentScope.planRoot)) {
+    return { directory: currentScope[field], legacyPlan: null };
+  }
+  return { directory: getOverlayPaths(changeDir)[field], legacyPlan: currentScope.plan };
+}
+
+function hasMatchingPlan(record, plan) {
+  return record?.plan_hash === plan.hash
+    && String(record?.plan_revision) === String(plan.revision);
 }
 
 function renderRecord(metadata, title, body) {

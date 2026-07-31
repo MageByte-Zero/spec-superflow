@@ -179,16 +179,16 @@ async function copyValidatedCommands(commandAssets, targetCommands, pluginRootAb
     const targetPath = join(targetCommands, ...asset.relativePath.split('/'));
     ensureDir(dirname(targetPath));
     let content = asset.content;
-    // Rewrite npx invocations to call the deployed local runtime instead of a
-    // pinned npm package, so --local installs do not depend on npx fetching a
-    // fixed version at runtime.
+    // Rewrite either supported source command to the deployed local runtime,
+    // so --local installs neither fetch a pinned package nor depend on a
+    // caller's globally linked `ssf` executable.
     content = content.replace(
-      /npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf/g,
+      /(?:npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf|\bssf(?=\s+(?:resume|save|switch)\b))/g,
       nodeCmd,
     );
     // The command adapters no longer shell out to npx; allow node instead.
     content = content.replace(
-      /^allowed-tools:\s*Bash\(npx:\*\)\s*$/m,
+      /^allowed-tools:\s*Bash\((?:npx|ssf):\*\)\s*$/m,
       'allowed-tools: Bash(node:*)',
     );
     await writeFile(targetPath, content, 'utf-8');

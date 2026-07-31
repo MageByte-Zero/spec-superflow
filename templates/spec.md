@@ -1,5 +1,11 @@
 # 能力规格
 
+## Purpose（可选）
+
+仅当这个 delta 能说明新能力规格的目的时填写本段。此段可省略：旧模板和未包含
+Purpose 的历史 delta 仍然有效。同步仅在创建新的主规格时使用非空 Purpose；缺省时会
+生成确定性的默认 Purpose，且不会改写既有主规格的 Purpose。
+
 ## ADDED Requirements
 
 ### Requirement: 需求名称

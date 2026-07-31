@@ -3,7 +3,7 @@ import { readFileSync, readdirSync, writeFileSync, existsSync, statSync, mkdirSy
 import path, { join } from 'node:path';
 import { validateSpecPathLayout } from './spec-paths.mjs';
 import {
-  applyDeltaToBaseline,
+  applyDeltaToBaselineDetailed,
   createPublicationReceipt,
   encodePublicationReceipt,
   hashPublishedBaseline,
@@ -25,6 +25,56 @@ export function deriveCapabilityDir(changeSpecsDir, specFile) {
   return relative.replace(/\/spec\.md$/, '');
 }
 
+function isMissingPurposeIssue(issue, purposeErrorMessage) {
+  return issue.level === 'ERROR' && issue.path === 'overview' && issue.message === purposeErrorMessage;
+}
+
+function openingFence(line) {
+  const match = line.match(/^ {0,3}(`{3,}|~{3,})/);
+  return match ? { marker: match[1][0], length: match[1].length } : undefined;
+}
+
+function closesFence(line, fence) {
+  const match = line.match(/^ {0,3}(`+|~+)\s*$/);
+  return Boolean(match && match[1][0] === fence.marker && match[1].length >= fence.length);
+}
+
+function hasUnfencedPurposeHeading(content) {
+  let activeFence;
+  for (const line of content.replace(/\r\n?/g, '\n').split('\n')) {
+    if (activeFence) {
+      if (closesFence(line, activeFence)) activeFence = undefined;
+      continue;
+    }
+    const fence = openingFence(line);
+    if (fence) {
+      activeFence = fence;
+      continue;
+    }
+    if (/^##\s+.*\bPurpose\b.*$/i.test(line)) return true;
+  }
+  return false;
+}
+
+function candidateValidationIssues(candidateReport, baseline, capabilityDir, validator, purposeErrorMessage) {
+  if (!baseline.trim()) return candidateReport.issues;
+
+  const baselineHasMissingPurpose = validator
+    .validateSpecContent(capabilityDir, baseline)
+    .issues.some(issue => isMissingPurposeIssue(issue, purposeErrorMessage));
+  // The validator intentionally reports the same error for a missing heading
+  // and an empty Purpose section. Only pre-Purpose baselines with no real,
+  // top-level Purpose heading are legacy-compatible; an empty heading remains
+  // invalid and must stop publication before any baseline or receipt is written.
+  if (!baselineHasMissingPurpose || hasUnfencedPurposeHeading(baseline)) return candidateReport.issues;
+
+  // Published baselines from before Purpose was introduced remain readable and
+  // publishable. This narrowly preserves that history without weakening any
+  // other candidate validation rule or allowing a newly created baseline to
+  // omit Purpose.
+  return candidateReport.issues.filter(issue => !isMissingPurposeIssue(issue, purposeErrorMessage));
+}
+
 export async function run(args) {
   if (args.length < 1) {
     console.error('Usage: ssf sync <change-dir>');
@@ -39,7 +89,7 @@ export async function run(args) {
 
   const context = resolvePublicationContext(requestedChangeDir);
   const { changeDir, projectRoot, baselineSpecsDir } = context;
-  const { Validator } = await import('../../dist/index.js');
+  const { Validator, VALIDATION_MESSAGES } = await import('../../dist/index.js');
   const validator = new Validator();
 
   // Collect deltas from this project only. The active change path, not cwd,
@@ -102,11 +152,40 @@ export async function run(args) {
     if (!report.valid) {
       throw new Error(`Invalid delta spec specs/${capabilityDir}/spec.md: ${report.issues.map(issue => issue.message).join('; ')}`);
     }
-    const published = applyDeltaToBaseline(baseline, delta, capabilityDir);
-    return { capabilityDir, targetDir, targetFile, published, original: existsSync(targetFile) ? baseline : null };
+    const publication = applyDeltaToBaselineDetailed(baseline, delta, capabilityDir);
+    const candidateReport = validator.validateSpecContent(capabilityDir, publication.content);
+    const candidateIssues = candidateValidationIssues(
+      candidateReport,
+      baseline,
+      capabilityDir,
+      validator,
+      VALIDATION_MESSAGES.SPEC_PURPOSE_EMPTY,
+    );
+    if (candidateIssues.some(issue => issue.level === 'ERROR')) {
+      throw new Error(
+        `Invalid canonical spec specs/${capabilityDir}/spec.md: ${candidateIssues.map(issue => issue.message).join('; ')}`,
+      );
+    }
+    return {
+      capabilityDir,
+      targetDir,
+      targetFile,
+      published: publication.content,
+      changed: publication.changed,
+      operations: publication.operations,
+      warnings: publication.warnings,
+      original: existsSync(targetFile) ? baseline : null,
+    };
   });
-  publishAtomically(publications);
-  for (const { capabilityDir } of publications) console.log(`  📋 Published canonical baseline: specs/${capabilityDir}/spec.md`);
+  publishAtomically(publications.filter(publication => publication.changed));
+  for (const publication of publications) {
+    if (publication.changed) {
+      console.log(`  📋 Published canonical baseline: specs/${publication.capabilityDir}/spec.md`);
+    } else {
+      console.log(`  📋 Canonical baseline already synchronized: specs/${publication.capabilityDir}/spec.md`);
+    }
+    for (const warning of publication.warnings) console.log(`  ⚠️  ${warning}`);
+  }
 
   // A receipt belongs to the active change, never to the published baseline.
   // Older callers without a state file still get canonical publication but do

@@ -10,7 +10,7 @@ Before the final `executing → closing` transition, delta specs (ADDED/MODIFIED
 ## Execution-State Guard
 
 Before `ssf sync` or any other write, run
-`npx --yes --package spec-superflow@0.12.1 ssf state get <change-dir> state`.
+`ssf state get <change-dir> state`.
 Continue only when the persisted state is exactly `executing`. If it is
 `closing` → STOP: "Closing is terminal. Do not route this change to spec-merger;
 synchronization belongs before the final executing → closing transition." For
@@ -20,12 +20,14 @@ any other state, or if the state cannot be read → STOP and route through
 ## Pre-Flight Checks
 
 ### Conflict Detection
-Run `npx --yes --package spec-superflow@0.12.1 ssf sync <change-dir>`. If conflicts are detected (same requirement modified by multiple changes), present the conflict list to the user for resolution order.
+Run `ssf sync <change-dir>`. If conflicts are detected (same requirement modified by multiple changes), present the conflict list to the user for resolution order.
 
 ## Sync Process
 
 ### Step 1: Identify Deltas
 Each `specs/<capability>/spec.md` under the change folder contains delta operations under `## ADDED/MODIFIED/REMOVED/RENAMED Requirements`.
+
+`## Purpose` is an optional top-level delta extension. Use it only when creating a canonical main spec. When it is absent or empty, the sync result uses and reports a deterministic default Purpose so legacy delta specs remain usable. A delta Purpose must not overwrite an existing main spec Purpose.
 
 ### Step 2: Apply by Operation
 
@@ -44,7 +46,7 @@ Before executing, detect:
 - MODIFIED/REMOVED targeting nonexistent requirements → flag
 
 ### Step 4: Execute Merge
-Apply changes. Do NOT delete delta specs — they remain for traceability. The root baseline must contain `## Requirements`, never `## ADDED/MODIFIED/REMOVED/RENAMED Requirements` headers. Unsafe legacy delta-only baselines that cannot be interpreted are rejected instead of guessed.
+Validate every candidate main spec before writing any target. Apply only changed candidates. An operation that is already reflected in the baseline is an idempotent no-op and must report that it made no write. A missing operation target with a case- or whitespace-only near match is an error, not a no-op. Do NOT delete delta specs — they remain for traceability. The root baseline must contain `## Requirements`, never `## ADDED/MODIFIED/REMOVED/RENAMED Requirements` headers. Unsafe legacy delta-only baselines that cannot be interpreted are rejected instead of guessed.
 
 ### Step 5: Report
 Output sync report table: Capability, ADDED/MODIFIED/REMOVED/RENAMED counts, Status (✓/⚠). Summary with totals and unresolved conflicts.
@@ -54,7 +56,8 @@ Output sync report table: Capability, ADDED/MODIFIED/REMOVED/RENAMED counts, Sta
 - Do not delete delta spec files (historical record)
 - Do not auto-resolve conflicts across changes
 - Do not merge specs for unverified changes
-- Validate main spec consistency after each capability merge
+- Validate every candidate main spec before publication; on validation failure, write no target
+- Treat only semantically equivalent, already-applied operations as no-op; near-match requirement names must fail
 
 ## Post-Sync
 

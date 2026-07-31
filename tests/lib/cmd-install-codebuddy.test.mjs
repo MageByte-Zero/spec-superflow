@@ -48,7 +48,7 @@ describe('cmd-install-codebuddy', () => {
     for (const command of commands) {
       const commandFile = join(pluginRoot, 'commands', 'ssf', `${command}.md`);
       mkdirSync(join(commandFile, '..'), { recursive: true });
-      writeFileSync(commandFile, `---\n\ndescription: ${command} command\nargument-hint: "<change>"\nallowed-tools: Bash(npx:*)\n---\n\nRun \`npx --yes --package spec-superflow@0.12.1 ssf ${command} --json "$ARGUMENTS"\` and report.\n`);
+      writeFileSync(commandFile, `---\n\ndescription: ${command} command\nargument-hint: "<change>"\nallowed-tools: Bash(ssf:*)\n---\n\nRun \`ssf ${command} --json "$ARGUMENTS"\` and report.\n`);
     }
     writeFileSync(join(pluginRoot, 'package.json'), JSON.stringify({ version: '0.12.1' }));
     // A scripts/ dir so RUNTIME_DIRS copy has at least one file.
@@ -109,7 +109,7 @@ describe('cmd-install-codebuddy', () => {
       assert.match(content, new RegExp(`${name} --json`));
       // allowed-tools switched from npx to node
       assert.match(content, /allowed-tools: Bash\(node:\*\)/);
-      assert.doesNotMatch(content, /Bash\(npx:\*\)/);
+      assert.doesNotMatch(content, /Bash\((?:npx|ssf):\*\)/);
     }
   });
 

@@ -31,6 +31,12 @@ Defines:
 
 In a project using this plugin, `specs/` within an active `changes/<change>/` directory is the change's delta-spec source and the only spec input to that change's workflow state. The project-root `specs/` directory is a separately published baseline: `ssf sync` applies delta operations to it and records a publication receipt on the active change. Root baseline files never determine active transitions; closing verifies the receipt against both sides. The plugin repository itself ships only curated examples, not live change directories or generated baselines.
 
+#### Delta publication compatibility
+
+`## Purpose` is an optional top-level extension in a delta spec, not a newly required field. It is used only to create a new published main spec; an absent or empty value receives a deterministic default Purpose, while an existing main spec Purpose is preserved. Consequently, older templates and historical deltas without this section remain publishable.
+
+A no-op means an already synchronized, semantically equivalent delta operation: it produces a successful receipt but no baseline write. A missing operation target with a case- or whitespace-only near-match must fail rather than being treated as a no-op. `ssf sync` constructs and validates every candidate before it writes any baseline file, so an invalid candidate prevents partial publication.
+
 ### `design.md`
 
 Defines:

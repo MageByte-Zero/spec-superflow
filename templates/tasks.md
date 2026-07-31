@@ -1,47 +1,16 @@
 # 实现任务
 
-## 文件结构
+## 交付与证明
 
-- `Create: path/to/new-file.ts` — 一句话说明职责
-- `Modify: path/to/existing.ts` — 改什么、为什么
+| 批次 | 交付结果 | 依赖 | 证明 |
+|---|---|---|---|
+| 1 | 可观察的完成结果 | 无或前置批次 | 测试、构建或人工验证命令 |
 
-## 接口
+## 任务
 
-### Batch N → Batch M
-- **Produces**: `type/function name` — 被 Batch M 用于什么目的
+- [ ] **1.1 <动词开头的交付>**：修改 `path/to/file`，说明完成后什么行为不同；证明：`exact command`。
 
-## 1. Batch 1: [批次目标]
+## 实施备注（仅在必要时）
 
-- [ ] **1.1 编写失败的测试**
-
-```language
-// 带精确断言的测试代码
-```
-
-**Files**: `Create/Modify: exact/path`
-
-- [ ] **1.2 运行测试并确认失败**
-
-Run: `exact command`
-Expected: FAIL with "specific error message"
-
-- [ ] **1.3 实现最小化代码**
-
-```language
-// 实现代码
-```
-
-**Files**: `Create/Modify: exact/path`
-**Interfaces**: Produces `name(type): returnType` — 被 Batch N 消费
-
-- [ ] **1.4 运行测试并确认通过**
-
-Run: `exact command`
-Expected: PASS
-
-- [ ] **1.5 提交**
-
-```bash
-git add files
-git commit -m "feat: description"
-```
+- 记录跨批次接口、迁移风险或不可从任务名称推断的约束。测试的 RED/GREEN 证据、review
+  回执与精确调度细节属于 execution contract / task brief，不重复写在这里。

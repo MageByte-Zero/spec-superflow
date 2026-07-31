@@ -4,8 +4,7 @@
 # through the controller's context.
 #
 # Usage: task-brief PLAN_FILE TASK_NUMBER [OUTFILE]
-# Default OUTFILE: <repo-root>/.superpowers/sdd/task-<N>-brief.md
-# (per worktree; concurrent runs in the same working tree share it).
+# Default OUTFILE: <change>/.superpowers/sdd/plans/<plan-identity>/workspace/task-<N>-brief.md
 set -euo pipefail
 
 if [ $# -lt 2 ] || [ $# -gt 3 ]; then
@@ -20,9 +19,19 @@ n=$2
 if [ $# -eq 3 ]; then
   out=$3
 else
-  dir="$(cd "$(dirname "$0")" && pwd)/sdd-workspace"
+  script_dir="$(cd "$(dirname "$0")" && pwd)"
+  change_dir="$(cd "$(dirname "$plan")" && pwd)"
+  dir="$(node --input-type=module -e '
+    import { pathToFileURL } from "node:url";
+    const overlay = await import(pathToFileURL(process.argv[1]).href);
+    const scope = overlay.getCurrentPlanScopedPaths(process.argv[2]);
+    if (!scope) throw new Error("task-brief requires a persisted execution plan");
+    process.stdout.write(scope.workspace);
+  ' "$script_dir/lib/sdd-overlay.mjs" "$change_dir")"
   out="$dir/task-${n}-brief.md"
 fi
+
+mkdir -p "$(dirname "$out")"
 
 awk -v n="$n" '
   /^```/ { infence = !infence }

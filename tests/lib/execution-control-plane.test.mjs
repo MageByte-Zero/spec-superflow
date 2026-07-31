@@ -1,12 +1,42 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { createRecoverySummary } from '../../scripts/lib/change-recovery.mjs';
+import { saveCheckpoint } from '../../scripts/lib/sdd-overlay.mjs';
 
 const root = process.cwd();
 const read = path => readFileSync(join(root, path), 'utf8');
 
 describe('execution control plane instructions', () => {
+  it('recovers only a legacy checkpoint whose hash and revision prove it belongs to the current plan', () => {
+    const changeDir = mkdtempSync(join(tmpdir(), 'execution-control-plan-'));
+    const currentHash = `sha256:${'c'.repeat(64)}`;
+    try {
+      writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 Resume the current plan\n- [ ] 1.2 Ignore stale evidence\n');
+      writeFileSync(join(changeDir, '.spec-superflow.yaml'), 'state: executing\nworkflow: full\nrevision: 2\n');
+
+      saveCheckpoint(changeDir, { taskId: '1.1', next: 'Resume the proven plan checkpoint' });
+      saveCheckpoint(changeDir, { taskId: '1.2', next: 'Do not resume stale evidence' });
+      stampLegacyCheckpoint(changeDir, '1.1', currentHash, 2, '2000-01-01T00:00:00.000Z');
+      stampLegacyCheckpoint(changeDir, '1.2', `sha256:${'d'.repeat(64)}`, 1, '2999-01-01T00:00:00.000Z');
+
+      const root = join(changeDir, '.superpowers', 'sdd');
+      writeFileSync(join(root, 'execution-plan.json'), `${JSON.stringify({
+        hash: currentHash,
+        revision: 2,
+      })}\n`);
+
+      const summary = createRecoverySummary(changeDir);
+      assert.equal(summary.checkpoint?.status, 'current');
+      assert.equal(summary.checkpoint?.record.task_id, '1.1');
+      assert.equal(summary.checkpoint?.record.next, 'Resume the proven plan checkpoint');
+    } finally {
+      rmSync(changeDir, { recursive: true, force: true });
+    }
+  });
+
   it('limits planning and review receipts to Full and legacy Hotfix', () => {
     for (const path of [
       'skills/workflow-start/SKILL.md',
@@ -284,3 +314,10 @@ describe('execution control plane instructions', () => {
     assert.match(reviewerPrompt, /persisted.*review report/i);
   });
 });
+
+function stampLegacyCheckpoint(changeDir, taskId, planHash, planRevision, createdAt) {
+  const checkpointPath = join(changeDir, '.superpowers', 'sdd', 'checkpoints', `${taskId}.md`);
+  const record = readFileSync(checkpointPath, 'utf8');
+  writeFileSync(checkpointPath, record
+    .replace('---\n\n# Checkpoint:', `plan_hash: ${JSON.stringify(planHash)}\nplan_revision: ${JSON.stringify(planRevision)}\ncreated_at: ${JSON.stringify(createdAt)}\n---\n\n# Checkpoint:`));
+}

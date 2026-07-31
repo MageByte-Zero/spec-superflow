@@ -33,7 +33,7 @@ describe('change-recovery: resolveChangeTarget()', () => {
 
   function makeStaleCheckpoint(changeDir, taskId) {
     saveCheckpoint(changeDir, { taskId, next: 'Use this stale recovery note' });
-    writeFileSync(join(changeDir, 'tasks.md'), '- [x] 1.1 Recovery summary\n');
+    writeFileSync(join(changeDir, 'tasks.md'), '- [ ] 1.1 Recovery summary with changed scope\n');
   }
 
   function makeResultReadyHandoff(changeDir, id) {
