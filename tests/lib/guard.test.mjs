@@ -67,11 +67,10 @@ describe('guard: transition matrix', () => {
     }
   }
 
-  it('exploring→specifying requires artifacts-exist', () => {
+  it('exploring→specifying permits a confirmed intake before planning artifacts exist', () => {
     const result = runGuard('exploring', 'specifying');
     assert.equal(result.exitCode, 0, `Expected exit 0 but got ${result.exitCode}: ${JSON.stringify(result.output)}`);
-    const checks = result.output.checks;
-    assert.ok(checks.some(c => c.dimension === 'artifacts-exist'));
+    assert.deepEqual(result.output.checks, []);
   });
 
   it('specifying→bridging requires artifacts-exist + schema-valid', () => {

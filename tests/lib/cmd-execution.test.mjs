@@ -322,6 +322,7 @@ describe('ssf execution', () => {
     const reviewsDir = join(changeDir, '.superpowers', 'sdd', 'reviews');
 
     try {
+      rmSync(reviewsDir, { recursive: true, force: true });
       writeFileSync(join(outsideReviewsDir, 'wave-1.md'), 'Review completed without blocking findings.\n');
       symlinkSync(outsideReviewsDir, reviewsDir, 'dir');
 
