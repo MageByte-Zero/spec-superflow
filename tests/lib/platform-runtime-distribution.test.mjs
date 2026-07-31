@@ -240,7 +240,7 @@ describe('runtime version synchronization', () => {
       const lock = JSON.parse(readFileSync(lockPath, 'utf8'));
       lock.version = '9.9.9';
       lock.packages[''].version = '9.9.9';
-      writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`);
+      writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n');
       const result = spawnSync(process.execPath, [join(fixture, 'scripts', 'check-version-consistency.mjs')], {
         cwd: fixture,
         encoding: 'utf8',

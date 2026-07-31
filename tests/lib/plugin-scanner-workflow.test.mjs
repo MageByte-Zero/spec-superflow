@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const workflow = readFileSync('.github/workflows/hol-plugin-scanner.yml', 'utf8');
 const runtimeDistributionTest = readFileSync('tests/lib/platform-runtime-distribution.test.mjs', 'utf8');
+const shellInjectionPattern = /`[^`]*\$\{[^}]+\}[^`]*`[\s\S]{0,30}\b(exec|spawn|execSync|spawnSync|os\.system|subprocess)\b/;
 
 describe('plugin scanner observability', () => {
   it('publishes actionable findings without weakening the high-severity gate', () => {
@@ -20,5 +21,9 @@ describe('plugin scanner observability', () => {
 
   it('does not execute generated skill content through a shell interpreter', () => {
     assert.doesNotMatch(runtimeDistributionTest, /execFileSync\('sh', \['-c'/);
+  });
+
+  it('does not match the scanner shell-injection rule in runtime deployment tests', () => {
+    assert.doesNotMatch(runtimeDistributionTest, shellInjectionPattern);
   });
 });
