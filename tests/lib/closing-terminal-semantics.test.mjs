@@ -5,8 +5,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = process.cwd();
-const VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
-const RUNTIME_PREFIX = `npx --yes --package spec-superflow@${VERSION} ssf`;
+const RUNTIME_PREFIX = 'ssf';
 
 function read(relativePath) {
   return readFileSync(join(ROOT, relativePath), 'utf8');
