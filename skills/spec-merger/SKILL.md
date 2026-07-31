@@ -10,7 +10,7 @@ Before the final `executing → closing` transition, delta specs (ADDED/MODIFIED
 ## Execution-State Guard
 
 Before `ssf sync` or any other write, run
-`npx --yes --package spec-superflow@0.12.1 ssf state get <change-dir> state`.
+`node scripts/spec-superflow.mjs state get <change-dir> state`.
 Continue only when the persisted state is exactly `executing`. If it is
 `closing` → STOP: "Closing is terminal. Do not route this change to spec-merger;
 synchronization belongs before the final executing → closing transition." For
@@ -20,7 +20,7 @@ any other state, or if the state cannot be read → STOP and route through
 ## Pre-Flight Checks
 
 ### Conflict Detection
-Run `npx --yes --package spec-superflow@0.12.1 ssf sync <change-dir>`. If conflicts are detected (same requirement modified by multiple changes), present the conflict list to the user for resolution order.
+Run `node scripts/spec-superflow.mjs sync <change-dir>`. If conflicts are detected (same requirement modified by multiple changes), present the conflict list to the user for resolution order.
 
 ## Sync Process
 

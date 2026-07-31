@@ -93,7 +93,7 @@ Subagent (general-purpose):
     report path. End with the exact receipt command:
 
     ```bash
-    npx --yes --package spec-superflow@0.12.1 ssf execution review <change-dir> --wave [WAVE_ID] --base [BASE_SHA] --head [HEAD_SHA] --report [REVIEW_REPORT_FILE] --verdict <pass|fail>
+    node scripts/spec-superflow.mjs execution review <change-dir> --wave [WAVE_ID] --base [BASE_SHA] --head [HEAD_SHA] --report [REVIEW_REPORT_FILE] --verdict <pass|fail>
     ```
 
     Use `fail` when any Critical or Important finding remains. A repair needs

@@ -279,6 +279,19 @@ describe('execution plan data contract', () => {
     assert.ok(result.failures.includes('execution plan is stale: artifacts hash mismatch'));
   });
 
+  it('keeps a plan current when only legal task checkbox states change', () => {
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'freeze current artifacts',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+    writePlan(changeDir, plan);
+    writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [x] 1.1 First task\n- [X] 1.2 Second task\n');
+
+    const result = validatePlan(changeDir, readPlan(changeDir));
+
+    assert.equal(result.valid, true, result.failures.join('\n'));
+  });
+
   it('marks a plan stale after its frozen contract changes', () => {
     const plan = createPlan(changeDir, {
       mode: 'sdd', source: 'default', rationale: 'freeze current contract',

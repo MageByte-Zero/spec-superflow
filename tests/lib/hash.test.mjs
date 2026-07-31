@@ -70,6 +70,18 @@ describe('hash: computeArtifactsHash()', () => {
     assert.notEqual(h1, h2);
   });
 
+  it('ignores only legal task checkbox state changes', () => {
+    writeFileSync(join(tempDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 Keep task text\n- [X] 1.2 Keep second task\n');
+    const before = hashMod.computeArtifactsHash(tempDir);
+
+    writeFileSync(join(tempDir, 'tasks.md'), '# Tasks\n\n- [x] 1.1 Keep task text\n- [ ] 1.2 Keep second task\n');
+    const afterCheckboxOnly = hashMod.computeArtifactsHash(tempDir);
+    assert.equal(afterCheckboxOnly, before);
+
+    writeFileSync(join(tempDir, 'tasks.md'), '# Tasks\n\n- [x] 1.1 Changed task text\n- [ ] 1.2 Keep second task\n');
+    assert.notEqual(hashMod.computeArtifactsHash(tempDir), before);
+  });
+
   it('reads canonical specs in sorted order for determinism', () => {
     mkdirSync(join(tempDir, 'specs', 'z-auth'), { recursive: true });
     mkdirSync(join(tempDir, 'specs', 'a-ui'), { recursive: true });

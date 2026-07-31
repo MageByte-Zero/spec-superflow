@@ -11,9 +11,9 @@ import { PLATFORM_RUNTIME_INVENTORY, ZCODE_COMPATIBILITY_PATH } from '../../scri
 import { installPlatform } from '../../scripts/lib/install.mjs';
 
 const ROOT = process.cwd();
-const VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
-const PREFIX = `npx --yes --package spec-superflow@${VERSION} ssf`;
 const CLI = join(ROOT, 'scripts', 'spec-superflow.mjs');
+const SOURCE_RUNTIME_COMMAND = 'node scripts/spec-superflow.mjs';
+const FIXED_NPM_RUNTIME = /npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf/;
 const RUNTIME_SKILLS = [
   'workflow-start',
   'need-explorer',
@@ -40,13 +40,25 @@ describe('canonical skill runtime protocol', () => {
     }
   });
 
-  it('uses the exact package-version prefix for every runtime-dependent skill', () => {
+  it('uses the current working-tree CLI for every runtime-dependent source skill', () => {
     for (const name of RUNTIME_SKILLS) {
       const content = skill(name);
-      assert.match(content, new RegExp(PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
-        `${name} should use the canonical portable prefix`);
+      assert.match(content, new RegExp(SOURCE_RUNTIME_COMMAND.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+        `${name} should use the source runtime command`);
+      assert.doesNotMatch(content, FIXED_NPM_RUNTIME,
+        `${name} should not pin an npm runtime version`);
       assert.doesNotMatch(content, /\$\{CLAUDE_PLUGIN_ROOT\}|\$\{PLUGIN_ROOT\}/,
         `${name} should not require a host plugin-root variable`);
+    }
+  });
+
+  it('uses the current working-tree CLI for each recovery command source asset', () => {
+    for (const name of ['resume', 'switch', 'save']) {
+      const content = readFileSync(join(ROOT, 'commands', 'ssf', `${name}.md`), 'utf8');
+      assert.match(content, new RegExp(SOURCE_RUNTIME_COMMAND.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+        `${name} should use the source runtime command`);
+      assert.doesNotMatch(content, FIXED_NPM_RUNTIME,
+        `${name} should not pin an npm runtime version`);
     }
   });
 
@@ -101,7 +113,7 @@ describe('local runtime deployment', () => {
     }
   });
 
-  it('rewrites the canonical prefix to ZCODE\'s installed runtime tree', () => {
+  it('rewrites the source runtime command to ZCODE\'s installed runtime tree', () => {
     const target = mkdtempSync(join(tmpdir(), 'ssf-zcode-runtime-'));
     try {
       execFileSync(process.execPath, [CLI, 'install-zcode', '--local', ROOT], {
@@ -114,7 +126,7 @@ describe('local runtime deployment', () => {
       const localPrefix = `node '${join(realpathSync(pluginRoot), 'scripts', 'spec-superflow.mjs')}'`;
 
       assert.match(content, new RegExp(localPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-      assert.doesNotMatch(content, new RegExp(PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+      assert.doesNotMatch(content, new RegExp(SOURCE_RUNTIME_COMMAND.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     } finally {
       rmSync(target, { recursive: true, force: true });
     }
@@ -167,19 +179,19 @@ describe('platform runtime inventory', () => {
 });
 
 describe('runtime version synchronization', () => {
-  it('includes code-reviewer when a release version is dry-run', () => {
+  it('does not version source runtime commands during a release dry-run', () => {
     const output = execFileSync(process.execPath, [CLI, 'version', '0.9.2', '--dry-run'], {
       cwd: ROOT,
       encoding: 'utf8',
     });
 
-    assert.match(output, /skills\/code-reviewer\/SKILL\.md: version string updated/);
-    assert.match(output, /skills\/build-executor\/implementer-prompt\.md: version string updated/);
-    assert.match(output, /skills\/build-executor\/task-reviewer-prompt\.md: version string updated/);
-    assert.match(output, /skills\/code-reviewer\/code-reviewer-prompt\.md: version string updated/);
+    assert.doesNotMatch(output, /skills\/code-reviewer\/SKILL\.md: version string updated/);
+    assert.doesNotMatch(output, /skills\/build-executor\/implementer-prompt\.md: version string updated/);
+    assert.doesNotMatch(output, /skills\/build-executor\/task-reviewer-prompt\.md: version string updated/);
+    assert.doesNotMatch(output, /skills\/code-reviewer\/code-reviewer-prompt\.md: version string updated/);
   });
 
-  it('updates npm lock metadata and recovery command runtime pins', () => {
+  it('updates npm lock metadata without rewriting source recovery commands', () => {
     const target = mkdtempSync(join(tmpdir(), 'ssf-version-release-assets-'));
     try {
       mkdirSync(join(target, 'commands', 'ssf'), { recursive: true });
@@ -193,7 +205,7 @@ describe('runtime version synchronization', () => {
       for (const name of ['resume', 'switch', 'save']) {
         writeFileSync(
           join(target, 'commands', 'ssf', `${name}.md`),
-          `Run \`npx --yes --package spec-superflow@0.10.0 ssf ${name}\`.\n`,
+          `Run \`${SOURCE_RUNTIME_COMMAND} ${name}\`.\n`,
         );
       }
 
@@ -208,7 +220,7 @@ describe('runtime version synchronization', () => {
       for (const name of ['resume', 'switch', 'save']) {
         assert.match(
           readFileSync(join(target, 'commands', 'ssf', `${name}.md`), 'utf8'),
-          new RegExp(`spec-superflow@0\\.11\\.0 ssf ${name}`),
+          new RegExp(`${SOURCE_RUNTIME_COMMAND.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} ${name}`),
         );
       }
     } finally {
@@ -216,7 +228,7 @@ describe('runtime version synchronization', () => {
     }
   });
 
-  it('reports drift in npm lock metadata and recovery command runtime pins', () => {
+  it('reports npm lock metadata drift without requiring source runtime command pins', () => {
     const target = mkdtempSync(join(tmpdir(), 'ssf-version-consistency-'));
     const fixture = join(target, 'repo');
     try {
@@ -235,11 +247,6 @@ describe('runtime version synchronization', () => {
       lock.version = '9.9.9';
       lock.packages[''].version = '9.9.9';
       writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`);
-      for (const name of ['resume', 'switch', 'save']) {
-        const path = join(fixture, 'commands', 'ssf', `${name}.md`);
-        writeFileSync(path, readFileSync(path, 'utf8').replace(/spec-superflow@\d+\.\d+\.\d+/g, 'spec-superflow@9.9.9'));
-      }
-
       const result = spawnSync(process.execPath, [join(fixture, 'scripts', 'check-version-consistency.mjs')], {
         cwd: fixture,
         encoding: 'utf8',
@@ -249,9 +256,7 @@ describe('runtime version synchronization', () => {
       assert.equal(result.status, 1);
       assert.match(output, /package-lock\.json \[version\]/);
       assert.match(output, /package-lock\.json \[packages\.\.version\]/);
-      for (const name of ['resume', 'switch', 'save']) {
-        assert.match(output, new RegExp(`commands/ssf/${name}\\.md`));
-      }
+      assert.doesNotMatch(output, /commands\/ssf\/(?:resume|switch|save)\.md/);
     } finally {
       rmSync(target, { recursive: true, force: true });
     }

@@ -102,12 +102,11 @@ for (const file of RUNTIME_FILES) {
     errors.push({ file, found: 'FILE_NOT_FOUND', expected: CANONICAL });
     continue;
   }
-  const versions = [...readFileSync(fp, 'utf8').matchAll(/npx --yes --package spec-superflow@(\d+\.\d+\.\d+) ssf/g)]
-    .map(match => match[1]);
-  if (versions.length === 0) {
-    errors.push({ file, found: 'RUNTIME_PREFIX_NOT_FOUND', expected: CANONICAL });
-  } else if (versions.some(version => version !== CANONICAL)) {
-    errors.push({ file, found: [...new Set(versions)].join(', '), expected: CANONICAL });
+  const content = readFileSync(fp, 'utf8');
+  if (/npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf/.test(content)) {
+    errors.push({ file, found: 'FIXED_NPM_RUNTIME_FOUND', expected: 'node scripts/spec-superflow.mjs' });
+  } else if (!content.includes('node scripts/spec-superflow.mjs')) {
+    errors.push({ file, found: 'SOURCE_RUNTIME_COMMAND_NOT_FOUND', expected: 'node scripts/spec-superflow.mjs' });
   }
 }
 
