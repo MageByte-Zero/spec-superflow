@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { acceptWorkflowRecommendation, saveWorkflowRecommendation } from '../../scripts/lib/workflow-recommendation.mjs';
+import { getPlanScopedPaths } from '../../scripts/lib/sdd-overlay.mjs';
 
 let tempDir;
 let gitRefs;
@@ -654,7 +655,8 @@ describe('guard: execution control records', () => {
       {
         name: 'control-character path',
         replace: reportPath => {
-          const receiptPath = join(dir, '.superpowers', 'sdd', 'reviews', `${Buffer.from('wave-1').toString('base64url')}.json`);
+          const plan = JSON.parse(readFileSync(join(dir, '.superpowers', 'sdd', 'execution-plan.json'), 'utf8'));
+          const receiptPath = join(getPlanScopedPaths(dir, plan).reviews, `${Buffer.from('wave-1').toString('base64url')}.json`);
           const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
           receipt.report = `${reportPath}\nforged`;
           writeFileSync(receiptPath, `${JSON.stringify(receipt)}\n`);
