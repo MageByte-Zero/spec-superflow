@@ -1,39 +1,32 @@
-# Wave 1 最终聚焦审查报告
+# Wave 1 最终审查报告
 
 - wave：`wave-1`
-- 范围：`a0732a3..bd6d284`
-- verdict: pass
+- base：`bd6d284`
+- head：`2e47381`
+- verdict：`pass`
+
+## 范围
+
+复核默认 `npm test` 的受控并发、Node 20 入口测试、guard 夹具、审查报告位置/回执合同，以及 `fix-full-flow-friction` 的执行合同和 Delta 规格。
 
 ## 结论
 
-本次仅修正测试夹具，使其适配执行计划现在会预创建 review overlay 的既定行为。实现边界未被放宽。
+此前发现的 Important 已关闭：`changes/fix-full-flow-friction/specs/test-discipline/spec.md` 已由提交 `2e47381` 追踪，明确要求保留既有 E2E 与库测试集合并固定 `--test-concurrency=2`。`package.json` 与入口测试落实该要求；执行计划为当前 revision 3，旧 revision 的回执不会被当作当前回执。未发现 Critical、Important 或 Minor 问题。
 
-## 核对结果
+## 验证
 
-- `exploring -> specifying` 的新入口语义与合同一致：guard 不要求尚未生成的规划工件（`scripts/guard/guard.mjs:19-25`）；对应状态测试以空 Full change 验证转换和随后的哈希一致性（`tests/lib/cmd-state.test.mjs:120-129`）。
-- 新 symlink 测试先删除由 `execution plan` 创建的物理 `reviews/` 目录，再将该目录替换为指向外部目录的符号链接（`tests/lib/cmd-execution.test.mjs:317-334`）。它因此能够真正到达 `getPhysicalReviewsDirectory` 的目录级符号链接检查（`scripts/lib/execution-plan.mjs:387-408`），并验证该检查拒绝外部证据，而不是因夹具已存在而提前失败。
+- `node --test tests/lib/node20-test-entry.test.mjs`：1/1 通过。
+- `node --test tests/lib/execution-plan.test.mjs --test-name-pattern='review|receipt|overlay'`：27/27 通过。
+- `node --test tests/lib/guard.test.mjs`：37/37 通过。
+- `node scripts/spec-superflow.mjs validate changes/fix-full-flow-friction`：通过。
+- `node scripts/spec-superflow.mjs execution show changes/fix-full-flow-friction --json`：当前 revision 3 计划有效，wave-1 等待本次回执。
 
 ## 分级发现
 
-### Critical
-
-无。
-
-### Important
-
-无。
-
-### Minor
-
-无。
-
-## 测试证据
-
-- 通过：`node --test tests/lib/cmd-execution.test.mjs`。
-- 通过：`git diff --check a0732a3..bd6d284`。
-
-**Ready to merge?** Yes。
+- Critical：无。
+- Important：无。
+- Minor：无。
 
 ```bash
-ssf execution review changes/fix-full-flow-friction --wave wave-1 --base a0732a3 --head bd6d284 --report .superpowers/sdd/reviews/wave-1-final-review.md --verdict pass
+ssf execution review changes/fix-full-flow-friction --wave wave-1 --base bd6d284 --head 2e47381 --report .superpowers/sdd/reviews/wave-1-final-review.md --verdict pass
 ```

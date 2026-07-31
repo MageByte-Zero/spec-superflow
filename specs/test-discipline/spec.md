@@ -30,3 +30,12 @@ build-executor MUST 明确说明纯人工文案或说明性文档改动不要求
 - **WHEN** 一个任务只修改人工可读文档且不改变可执行行为
 - **THEN** 执行计划要求相应的文档验证
 - **AND** 不将缺少单元测试视为缺陷
+
+### Requirement: Controlled default test concurrency
+
+The default `npm test` command SHALL run the existing E2E and library test file set with Node file-level concurrency fixed at two, rather than inheriting an unbounded host-dependent default.
+
+#### Scenario: Run the default regression command
+
+- **WHEN** a maintainer or CI runs `npm test`
+- **THEN** the command executes `tests/e2e.test.mjs` and `tests/lib/*.test.mjs` with `--test-concurrency=2`

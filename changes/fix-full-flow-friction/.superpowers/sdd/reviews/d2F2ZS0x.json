@@ -1,10 +1,10 @@
 {
   "status": "pass",
-  "base": "08f67cf810c1ea2c50b77cbbe504a1ac4430d803",
-  "head": "5df08a5ea28a81f190d9242663c83f1f7af3ef0e",
-  "report": ".superpowers/sdd/reviews/wave-1-rereview.md",
-  "report_sha256": "sha256:f5ab4820492d9d9f1d59297153a494872f0eea02c5a36e688ba83950426a2e5c",
-  "plan_hash": "sha256:c60fb2e941c76d37c98dfcd724e7dba7b60417307685a922d176303b951e96ce",
-  "plan_revision": 1,
-  "recorded_at": "2026-07-31T14:03:56.532Z"
+  "base": "bd6d2848785538e1f4159bc7dbc724ba0ed0a615",
+  "head": "2e47381342371e9dbf1f56c1e175d88c7683d426",
+  "report": ".superpowers/sdd/reviews/wave-1-final-review.md",
+  "report_sha256": "sha256:4321285c563404c0da5cc90a44eb407d13eaed136cbc9b29b8ed9775c35cedb5",
+  "plan_hash": "sha256:e6c2ad664930f4769e76d2fa0319fb1cd5b556a65a46970f41ad7d0b53ff07cf",
+  "plan_revision": 3,
+  "recorded_at": "2026-07-31T15:28:59.246Z"
 }

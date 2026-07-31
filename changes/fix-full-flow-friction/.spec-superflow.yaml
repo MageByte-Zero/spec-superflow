@@ -2,7 +2,7 @@
 # Derived data. Always rebuildable from artifacts. Lost/corrupt → fall back to content-level detection.
 
 # === Core state ===
-state: executing
+state: closing
 workflow: full
 revision: 3
 
@@ -15,15 +15,15 @@ execution_mode: sdd
 execution_plan_hash: sha256:e6c2ad664930f4769e76d2fa0319fb1cd5b556a65a46970f41ad7d0b53ff07cf
 execution_plan_revision: 3
 batches_completed: 0
-test_result: null
-spec_merged: false
-spec_publication_receipt: null
+test_result: pass
+spec_merged: true
+spec_publication_receipt: eyJ2ZXJzaW9uIjoxLCJzb3VyY2VfaGFzaCI6InNoYTI1Njo1ZDI0NmUwNTYzYjViM2FkYWE0ODk1ODRiY2UzYTE4Y2QxOGYzZjM2MDZlODMwMDA5OGEzOGRmZWRhNDA2ZGMwIiwiYmFzZWxpbmVfYmVmb3JlX2hhc2giOiJzaGEyNTY6ODIxM2Q2NTMwZGUxNTQ0ZDJkNTBiNTA4OGJjMzg4YTNiZWMwMjUzYmUzOTU1MDYzNTQ4MjBmZTkxMTlkNTNiNCIsImJhc2VsaW5lX2FmdGVyX2hhc2giOiJzaGEyNTY6OTBkOTljNDhhZmI4ZDM5MGFmN2I0NTk1NzcyNDQ0MGY1NWVjN2JkNWJmZDM3MTFlMzQyMzFkYTRhMjlkMWRiNCIsImNhcGFiaWxpdGllcyI6WyJzZGQtZXhlY3V0aW9uLWNvbnRyb2wiLCJzcGVjLXB1YmxpY2F0aW9uIiwidGVzdC1kaXNjaXBsaW5lIiwid29ya2Zsb3ctcm91dGluZyIsIndvcmt0cmVlLWlzb2xhdGlvbiJdfQ
 
 # === Metadata ===
 change_name: fix-full-flow-friction
-last_transition: 2026-07-31T15:05:54.455Z
-last_transition_from: approved-for-build
-last_transition_to: executing
+last_transition: 2026-07-31T15:37:13.796Z
+last_transition_from: executing
+last_transition_to: closing
 
 # === Decision points ===
 dp_0_decisions: scope=修复隔离 worktree、审查回执初始化、Delta 基线预检、状态哈希同步与默认测试并发；constraints=兼容现有 CLI、多平台与 Node 20；artifact_language=zh-CN；workflow_path=full；recommended=full；communication=自动推进并报告门禁
@@ -40,7 +40,7 @@ dp_4_result: sdd: plan revision 3; user-confirmed-revision; 完成任务记录�
 dp_4_timestamp: 2026-07-31T15:24:36.454Z
 dp_5_result: null
 dp_5_timestamp: null
-dp_6_result: pass: npm test completed 630/630 with --test-concurrency=2 in 379 seconds
-dp_6_timestamp: 2026-07-31T15:24:00Z
-dp_7_result: null
-dp_7_timestamp: null
+dp_6_result: pass: post-sync npm test completed 630/630 with --test-concurrency=2 in 388 seconds
+dp_6_timestamp: 2026-07-31T15:35:00Z
+dp_7_result: confirmed: delta specs published, wave-1 review passed, and post-sync full regression passed
+dp_7_timestamp: 2026-07-31T15:35:00Z

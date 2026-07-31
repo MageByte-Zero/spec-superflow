@@ -59,3 +59,12 @@
 - **WHEN** execution plan 的每个 wave 都有当前 pass receipt
 - **THEN** 系统删除该计划作用域下可再生的工作文件
 - **AND** closing guard 仍可读取通过 receipt
+
+### Requirement: First review evidence initialization
+
+The system SHALL create the physical review evidence overlay before validating or recording a first wave review report.
+
+#### Scenario: First review receipt
+
+- **WHEN** a planned wave records its first review
+- **THEN** a report stored in the review overlay can be recorded without a manual directory creation step

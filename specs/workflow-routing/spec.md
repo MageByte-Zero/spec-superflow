@@ -1,6 +1,6 @@
 # 工作流路由能力规格
 
-## MODIFIED Requirements
+## Requirements
 
 ### Requirement: closing 是成功完成后的终态
 
@@ -53,3 +53,12 @@
 
 - **WHEN** CLI guard 或 state transition 收到任意以 `closing` 为起点的目标状态
 - **THEN** 系统 MUST 拒绝该转换，包括历史遗留的 `closing → specifying`，并且不得修改状态文件
+
+### Requirement: Specifying entry and state freshness
+
+The system SHALL allow a confirmed Full change to enter `specifying` before planning artifacts exist, and SHALL persist current artifact and contract hashes after every successful state transition.
+
+#### Scenario: Start specification after intake
+
+- **WHEN** DP-0 is confirmed for a Full change with no planning artifacts
+- **THEN** the transition to `specifying` succeeds and a subsequent state check is consistent
