@@ -23,6 +23,7 @@
 | Gemini CLI | `gemini extensions install` | `gemini extensions update` | `gemini extensions uninstall` |
 | OpenCode | plugin entry / skills 目录 | `git pull` | 删除 plugin/skills |
 | WorkBuddy | `ssf install-workbuddy` | 重新运行安装器 | 删除 marketplace 插件并禁用 |
+| CodeBuddy Code CLI | `ssf install-codebuddy` | 重新运行安装器 | `ssf uninstall-codebuddy` |
 | Trae IDE / TRAE Work | `.trae/skills` / 上传 zip 或 .skill / marketplace | `git pull` + 重新导入 | UI 卸载或删除技能目录 |
 | Cline | `ssf install-cline` | 重新运行脚本 | 删除 `.cline/skills/`、`.clinerules/` |
 | Kiro | `ssf install-kiro` | 重新运行脚本 | 删除 `.kiro/skills/`、`.kiro/steering/` |
@@ -394,6 +395,101 @@ cat ~/.workbuddy/plugins/marketplaces/cb_teams_marketplace/plugins/spec-superflo
 ```
 
 重启 WorkBuddy 后，在对话中输入「用 workflow-start 开始」即可启动工作流。
+
+---
+
+## CodeBuddy Code CLI
+
+CodeBuddy Code CLI 直接从 `~/.codebuddy/skills/` 读取 skill，从 `~/.codebuddy/rules/*.md` 自动加载规则（支持 frontmatter 控制是否总是应用），SessionStart hook 从 `~/.codebuddy/settings.json` 的 `hooks` 字段加载（**不是** `~/.codebuddy/hooks/hooks.json`——CodeBuddy 用户级 `hooks.json` 不会被自动加载）。与 WorkBuddy 的 marketplace 插件模型不同，CodeBuddy CLI 把 skill 直接放进共享 `skills/` 目录，与其他 skill 共存；运行时依赖（scripts/docs/templates/dist/hooks）放在独立的 `~/.codebuddy/spec-superflow/` 目录下作为 `${CLAUDE_PLUGIN_ROOT}`。安装器还会把三个 recovery command adapter 重写为调用已部署的本地 runtime（而非固定版本的 `npx` 包），并把 `phase-guard.md` 设为 `alwaysApply: false` 以避免影响普通项目。
+
+### 安装（推荐：一键脚本）
+
+```bash
+npx spec-superflow@latest install-codebuddy
+```
+
+本地仓库调试：
+
+```bash
+node /absolute/path/to/spec-superflow/scripts/spec-superflow.mjs install-codebuddy --local /absolute/path/to/spec-superflow
+```
+
+`--dry-run` 预览部署计划：
+
+```bash
+ssf install-codebuddy --dry-run
+```
+
+指定 CodeBuddy 配置目录（默认 `~/.codebuddy`）：
+
+```bash
+ssf install-codebuddy --config-dir /path/to/.codebuddy
+```
+
+### 部署结构
+
+```text
+~/.codebuddy/
+├── spec-superflow/              ← pluginRoot（运行时依赖；${CLAUDE_PLUGIN_ROOT} 目标）
+│   ├── scripts/  docs/  templates/  dist/  hooks/
+│   │   └── session-start        ← 输出 hookSpecificOutput（CodeBuddy 分支）
+│   └── package.json
+├── skills/                      ← 部署的 skill（路径已重写；其他 skill 保留）
+│   ├── workflow-start/
+│   └── ... (9 skills)
+├── commands/ssf/                ← canonical recovery command adapters（共享目录，可含用户自建 command）
+│   ├── resume.md                ← 已重写：node <plugin>/scripts/spec-superflow.mjs（非 npx）
+│   ├── save.md                  ← allowed-tools: Bash(node:*)
+│   └── switch.md
+├── rules/
+│   └── phase-guard.md           ← alwaysApply:false（其他 rules 不受影响；普通项目不强制走 workflow）
+└── settings.json                ← SessionStart hook 合并到此处（保留其他字段）
+```
+
+安装器只会清理源仓库中存在的同名 skill 目录——其他 skill 会被保留。`settings.json` 采用合并策略：只替换引用 spec-superflow 的 `SessionStart` 条目，保留其他事件 hook、`permissions`、`enabledPlugins` 等字段。
+
+### 升级
+
+重新运行安装命令即可覆盖运行时依赖、刷新 skill、重写 recovery command adapter、合并 `settings.json` 的 SessionStart hook：
+
+```bash
+npx spec-superflow@latest install-codebuddy
+```
+
+### 卸载
+
+推荐使用专用卸载命令——它会从 `settings.json` 精确移除 spec-superflow 的 `SessionStart` 条目（保留其他 hook 与所有设置字段），并删除运行时目录、commands、phase-guard 规则与 9 个 skill 目录：
+
+```bash
+ssf uninstall-codebuddy
+```
+
+`--dry-run` 预览卸载计划：
+
+```bash
+ssf uninstall-codebuddy --dry-run
+```
+
+指定 CodeBuddy 配置目录（默认 `~/.codebuddy`）：
+
+```bash
+ssf uninstall-codebuddy --config-dir /path/to/.codebuddy
+```
+
+> 卸载不会删除其他 skill、其他 rules、其他 hook 条目，也不会删除 `settings.json` 本身——只移除 spec-superflow 自己注入的内容。卸载后需重启 CodeBuddy Code CLI（或通过 `/hooks` 菜单审查）以刷新 hook 快照。
+
+### 验证
+
+```bash
+ls ~/.codebuddy/skills/                                       # 应包含 9 个 spec-superflow skill
+ls ~/.codebuddy/spec-superflow/hooks/session-start            # hook 脚本存在
+cat ~/.codebuddy/settings.json | grep -A4 SessionStart        # SessionStart 指向 spec-superflow/hooks/session-start
+grep allowed-tools ~/.codebuddy/commands/ssf/resume.md        # 应为 Bash(node:*)（非 npx）
+head -2 ~/.codebuddy/rules/phase-guard.md                    # frontmatter 应含 alwaysApply: false
+cat ~/.codebuddy/spec-superflow/package.json | grep version   # 期望版本，如 0.12.1
+```
+
+重启 CodeBuddy Code CLI 后，在对话中输入「用 workflow-start 开始」即可启动工作流。
 
 ---
 
