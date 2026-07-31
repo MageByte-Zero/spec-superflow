@@ -31,6 +31,14 @@ function insideRepository(repoRoot, candidate) {
   return relativePath !== '' && relativePath !== '..' && !relativePath.startsWith(`..${sep}`);
 }
 
+function isSafePathSegment(value) {
+  return typeof value === 'string'
+    && value.length > 0
+    && value !== '.'
+    && value !== '..'
+    && !/[\\/\u0000-\u001f]/.test(value);
+}
+
 // Determine current branch (literal arg array).
 let branch = '';
 try {
@@ -63,6 +71,10 @@ if (!insideRepository(repoRoot, sourceChangeDir)) {
 const changeRelativePath = relative(repoRoot, sourceChangeDir);
 const repoName = basename(repoRoot) || 'repo';
 const name = changeName || repoName;
+if (!isSafePathSegment(name)) {
+  console.error('ensure-branch: change name must be a single safe path segment.');
+  process.exit(1);
+}
 const worktreePath = join(dirname(repoRoot), `${repoName}-${name}`);
 
 function copyActiveChange(worktreeRoot) {

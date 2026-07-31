@@ -73,4 +73,15 @@ describe('BUG/#15: ensure-branch enforces isolation', () => {
       if (existsSync(worktree)) git(repoDir, 'worktree', 'remove', '--force', worktree);
     }
   });
+
+  it('SHALL reject a change name that is not one safe path segment', () => {
+    const changeDir = join(repoDir, 'changes', 'safe-change');
+    mkdirSync(changeDir, { recursive: true });
+    git(repoDir, 'checkout', '-q', 'main');
+
+    const r = run(`"${changeDir}" ../../outside`);
+
+    assert.equal(r.ok, false, r.out);
+    assert.match(r.out, /single safe path segment/i);
+  });
 });
