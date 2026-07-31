@@ -116,7 +116,7 @@ function checkRuntimeDistribution(root) {
     return { pass: false, message: 'runtime distribution cannot be checked: package.json or skills/ is missing; reinstall spec-superflow' };
   }
 
-  const sourceRuntimeCommand = 'node scripts/spec-superflow.mjs';
+  const sourceRuntimeCommand = 'ssf';
   const issues = [];
   for (const name of readdirSync(skillsDir)) {
     if (!RUNTIME_SKILLS.has(name)) continue;
@@ -127,7 +127,7 @@ function checkRuntimeDistribution(root) {
       issues.push(`${name}: plugin-root placeholder remains`);
       continue;
     }
-    if (content.includes(sourceRuntimeCommand)) continue;
+    if (new RegExp(`\\b${sourceRuntimeCommand}\\s+(?:audit|checkpoint|config|execution|handoff|inject|isolate|resume|runtime|save|state|switch|sync|validate|workflow)\\b`).test(content)) continue;
     const localPaths = localRuntimePaths(content);
     if (localPaths.length > 0) {
       if (localPaths.every(existsSync)) continue;

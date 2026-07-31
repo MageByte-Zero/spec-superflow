@@ -12,7 +12,7 @@ import { installPlatform } from '../../scripts/lib/install.mjs';
 
 const ROOT = process.cwd();
 const CLI = join(ROOT, 'scripts', 'spec-superflow.mjs');
-const SOURCE_RUNTIME_COMMAND = 'node scripts/spec-superflow.mjs';
+const SOURCE_RUNTIME_COMMAND = 'ssf';
 const FIXED_NPM_RUNTIME = /npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf/;
 const RUNTIME_SKILLS = [
   'workflow-start',
@@ -40,10 +40,10 @@ describe('canonical skill runtime protocol', () => {
     }
   });
 
-  it('uses the current working-tree CLI for every runtime-dependent source skill', () => {
+  it('uses the unversioned local CLI for every runtime-dependent source skill', () => {
     for (const name of RUNTIME_SKILLS) {
       const content = skill(name);
-      assert.match(content, new RegExp(SOURCE_RUNTIME_COMMAND.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+      assert.match(content, new RegExp(`\\b${SOURCE_RUNTIME_COMMAND}\\s+`),
         `${name} should use the source runtime command`);
       assert.doesNotMatch(content, FIXED_NPM_RUNTIME,
         `${name} should not pin an npm runtime version`);
@@ -52,10 +52,10 @@ describe('canonical skill runtime protocol', () => {
     }
   });
 
-  it('uses the current working-tree CLI for each recovery command source asset', () => {
+  it('uses the unversioned local CLI for each recovery command source asset', () => {
     for (const name of ['resume', 'switch', 'save']) {
       const content = readFileSync(join(ROOT, 'commands', 'ssf', `${name}.md`), 'utf8');
-      assert.match(content, new RegExp(SOURCE_RUNTIME_COMMAND.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+      assert.match(content, new RegExp(`\\b${SOURCE_RUNTIME_COMMAND}\\s+`),
         `${name} should use the source runtime command`);
       assert.doesNotMatch(content, FIXED_NPM_RUNTIME,
         `${name} should not pin an npm runtime version`);
@@ -69,20 +69,9 @@ describe('canonical skill runtime protocol', () => {
     assert.match(content, /runtime asset read skills\/build-executor\/task-reviewer-prompt\.md/);
   });
 
-  it('does not leave bare ssf commands in runtime instructions or reviewer templates', () => {
-    const files = [
-      ...RUNTIME_SKILLS.map(name => join(ROOT, 'skills', name, 'SKILL.md')),
-      join(ROOT, 'skills', 'build-executor', 'implementer-prompt.md'),
-      join(ROOT, 'skills', 'build-executor', 'task-reviewer-prompt.md'),
-      join(ROOT, 'skills', 'code-reviewer', 'code-reviewer-prompt.md'),
-    ];
-
-    for (const file of files) {
-      const content = readFileSync(file, 'utf8');
-      assert.doesNotMatch(content, /`ssf\s+(?:handoff|checkpoint|execution|state|runtime|validate|doctor|config|version)\b/,
-        `${file} contains a bare ssf command`);
-      assert.doesNotMatch(content, /^\s*ssf\s+(?:handoff|checkpoint|execution|state|runtime|validate|doctor|config|version)\b/m,
-        `${file} contains an unprefixed ssf command line`);
+  it('keeps the source command unversioned so npm link resolves the live checkout', () => {
+    for (const name of RUNTIME_SKILLS) {
+      assert.match(skill(name), /\bssf\s+(?:audit|checkpoint|config|execution|handoff|inject|isolate|runtime|state|sync|workflow)\b/);
     }
   });
 });
@@ -126,7 +115,7 @@ describe('local runtime deployment', () => {
       const localPrefix = `node '${join(realpathSync(pluginRoot), 'scripts', 'spec-superflow.mjs')}'`;
 
       assert.match(content, new RegExp(localPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-      assert.doesNotMatch(content, new RegExp(SOURCE_RUNTIME_COMMAND.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+      assert.doesNotMatch(content, new RegExp(`\\b${SOURCE_RUNTIME_COMMAND}\\s+`));
     } finally {
       rmSync(target, { recursive: true, force: true });
     }
