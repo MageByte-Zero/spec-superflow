@@ -40,7 +40,7 @@ dp_4_result: sdd: plan revision 1; user-confirmed; 用户批准 P0→P1 全链�
 dp_4_timestamp: 2026-07-31T13:45:16.200Z
 dp_5_result: null
 dp_5_timestamp: null
-dp_6_result: null
-dp_6_timestamp: null
+dp_6_result: fail: npm test concurrent runner stalled for over four minutes in synchronous child-process tests; targeted regressions pass
+dp_6_timestamp: 2026-07-31T14:08:00Z
 dp_7_result: null
 dp_7_timestamp: null
