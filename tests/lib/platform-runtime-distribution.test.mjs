@@ -130,10 +130,15 @@ describe('local runtime deployment', () => {
       });
 
       const content = readFileSync(join(target, '.zcode', 'skills', 'workflow-start', 'SKILL.md'), 'utf8');
-      const command = content.match(/node '[^']+' runtime asset read docs\/state-machine\.md/);
+      const command = content.match(/node '([^']+)' runtime asset read docs\/state-machine\.md/);
       assert.ok(command, 'workflow-start should contain a shell-literal local runtime command');
 
-      const output = execFileSync('sh', ['-c', command[0]], { cwd: target, encoding: 'utf8' });
+      const runtimeScript = command[1];
+      assert.equal(runtimeScript, join(realpathSync(join(target, '.zcode', 'spec-superflow')), 'scripts', 'spec-superflow.mjs'));
+      const output = execFileSync(process.execPath, [runtimeScript, 'runtime', 'asset', 'read', 'docs/state-machine.md'], {
+        cwd: target,
+        encoding: 'utf8',
+      });
       assert.match(output, /State Machine/);
     } finally {
       rmSync(target, { recursive: true, force: true });

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const workflow = readFileSync('.github/workflows/hol-plugin-scanner.yml', 'utf8');
+const runtimeDistributionTest = readFileSync('tests/lib/platform-runtime-distribution.test.mjs', 'utf8');
 
 describe('plugin scanner observability', () => {
   it('publishes actionable findings without weakening the high-severity gate', () => {
@@ -15,5 +16,9 @@ describe('plugin scanner observability', () => {
     assert.match(workflow, /actions\/upload-artifact@[0-9a-f]{40}/);
     assert.match(workflow, /name: plugin-scanner-report/);
     assert.match(workflow, /path: plugin-scanner-report\.json/);
+  });
+
+  it('does not execute generated skill content through a shell interpreter', () => {
+    assert.doesNotMatch(runtimeDistributionTest, /execFileSync\('sh', \['-c'/);
   });
 });
