@@ -156,7 +156,7 @@ async function copyValidatedCommands(commandAssets, targetCommands, pluginRootAb
     const content = asset.content.replace(
       /(?:npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf|node scripts\/spec-superflow\.mjs|\bssf(?=\s+(?:audit|checkpoint|config|execution|handoff|inject|isolate|resume|runtime|save|state|switch|sync|validate|workflow)\b))/g,
       `node ${shellQuote(join(pluginRootAbs, 'scripts', 'spec-superflow.mjs'))}`,
-    );
+    ).replace(/allowed-tools:\s*Bash\(ssf:\*\)/g, 'allowed-tools: Bash(node:*)');
     await writeFile(targetPath, content, 'utf-8');
   }
   return commandAssets.length;

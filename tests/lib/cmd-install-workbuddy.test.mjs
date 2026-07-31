@@ -130,6 +130,28 @@ describe('cmd-install-workbuddy', () => {
     assert.equal(existsSync(homeDir), false);
   });
 
+  it('rewrites recovery command authorization together with its runtime command', async () => {
+    const pluginRoot = makePluginRoot();
+    const homeDir = join(tempDir, 'authorization-home');
+    const resume = join(pluginRoot, 'commands', 'ssf', 'resume.md');
+    writeFileSync(resume, [
+      '---',
+      'description: resume',
+      'allowed-tools: Bash(ssf:*)',
+      '---',
+      '',
+      'Run `ssf resume --json`.',
+      '',
+    ].join('\n'));
+
+    await installWorkBuddy({ pluginRoot, homeDir, marketplaceName: 'test' });
+
+    const installed = readFileSync(join(homeDir, '.workbuddy', 'plugins', 'marketplaces', 'test', 'plugins', 'spec-superflow', 'commands', 'ssf', 'resume.md'), 'utf8');
+    assert.match(installed, /allowed-tools: Bash\(node:\*\)/);
+    assert.match(installed, /node ['"]?.*scripts\/spec-superflow\.mjs['"]? resume --json/);
+    assert.doesNotMatch(installed, /\bssf resume --json/);
+  });
+
   it('rejects symbolic links in the canonical command tree before writing WorkBuddy home', async () => {
     const pluginRoot = makePluginRoot();
     const homeDir = join(tempDir, 'symlink-home');
@@ -272,10 +294,10 @@ describe('cmd-install-workbuddy', () => {
     assert.ok(existsSync(join(result.targetRules, 'phase-guard.md')));
     assert.ok(existsSync(join(result.manifestDir, 'plugin.json')));
     for (const name of ['resume', 'save', 'switch']) {
-      assert.equal(
-        readFileSync(join(result.targetCommands, 'ssf', `${name}.md`), 'utf-8'),
-        readFileSync(join(pluginRoot, 'commands', 'ssf', `${name}.md`), 'utf-8'),
-      );
+      const installed = readFileSync(join(result.targetCommands, 'ssf', `${name}.md`), 'utf-8');
+      assert.match(installed, /allowed-tools: Bash\(node:\*\)/);
+      assert.match(installed, /node .*scripts\/spec-superflow\.mjs/);
+      assert.doesNotMatch(installed, /\bssf (?:resume|save|switch)\b/);
     }
 
     const settings = JSON.parse(readFileSync(join(settingsDir, 'settings.json'), 'utf-8'));
