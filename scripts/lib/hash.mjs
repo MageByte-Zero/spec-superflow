@@ -33,11 +33,18 @@ export function computeArtifactsHash(changeDir) {
   // tasks.md
   const tasks = path.join(changeDir, 'tasks.md');
   if (fs.existsSync(tasks)) {
-    hash.update(fs.readFileSync(tasks, 'utf-8'));
+    hash.update(normalizeTaskCheckboxes(fs.readFileSync(tasks, 'utf-8')));
     hasContent = true;
   }
 
   return hasContent ? `sha256:${hash.digest('hex')}` : null;
+}
+
+// Task completion is execution progress, not planning scope. Normalize only
+// complete Markdown task lines; headings, prose, malformed lines, and task
+// text continue to participate in stale-plan detection unchanged.
+export function normalizeTaskCheckboxes(content) {
+  return content.replace(/^(- \[)[xX](\] .+)$/gm, '$1 $2');
 }
 
 // Compute SHA256 hash of execution-contract.md alone.

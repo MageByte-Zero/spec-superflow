@@ -16,13 +16,13 @@ Check workflow mode and receipt first. Tweak → direct edit mode. Quick or a va
 Branch/worktree preflight before ANY implementation edit (mandatory — do not skip):
 1. Run the isolation check:
    ```bash
-   npx --yes --package spec-superflow@0.12.1 ssf isolate <change-dir>
+   ssf isolate <change-dir>
    ```
    This script enforces git isolation: if you are on `main`/`master` it creates a
    git worktree (preferred) or a new branch, and exits non-zero if it cannot and you
    have not approved `--force`.
-2. If `npx --yes --package spec-superflow@0.12.1 ssf isolate` exits non-zero: STOP. Do not edit `main`/`master` in place.
-   Ask the user for explicit approval (and re-run with `npx --yes --package spec-superflow@0.12.1 ssf isolate <change-dir> --force`
+2. If `ssf isolate` exits non-zero: STOP. Do not edit `main`/`master` in place.
+   Ask the user for explicit approval (and re-run with `ssf isolate <change-dir> --force`
    only after they approve).
 3. If it succeeds, report the chosen branch/worktree and make all implementation
    edits there.
@@ -77,20 +77,28 @@ This protocol is a host controller responsibility. The skill does not create aut
   the automatic next gate. It must not imply that the skill itself will run in
   the background after the host has ended the turn.
 
+## Planning-document boundary
+
+Treat proposal, design, and tasks as reader-facing decision records. Do not add
+per-test RED/GREEN ritual, receipt paths, or dispatch scripts to them during
+implementation; keep that evidence in the execution contract, task brief, and
+review report. For a Full change, confirm that the one DP-2 blind-reader result
+is recorded before treating the contract as the implementation authority.
+
 ## Execution Mode Selection
 
 For Full or legacy Hotfix, generate proposed waves from the approved contract, then use the recommendation as a decision aid rather than silently defaulting a mode:
 
 ```bash
-npx --yes --package spec-superflow@0.12.1 ssf execution recommend <change-dir> \
+ssf execution recommend <change-dir> \
   --wave <wave-id>:<parallel|serial>:<task,...>[:<depends-on,...>] --json
 # Show every available mode, the observed facts, and the recommendation to the user.
 # The command writes a receipt tied to the artifacts, contract, and waves. After the user chooses, record that explicit confirmation:
-npx --yes --package spec-superflow@0.12.1 ssf execution plan <change-dir> \
+ssf execution plan <change-dir> \
   --mode <selected-mode> --confirm --reason "user-selected execution mode" \
   --wave <wave-id>:<parallel|serial>:<task,...>[:<depends-on,...>]
 # Add --acknowledge-recommendation when the selection differs from the recommendation.
-npx --yes --package spec-superflow@0.12.1 ssf execution show <change-dir> --json
+ssf execution show <change-dir> --json
 ```
 
 The optional fourth `--wave` segment names prerequisite wave IDs. `execution show --json` reports `current`, plus each wave's `depends_on`, `receipt`, `blockers`, `retryable`, and `eligible` status. A wave with `retryable: true` has a current `fail` receipt and is eligible only for its focused repair and re-review; its dependents remain blocked until its replacement `pass` receipt. Report the saved plan revision, selected mode, ordered waves, dependencies, and whether every `parallel` wave can actually be dispatched concurrently on the current platform. If concurrency is unavailable, state the capability and reason plainly; retain the planned `parallel` strategy and do not silently execute it as a serial or Batch Inline plan.
@@ -103,7 +111,7 @@ The recommendation uses task count, configured `execution.inlineThreshold`, and 
 | **Inline** | Recommended for a single sequential task; always available for a user-confirmed choice |
 | **Batch Inline** | Recommended for a bounded sequential batch; it remains serial and is never presented as parallel |
 
-Do not transition to `executing` until `execution show` reports `current: true` and the phase guard passes. A revised plan must repeat `npx --yes --package spec-superflow@0.12.1 ssf execution recommend` and use `npx --yes --package spec-superflow@0.12.1 ssf execution revise --confirm`; it creates a new revision and invalidates receipts from the prior revision.
+Do not transition to `executing` until `execution show` reports `current: true` and the phase guard passes. A revised plan must repeat `ssf execution recommend` and use `ssf execution revise --confirm`; it creates a new revision and invalidates receipts from the prior revision.
 
 ## Batch Inline Execution
 
@@ -118,12 +126,12 @@ Boundaries: if any task touches >1 module, involves schema/API/config changes, o
 For Full/legacy Hotfix by default. Dispatch according to the persisted plan, review each planned wave, and run a final broad review after all waves.
 
 ### Planned-Wave Loop
-1. Read the current plan with `npx --yes --package spec-superflow@0.12.1 ssf execution show <change-dir> --json`; only waves shown with `current: true` and `eligible: true` may start. A `retryable: true` wave may only be repaired and re-reviewed; do not dispatch its dependents until its replacement receipt is `pass`. The CLI encodes dependencies in `--wave <id>:<strategy>:<tasks>[:<depends-on,...>]` and rejects a review receipt for a wave whose prerequisites lack current `pass` receipts.
+1. Read the current plan with `ssf execution show <change-dir> --json`; only waves shown with `current: true` and `eligible: true` may start. A `retryable: true` wave may only be repaired and re-reviewed; do not dispatch its dependents until its replacement receipt is `pass`. The CLI encodes dependencies in `--wave <id>:<strategy>:<tasks>[:<depends-on,...>]` and rejects a review receipt for a wave whose prerequisites lack current `pass` receipts.
 2. A `parallel` wave may dispatch independent tasks simultaneously only when the platform supports concurrent dispatch. If it does not, disclose the unavailable capability and execute the same wave one task at a time without changing its stored strategy.
 3. A `serial` wave dispatches one task at a time in listed order.
 4. After every wave, write a non-empty persisted regular-file review report (separate from the implementer's report), then record exactly one receipt that names that review report:
    ```bash
-   npx --yes --package spec-superflow@0.12.1 ssf execution review <change-dir> \
+   ssf execution review <change-dir> \
      --wave <wave-id> --base <sha> --head <sha> --report <review-report-path> --verdict <pass|fail>
    ```
    Do not begin a dependent wave until its predecessor receipt is `pass`.
@@ -153,9 +161,9 @@ history, and must not write, edit, or modify a repair-state file directly.
   A replacement `pass` receipt is the only evidence that resolves the wave.
 
 ### Per-Task Loop
-1. **Dispatch implementer**: Load the template with `npx --yes --package spec-superflow@0.12.1 ssf runtime asset read skills/build-executor/implementer-prompt.md`. Extract task brief with `scripts/task-brief PLAN_FILE N`. Include: where task fits, brief path, interfaces from prior tasks, report file path.
+1. **Dispatch implementer**: Load the template with `ssf runtime asset read skills/build-executor/implementer-prompt.md`. Extract task brief with `scripts/task-brief PLAN_FILE N`. Include: where task fits, brief path, interfaces from prior tasks, report file path.
 2. **Handle response**: DONE → generate review package + dispatch reviewer. DONE_WITH_CONCERNS → assess. NEEDS_CONTEXT → provide context. BLOCKED → re-dispatch with better model or escalate.
-3. **Review**: Load `npx --yes --package spec-superflow@0.12.1 ssf runtime asset read skills/build-executor/task-reviewer-prompt.md`. Reviewer returns spec compliance + code quality verdicts with the wave ID, git range, report path, and `pass`/`fail` receipt command.
+3. **Review**: Load `ssf runtime asset read skills/build-executor/task-reviewer-prompt.md`. Reviewer returns spec compliance + code quality verdicts with the wave ID, git range, report path, and `pass`/`fail` receipt command.
 4. **Fix**: If Critical or Important issues, write the `fail` receipt, read the
    CLI repair state, then dispatch only the focused repair and re-review path
    permitted by the repair protocol above. Write the replacement `pass` receipt
@@ -166,7 +174,7 @@ history, and must not write, edit, or modify a repair-state file directly.
 Use the configured profile that matches the task role. Resolve it before dispatch:
 
 ```bash
-npx --yes --package spec-superflow@0.12.1 ssf runtime config --resolve-model <profile>
+ssf runtime config --resolve-model <profile>
 ```
 
 | Profile | Role |
@@ -179,11 +187,11 @@ npx --yes --package spec-superflow@0.12.1 ssf runtime config --resolve-model <pr
 For platforms whose dispatch supports a `model` field, explicitly pass the resolved `model` value. If the result is `configured: false`, automatic selection is unavailable: do not invent a provider model and do not bypass the existing requirement to specify `model` explicitly. Resolution only reads configuration; it does not switch models.
 
 ### Progress Ledger
-Track in `.superpowers/sdd/progress.md`. Check for existing ledger — completed tasks are done. After each batch: `npx --yes --package spec-superflow@0.12.1 ssf state set <change-dir> batches_completed <N>`.
+Track in `.superpowers/sdd/progress.md`. Check for existing ledger — completed tasks are done. After each batch: `ssf state set <change-dir> batches_completed <N>`.
 
 ## Inline Execution Mode
 
-Only after a user-confirmed `inline` selection is recorded by `npx --yes --package spec-superflow@0.12.1 ssf execution plan --confirm`; a non-recommended selection also records `--acknowledge-recommendation`. Executes in the current session and still writes one review receipt per planned wave.
+Only after a user-confirmed `inline` selection is recorded by `ssf execution plan --confirm`; a non-recommended selection also records `--acknowledge-recommendation`. Executes in the current session and still writes one review receipt per planned wave.
 
 Per-task: extract brief → write failing test → confirm failure → implement → confirm green → checkpoint review (done-when criteria, SHALL/MUST verification) → commit → save a task-level recovery checkpoint when another task remains → append to progress ledger.
 
@@ -191,7 +199,7 @@ After a task is committed and reviewed, when another task remains, save the
 recovery context with real evidence:
 
 ```bash
-npx --yes --package spec-superflow@0.12.1 ssf checkpoint save <change-dir> \
+ssf checkpoint save <change-dir> \
   --task <completed-task-id> --next "<next task>" --completed "<completed work>" \
   --verification "<verification report path>" --review "<review report path>" \
   --risk "<open risk or None>" --commit-start <base-sha> --commit-end <head-sha>
@@ -199,7 +207,7 @@ npx --yes --package spec-superflow@0.12.1 ssf checkpoint save <change-dir> \
 
 This augments `.superpowers/sdd/progress.md`; it does not replace the progress
 ledger or add a new core workflow state. Do not claim a checkpoint is current
-when `npx --yes --package spec-superflow@0.12.1 ssf checkpoint list` reports it as stale.
+when `ssf checkpoint list` reports it as stale.
 
 If task hits BLOCKED (3+ fix failures or changes outside declared scope), escalate to SDD.
 
@@ -213,8 +221,8 @@ Quick direct execution requires the valid receipt, a bounded diff, the receipt's
 
 ## DP Records
 
-DP-4 is written by `npx --yes --package spec-superflow@0.12.1 ssf execution plan`; do not write it with raw `state set`.
-DP-5 (debug escalation): `npx --yes --package spec-superflow@0.12.1 ssf state set <change-dir> dp_5_result "<resolution>"` + timestamp.
+DP-4 is written by `ssf execution plan`; do not write it with raw `state set`.
+DP-5 (debug escalation): `ssf state set <change-dir> dp_5_result "<resolution>"` + timestamp.
 
 ## Completion Standard
 

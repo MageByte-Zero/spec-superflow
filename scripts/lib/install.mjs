@@ -104,7 +104,7 @@ async function copySkillsWithRoot(sourceSkills, targetSkills, pluginRootAbs) {
       content = content.replace(/\$\{CLAUDE_PLUGIN_ROOT\}/g, pluginRootAbs);
     }
     content = content.replace(
-      /npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf/g,
+      /(?:npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf|node scripts\/spec-superflow\.mjs|\bssf(?=\s+(?:audit|checkpoint|config|execution|handoff|inject|isolate|resume|runtime|save|state|switch|sync|validate|workflow)\b))/g,
       `node ${shellQuote(join(pluginRootAbs, 'scripts', 'spec-superflow.mjs'))}`,
     );
     writeFileSync(filePath, content, 'utf-8');

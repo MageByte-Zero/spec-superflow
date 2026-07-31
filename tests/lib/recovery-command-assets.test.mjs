@@ -58,7 +58,7 @@ describe('SSF recovery command assets', () => {
 
       assert.match(content, /^---\n[\s\S]+description:/);
       assert.match(content, /argument-hint:/);
-      assert.match(content, new RegExp(`spec-superflow@${VERSION.replaceAll('.', '\\.')} ssf ${name}`));
+      assert.match(content, new RegExp(`\\bssf ${name}\\b`));
       assert.match(content, /\$ARGUMENTS/);
       assert.doesNotMatch(content, /state set|state transition|active-change|\bcd\s/);
       assertNoCheckoutAbsolutePaths(content);
@@ -95,15 +95,15 @@ describe('SSF recovery command assets', () => {
   });
 
   it('rejects unquoted raw arguments after executable command flags', () => {
-    const unsafeResume = `Run \`npx --yes --package spec-superflow@${VERSION} ssf resume --json $ARGUMENTS\`.`;
-    const unsafeSwitch = `Run \`npx --yes --package spec-superflow@${VERSION} ssf switch --flag $ARGUMENTS\`.`;
+    const unsafeResume = 'Run `ssf resume --json $ARGUMENTS`.';
+    const unsafeSwitch = 'Run `ssf switch --flag $ARGUMENTS`.';
 
     assert.throws(() => assertNoUnquotedArguments(unsafeResume), /\$ARGUMENTS/);
     assert.throws(() => assertNoUnquotedArguments(unsafeSwitch), /\$ARGUMENTS/);
   });
 
   it('accepts quoted argument input and prose-only argument mentions', () => {
-    const safeResume = `Run \`npx --yes --package spec-superflow@${VERSION} ssf resume --json "$ARGUMENTS"\`. $ARGUMENTS is conversational input.`;
+    const safeResume = 'Run `ssf resume --json "$ARGUMENTS"`. $ARGUMENTS is conversational input.';
 
     assert.doesNotThrow(() => assertNoUnquotedArguments(safeResume));
     assert.doesNotThrow(() => assertNoUnquotedArguments(read('commands/ssf/save.md')));
@@ -126,8 +126,8 @@ describe('SSF recovery command assets', () => {
     }
   });
 
-  it('does not mistake the pinned portable npx entrypoint for a checkout path', () => {
-    const portable = `Run \`npx --yes --package spec-superflow@${VERSION} ssf resume --json "$ARGUMENTS"\`.`;
+  it('does not mistake the unversioned local entrypoint for a checkout path', () => {
+    const portable = 'Run `ssf resume --json "$ARGUMENTS"`.';
 
     assert.doesNotThrow(() => assertNoCheckoutAbsolutePaths(portable));
   });

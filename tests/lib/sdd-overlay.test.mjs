@@ -95,6 +95,13 @@ describe('checkpoint storage', () => {
     assert.equal(listCheckpoints(changeDir)[0].stale, true);
   });
 
+  it('keeps a checkpoint current when only its legal checkbox state changes', () => {
+    saveCheckpoint(changeDir, { taskId: '1.1', next: 'Run the focused test' });
+    writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [X] 1.1 Original task text\n');
+
+    assert.equal(listCheckpoints(changeDir)[0].stale, false);
+  });
+
   it('marks a checkpoint stale when its task is removed', () => {
     saveCheckpoint(changeDir, { taskId: '1.1', next: 'Run the focused test' });
     writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n');

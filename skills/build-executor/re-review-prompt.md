@@ -40,7 +40,7 @@ Subagent (general-purpose):
     Then provide exactly this receipt command to the controller:
 
     ```bash
-    npx --yes --package spec-superflow@0.12.1 ssf execution review <change-dir> --wave [WAVE_ID] --base [PREVIOUS_HEAD] --head [HEAD_SHA] --report [REVIEW_REPORT_FILE] --verdict <pass|fail>
+    ssf execution review <change-dir> --wave [WAVE_ID] --base [PREVIOUS_HEAD] --head [HEAD_SHA] --report [REVIEW_REPORT_FILE] --verdict <pass|fail>
     ```
 
     Use `fail` for any unresolved Critical or Important finding. The controller

@@ -3,7 +3,7 @@ import {
   existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { computeArtifactsHash } from './hash.mjs';
+import { computeArtifactsHash, normalizeTaskCheckboxes } from './hash.mjs';
 import { readState } from './state-loader.mjs';
 
 export const HANDOFF_TYPES = new Set(['prototype', 'research', 'experiment']);
@@ -70,7 +70,7 @@ export function computeTaskHash(changeDir, taskId) {
   const escaped = taskId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = tasks.match(new RegExp(`^- \\[([ xX])\\] ${escaped}\\s+.+$`, 'm'));
   if (!match) throw new Error(`Task '${taskId}' was not found in tasks.md`);
-  return `sha256:${createHash('sha256').update(match[0]).digest('hex')}`;
+  return `sha256:${createHash('sha256').update(normalizeTaskCheckboxes(match[0])).digest('hex')}`;
 }
 
 export function saveCheckpoint(changeDir, input) {

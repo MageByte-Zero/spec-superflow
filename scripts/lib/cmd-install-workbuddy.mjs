@@ -149,11 +149,15 @@ function assertCanonicalCommands(commandNames) {
   }
 }
 
-async function copyValidatedCommands(commandAssets, targetCommands) {
+async function copyValidatedCommands(commandAssets, targetCommands, pluginRootAbs) {
   for (const asset of commandAssets) {
     const targetPath = join(targetCommands, ...asset.relativePath.split('/'));
     ensureDir(dirname(targetPath));
-    await writeFile(targetPath, asset.content, 'utf-8');
+    const content = asset.content.replace(
+      /(?:npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf|node scripts\/spec-superflow\.mjs|\bssf(?=\s+(?:audit|checkpoint|config|execution|handoff|inject|isolate|resume|runtime|save|state|switch|sync|validate|workflow)\b))/g,
+      `node ${shellQuote(join(pluginRootAbs, 'scripts', 'spec-superflow.mjs'))}`,
+    ).replace(/allowed-tools:\s*Bash\(ssf:\*\)/g, 'allowed-tools: Bash(node:*)');
+    await writeFile(targetPath, content, 'utf-8');
   }
   return commandAssets.length;
 }
@@ -205,7 +209,7 @@ async function copySkillsWithRoot(sourceSkills, targetSkills, pluginRootAbs) {
       content = content.replace(/\$\{CLAUDE_PLUGIN_ROOT\}/g, pluginRootAbs);
     }
     content = content.replace(
-      /npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf/g,
+      /(?:npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf|node scripts\/spec-superflow\.mjs|\bssf(?=\s+(?:audit|checkpoint|config|execution|handoff|inject|isolate|resume|runtime|save|state|switch|sync|validate|workflow)\b))/g,
       `node ${shellQuote(join(pluginRootAbs, 'scripts', 'spec-superflow.mjs'))}`,
     );
     writeFileSync(filePath, content, 'utf-8');
@@ -369,7 +373,7 @@ async function installWorkBuddy({ pluginRoot, homeDir, marketplaceName, plan } =
   }
 
   // 2. Copy canonical recovery commands as complete Markdown assets.
-  const commandCount = await copyValidatedCommands(commandAssets, targetCommands);
+  const commandCount = await copyValidatedCommands(commandAssets, targetCommands, pluginRootAbs);
   console.log(`   commands/ → ${targetCommands} (${commandCount} entries, ${commandNames.length} commands)`);
 
   // 3. Copy skills with ${CLAUDE_PLUGIN_ROOT} rewriting.

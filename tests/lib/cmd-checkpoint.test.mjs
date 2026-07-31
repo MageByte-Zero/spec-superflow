@@ -98,6 +98,16 @@ describe('ssf checkpoint', () => {
     assert.equal(payload.checkpoints[0].stale, true);
   });
 
+  it('keeps a checkpoint current after a checkbox-only task update', () => {
+    const save = runSsf(['checkpoint', 'save', changeDir, '--task', '1.1', '--next', 'Run focused tests']);
+    assert.equal(save.exitCode, 0, save.stderr);
+    writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [x] 1.1 Original task text\n');
+
+    const result = runSsf(['checkpoint', 'list', changeDir, '--json']);
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).checkpoints[0].stale, false);
+  });
+
   it('rejects an unknown task ID when showing a checkpoint', () => {
     const result = runSsf(['checkpoint', 'show', changeDir, '9.9']);
     assert.equal(result.exitCode, 1);
