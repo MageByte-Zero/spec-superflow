@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { getPlanScopedPaths } from '../../scripts/lib/sdd-overlay.mjs';
 
 const CLI = join(process.cwd(), 'scripts/spec-superflow.mjs');
 let changeDir;
@@ -85,6 +86,11 @@ function writeReviewReport(name, content = 'Review completed without blocking fi
   const reportPath = join(reportsDir, name);
   writeFileSync(reportPath, content);
   return reportPath;
+}
+
+function currentReceiptPath(waveId) {
+  const plan = JSON.parse(readFileSync(join(changeDir, '.superpowers', 'sdd', 'execution-plan.json'), 'utf8'));
+  return join(getPlanScopedPaths(changeDir, plan).reviews, `${Buffer.from(waveId, 'utf8').toString('base64url')}.json`);
 }
 
 function initializeGitRepository(directory) {
@@ -246,6 +252,7 @@ describe('ssf execution', () => {
       retryable: false,
       receipt: null,
       blockers: [],
+      repair: { status: 'not-needed', failure_count: 0, previous_head: null, previous_report: null, failures: [] },
     }]);
   });
 
@@ -363,7 +370,7 @@ describe('ssf execution', () => {
       '--base', gitRefs.base, '--head', gitRefs.head, '--report', writeReviewReport('wave-1.md'), '--verdict', 'pass']);
     assert.equal(reviewed.exitCode, 0, reviewed.stderr);
 
-    const receiptPath = join(changeDir, '.superpowers', 'sdd', 'reviews', Buffer.from('wave-1', 'utf8').toString('base64url') + '.json');
+    const receiptPath = currentReceiptPath('wave-1');
     const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
     receipt.base = '0000000000000000000000000000000000000001';
     writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
@@ -383,7 +390,7 @@ describe('ssf execution', () => {
       '--base', gitRefs.base, '--head', gitRefs.head, '--report', writeReviewReport('wave-1.md'), '--verdict', 'pass']);
     assert.equal(reviewed.exitCode, 0, reviewed.stderr);
 
-    const receiptPath = join(changeDir, '.superpowers', 'sdd', 'reviews', Buffer.from('wave-1', 'utf8').toString('base64url') + '.json');
+    const receiptPath = currentReceiptPath('wave-1');
     const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
     receipt.base = gitRefs.head;
     receipt.head = gitRefs.divergent;
