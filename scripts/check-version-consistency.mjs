@@ -104,9 +104,9 @@ for (const file of RUNTIME_FILES) {
   }
   const content = readFileSync(fp, 'utf8');
   if (/npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf/.test(content)) {
-    errors.push({ file, found: 'FIXED_NPM_RUNTIME_FOUND', expected: 'node scripts/spec-superflow.mjs' });
-  } else if (!content.includes('node scripts/spec-superflow.mjs')) {
-    errors.push({ file, found: 'SOURCE_RUNTIME_COMMAND_NOT_FOUND', expected: 'node scripts/spec-superflow.mjs' });
+    errors.push({ file, found: 'FIXED_NPM_RUNTIME_FOUND', expected: 'ssf <command>' });
+  } else if (!/\bssf\s+(?:audit|checkpoint|config|execution|handoff|inject|isolate|resume|runtime|save|state|switch|sync|validate|workflow)\b/.test(content)) {
+    errors.push({ file, found: 'SOURCE_RUNTIME_COMMAND_NOT_FOUND', expected: 'ssf <command>' });
   }
 }
 
