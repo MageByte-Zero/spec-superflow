@@ -38,11 +38,14 @@ awk -v n="$n" '
   !infence && /^#+[ \t]+Task[ \t]+[0-9]+/ {
     intask = ($0 ~ ("^#+[ \t]+Task[ \t]+" n "([^0-9]|$)"))
   }
+  !infence && /^- \[[ xX]\][ \t]+(\*\*)?[0-9]+\.[0-9]+/ {
+    intask = ($0 ~ ("^- \\[[ xX]\\][ \t]+(\\*\\*)?" n "([^0-9]|$)"))
+  }
   intask { print }
 ' "$plan" > "$out"
 
 if [ ! -s "$out" ]; then
-  echo "task ${n} not found in ${plan} (no heading matching 'Task ${n}')" >&2
+  echo "task ${n} not found in ${plan} (no matching Task heading or checkbox task line)" >&2
   exit 3
 fi
 
