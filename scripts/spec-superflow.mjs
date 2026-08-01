@@ -3,6 +3,9 @@
 // Usage: ssf <command> [options]
 
 import { parseArgs } from 'node:util';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
+import { realpathSync } from 'node:fs';
 
 const COMMANDS = {
   list:           () => import('./lib/cmd-list.mjs'),
@@ -144,12 +147,17 @@ Examples:
   ssf uninstall-codebuddy --dry-run
 `;
 
-async function main() {
-  const args = process.argv.slice(2);
+export async function dispatchCli(args, {
+  commands = COMMANDS,
+  stdout = process.stdout,
+  stderr = process.stderr,
+} = {}) {
+  const writeStdout = text => stdout.write(text);
+  const writeStderr = text => stderr.write(text);
 
   if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
-    console.log(HELP);
-    process.exit(0);
+    writeStdout(`${HELP}\n`);
+    return { exitCode: 0 };
   }
 
   if (args.includes('--version') || args.includes('-v')) {
@@ -158,24 +166,42 @@ async function main() {
         new URL('../package.json', import.meta.url), 'utf-8'
       )
     );
-    console.log(pkg.version);
-    process.exit(0);
+    writeStdout(`${pkg.version}\n`);
+    return { exitCode: 0 };
   }
 
   const command = args[0];
   const commandArgs = args.slice(1);
 
-  if (!COMMANDS[command]) {
-    console.error(`Unknown command: ${command}`);
-    console.error(`Run "ssf --help" for available commands.`);
-    process.exit(2);
+  if (!commands[command]) {
+    writeStderr(`Unknown command: ${command}\n`);
+    writeStderr('Run "ssf --help" for available commands.\n');
+    return { exitCode: 2 };
   }
 
-  const mod = await COMMANDS[command]();
-  await mod.run(commandArgs);
+  const previousExitCode = process.exitCode;
+  process.exitCode = undefined;
+  try {
+    const mod = await commands[command]();
+    const result = await mod.run(commandArgs, { stdout, stderr });
+    const exitCode = result?.exitCode ?? process.exitCode ?? 0;
+    process.exitCode = previousExitCode;
+    return { exitCode };
+  } catch (err) {
+    process.exitCode = previousExitCode;
+    writeStderr(`Error: ${err.message}\n`);
+    return { exitCode: 1 };
+  }
 }
 
-main().catch(err => {
-  console.error(`Error: ${err.message}`);
-  process.exit(1);
-});
+async function main() {
+  const result = await dispatchCli(process.argv.slice(2));
+  process.exitCode = result.exitCode;
+}
+
+if (process.argv[1] && realpathSync(resolve(process.argv[1])) === fileURLToPath(import.meta.url)) {
+  main().catch(err => {
+    console.error(`Error: ${err.message}`);
+    process.exitCode = 1;
+  });
+}

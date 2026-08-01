@@ -2,6 +2,9 @@
 // scripts/guard/guard.mjs — dimension-based phase transition guard
 // Usage: node guard.mjs check <change-dir> <from-state> <to-state> [--json]
 import { parseArgs } from 'node:util';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
+import { realpathSync } from 'node:fs';
 import { checkArtifactsExist } from './checks/artifacts-exist.mjs';
 import { checkTasksComplete } from './checks/tasks-complete.mjs';
 import { checkTestsPassing } from './checks/tests-passing.mjs';
@@ -127,8 +130,12 @@ function directTestResultCheck(changeDir) {
   };
 }
 
-async function main() {
+export async function runGuard(args, {
+  stdout = process.stdout,
+  stderr = process.stderr,
+} = {}) {
   const { positionals, values } = parseArgs({
+    args,
     options: {
       json: { type: 'boolean', default: false },
       workflow: { type: 'string', default: 'full' },
@@ -138,8 +145,8 @@ async function main() {
 
   const subcommand = positionals[0];
   if (subcommand !== 'check') {
-    console.error('Usage: guard.mjs check <change-dir> <from-state> <to-state> [--json] [--workflow <mode>]');
-    process.exit(2);
+    stderr.write('Usage: guard.mjs check <change-dir> <from-state> <to-state> [--json] [--workflow <mode>]\n');
+    return { exitCode: 2 };
   }
 
   const changeDir = positionals[1];
@@ -150,13 +157,13 @@ async function main() {
 
   const VALID_WORKFLOWS = ['full', 'hotfix', 'tweak', 'quick'];
   if (!VALID_WORKFLOWS.includes(workflow)) {
-    console.error(`Invalid workflow: ${workflow}. Must be one of: ${VALID_WORKFLOWS.join(', ')}`);
-    process.exit(2);
+    stderr.write(`Invalid workflow: ${workflow}. Must be one of: ${VALID_WORKFLOWS.join(', ')}\n`);
+    return { exitCode: 2 };
   }
 
   if (!changeDir || !fromState || !toState) {
-    console.error('Usage: guard.mjs check <change-dir> <from-state> <to-state> [--json]');
-    process.exit(2);
+    stderr.write('Usage: guard.mjs check <change-dir> <from-state> <to-state> [--json]\n');
+    return { exitCode: 2 };
   }
 
   const key = `${fromState}:${toState}`;
@@ -166,31 +173,31 @@ async function main() {
   if (!dimensions) {
     const valid = Object.keys(TRANSITION_CHECKS).join(', ');
     const msg = `Unknown transition: ${fromState} -> ${toState}. Valid transitions: ${valid}`;
-    if (useJson) console.log(JSON.stringify({ pass: false, checks: [], error: msg }));
-    else console.error(msg);
-    process.exit(1);
+    if (useJson) stdout.write(`${JSON.stringify({ pass: false, checks: [], error: msg })}\n`);
+    else stderr.write(`${msg}\n`);
+    return { exitCode: 1 };
   }
 
   const workflowCheck = checkWorkflowAllowed(key, workflow);
   if (!workflowCheck.pass) {
     if (useJson) {
-      console.log(JSON.stringify({ pass: false, checks: workflowCheck.checks }, null, 2));
+      stdout.write(`${JSON.stringify({ pass: false, checks: workflowCheck.checks }, null, 2)}\n`);
     } else {
-      console.error('Guard checks failed:');
+      stderr.write('Guard checks failed:\n');
       for (const c of workflowCheck.checks) {
         for (const f of c.failures) {
-          console.error(`  [FAIL] ${c.dimension}: ${f}`);
+          stderr.write(`  [FAIL] ${c.dimension}: ${f}\n`);
         }
       }
     }
-    process.exit(1);
+    return { exitCode: 1 };
   }
 
   if (dimensions.length === 0) {
     const result = { pass: true, checks: [] };
-    if (useJson) console.log(JSON.stringify(result));
-    else console.log('All checks passed (no checks required for this transition).');
-    process.exit(0);
+    if (useJson) stdout.write(`${JSON.stringify(result)}\n`);
+    else stdout.write('All checks passed (no checks required for this transition).\n');
+    return { exitCode: 0 };
   }
 
   const CHECK_RUNNERS = {
@@ -224,26 +231,33 @@ async function main() {
   pass = checks.every(c => c.pass);
 
   if (useJson) {
-    console.log(JSON.stringify({ pass, checks }, null, 2));
+    stdout.write(`${JSON.stringify({ pass, checks }, null, 2)}\n`);
   } else {
     if (pass) {
-      console.log('All checks passed.');
+      stdout.write('All checks passed.\n');
     } else {
-      console.error('Guard checks failed:');
+      stderr.write('Guard checks failed:\n');
       for (const c of checks) {
         if (!c.pass) {
           for (const f of c.failures) {
-            console.error(`  [FAIL] ${c.dimension}: ${f}`);
+            stderr.write(`  [FAIL] ${c.dimension}: ${f}\n`);
           }
         }
       }
     }
   }
 
-  process.exit(pass ? 0 : 1);
+  return { exitCode: pass ? 0 : 1 };
 }
 
-main().catch(err => {
-  console.error('Guard error:', err.message);
-  process.exit(1);
-});
+async function main() {
+  try {
+    const result = await runGuard(process.argv.slice(2));
+    process.exitCode = result.exitCode;
+  } catch (err) {
+    console.error('Guard error:', err.message);
+    process.exitCode = 1;
+  }
+}
+
+if (process.argv[1] && realpathSync(resolve(process.argv[1])) === fileURLToPath(import.meta.url)) main();
