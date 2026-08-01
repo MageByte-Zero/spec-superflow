@@ -1,14 +1,16 @@
-import { afterEach, beforeEach, describe, it } from 'node:test';
+import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { getPlanScopedPaths } from '../../scripts/lib/sdd-overlay.mjs';
+import { createGitSeedFixture } from '../helpers/git-seed-fixture.mjs';
 
 const CLI = join(process.cwd(), 'scripts/spec-superflow.mjs');
 let changeDir;
 let gitRefs;
+let fixture;
 
 function runSsf(args, cwd = process.cwd(), { confirmPlan = true, acknowledgePlan = true, prepareRecommendation = true } = {}) {
   const isPlan = args[0] === 'execution' && ['plan', 'revise'].includes(args[1]);
@@ -93,22 +95,6 @@ function currentReceiptPath(waveId) {
   return join(getPlanScopedPaths(changeDir, plan).reviews, `${Buffer.from(waveId, 'utf8').toString('base64url')}.json`);
 }
 
-function initializeGitRepository(directory) {
-  runGit(directory, ['init', '--quiet']);
-  runGit(directory, ['config', 'user.email', 'tests@example.invalid']);
-  runGit(directory, ['config', 'user.name', 'Execution Test']);
-  runGit(directory, ['add', '--all']);
-  runGit(directory, ['commit', '--quiet', '--message', 'initial execution change']);
-  const base = runGit(directory, ['rev-parse', 'HEAD']);
-
-  writeFileSync(join(directory, 'git-range-marker.txt'), 'second commit\n');
-  runGit(directory, ['add', 'git-range-marker.txt']);
-  runGit(directory, ['commit', '--quiet', '--message', 'second execution change']);
-  const head = runGit(directory, ['rev-parse', 'HEAD']);
-  const divergent = runGit(directory, ['commit-tree', `${head}^{tree}`, '-m', 'independent execution change']);
-  return { base, head, divergent };
-}
-
 function createRepairCommit(label) {
   const marker = join(changeDir, `repair-${label}.txt`);
   writeFileSync(marker, `${label}\n`);
@@ -117,14 +103,35 @@ function createRepairCommit(label) {
   return runGit(changeDir, ['rev-parse', 'HEAD']);
 }
 
+before(() => {
+  fixture = createGitSeedFixture({
+    setup: writeChangeDirectory,
+    initialCommitMessage: 'initial execution change',
+    secondCommit: {
+      path: 'git-range-marker.txt',
+      content: 'second commit\n',
+      message: 'second execution change',
+    },
+    prefix: 'ssf-execution-cmd-seed-',
+    copyPrefix: 'ssf-execution-cmd-',
+  });
+});
+
 beforeEach(() => {
-  changeDir = mkdtempSync(join(tmpdir(), 'ssf-execution-cmd-'));
-  writeChangeDirectory(changeDir);
-  gitRefs = initializeGitRepository(changeDir);
+  changeDir = fixture.createCopy();
+  gitRefs = {
+    base: fixture.base,
+    head: fixture.head,
+    divergent: runGit(changeDir, ['commit-tree', `${fixture.head}^{tree}`, '-m', 'independent execution change']),
+  };
 });
 
 afterEach(() => {
   rmSync(changeDir, { recursive: true, force: true });
+});
+
+after(() => {
+  fixture.dispose();
 });
 
 describe('ssf execution', () => {

@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { acceptWorkflowRecommendation, saveWorkflowRecommendation } from '../../scripts/lib/workflow-recommendation.mjs';
 import { getPlanScopedPaths } from '../../scripts/lib/sdd-overlay.mjs';
+import { createGitSeedFixture } from '../helpers/git-seed-fixture.mjs';
 
 let tempDir;
 let gitRefs;
@@ -364,13 +365,25 @@ describe('guard: hotfix minimal contract', () => {
 
 describe('guard: execution control records', () => {
   let dir;
+  let fixture;
 
   before(() => {
-    dir = mkdtempSync(join(tmpdir(), 'ssf-guard-control-records-'));
+    fixture = createGitSeedFixture({
+      setup: writeFreshFullState,
+      initialCommitMessage: 'initial guard control records change',
+      secondCommit: {
+        path: 'git-range-marker.txt',
+        content: 'second commit\n',
+        message: 'second guard control records change',
+      },
+      prefix: 'ssf-guard-control-records-seed-',
+      copyPrefix: 'ssf-guard-control-records-',
+    });
   });
 
   after(() => {
     if (dir) rmSync(dir, { recursive: true, force: true });
+    fixture?.dispose();
   });
 
   function run(fromState, toState, workflow = 'full') {
@@ -386,17 +399,21 @@ describe('guard: execution control records', () => {
     }
   }
 
+  function writeFreshFullState(directory) {
+    mkdirSync(join(directory, 'specs', 'execution'), { recursive: true });
+    writeFileSync(join(directory, 'proposal.md'), '## Why\nThis proposal has enough context to verify guard control records in a full workflow.\n## What Changes\n- Enforce recorded execution control data.\n');
+    writeFileSync(join(directory, 'design.md'), '# Design\n\n## Context\nGuard control records.\n');
+    writeFileSync(join(directory, 'tasks.md'), '# Tasks\n\n- [x] 1.1 First task\n- [x] 1.2 Second task\n');
+    writeFileSync(join(directory, 'specs', 'execution', 'spec.md'), '## Requirements\n\n### Requirement: Execution control records\nThe system SHALL require current execution control records.\n\n#### Scenario: Guard transition\n- **WHEN** execution starts\n- **THEN** the guard verifies control records.\n');
+    writeFileSync(join(directory, 'execution-contract.md'), '# Execution Contract\n\n## Intent Lock\n\nGuard control records.\n');
+    writeFileSync(join(directory, '.spec-superflow.yaml'), 'state: approved-for-build\nworkflow: full\n');
+    runNodeScript(CLI_PATH, ['state', 'init', directory]);
+  }
+
   function prepareFreshFullState() {
-    rmSync(dir, { recursive: true, force: true });
-    mkdirSync(join(dir, 'specs', 'execution'), { recursive: true });
-    writeFileSync(join(dir, 'proposal.md'), '## Why\nThis proposal has enough context to verify guard control records in a full workflow.\n## What Changes\n- Enforce recorded execution control data.\n');
-    writeFileSync(join(dir, 'design.md'), '# Design\n\n## Context\nGuard control records.\n');
-    writeFileSync(join(dir, 'tasks.md'), '# Tasks\n\n- [x] 1.1 First task\n- [x] 1.2 Second task\n');
-    writeFileSync(join(dir, 'specs', 'execution', 'spec.md'), '## Requirements\n\n### Requirement: Execution control records\nThe system SHALL require current execution control records.\n\n#### Scenario: Guard transition\n- **WHEN** execution starts\n- **THEN** the guard verifies control records.\n');
-    writeFileSync(join(dir, 'execution-contract.md'), '# Execution Contract\n\n## Intent Lock\n\nGuard control records.\n');
-    writeFileSync(join(dir, '.spec-superflow.yaml'), 'state: approved-for-build\nworkflow: full\n');
-    runNodeScript(CLI_PATH, ['state', 'init', dir]);
-    gitRefs = initializeGitRepository(dir);
+    if (dir) rmSync(dir, { recursive: true, force: true });
+    dir = fixture.createCopy();
+    gitRefs = { base: fixture.base, head: fixture.head };
   }
 
   function createCurrentPlan() {
