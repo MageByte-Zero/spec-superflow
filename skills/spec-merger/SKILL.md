@@ -71,3 +71,43 @@ Output sync report table: Capability, ADDED/MODIFIED/REMOVED/RENAMED counts, Sta
 - **Parse failures**: Report file and section. Do not attempt partial merges.
 - **No deltas**: If change has no delta sections, report nothing to merge and exit cleanly.
 - **User interruption**: On resume, check for merge conflict markers before proceeding.
+
+## Standard User-Facing Handoff
+
+End every user-facing phase report with this concise handoff. Only a successfully
+persisted `closing` state and `abandoned` are terminal.
+
+### Normal report
+
+- Current stage: `<detected workflow stage>`.
+- Completed / blocker: `<completed work>`.
+- Next stage: `<next workflow stage or skill>`.
+- Entry condition: `<what must be true to enter it>`.
+
+### Blocked report
+
+- Current stage: `<detected workflow stage>`.
+- Completed / blocker: `<blocking fact or missing evidence>`.
+- Next stage: `<stage that resumes after the blocker>`.
+- Entry condition: `<the approval, artifact, validation, or fix required>`.
+
+### Approval-wait report
+
+- Current stage: `<detected workflow stage>`.
+- Completed / blocker: `<work ready for the named decision>`.
+- Next stage: `<stage that follows approval>`.
+- Entry condition: `<explicit user approval or recorded decision>`.
+
+### Closing-in-progress report
+
+- Current stage: `executing`; release verification or archive work is still running.
+- Completed / blocker: `<completed release work or remaining release blocker>`.
+- Next stage: complete the remaining release or archive step, then transition to `closing` (not `none`).
+- Entry condition: all release and archive work is complete and the transition succeeds.
+
+### Successful terminal report
+
+- Current stage: successfully persisted `closing` or `abandoned`.
+- Completed / blocker: `<persisted terminal outcome>`.
+- Next stage: `none`.
+- Entry condition: no further transition exists.

@@ -79,3 +79,36 @@ For a legacy Hotfix, after writing the minimal contract, run `ssf state init <ch
 - **Missing files**: List every missing artifact. Route back to `spec-writer`.
 - **User interruption**: Re-read all artifacts on resume; check contract staleness via content comparison.
 - **Validation failure**: Flag unmapped requirements in Escalation Rules and approval summary.
+
+## Standard User-Facing Handoff
+
+End every user-facing phase report with this concise handoff. Only a successfully
+persisted `closing` state and `abandoned` are terminal.
+
+### Normal report
+
+- Current stage: `<detected workflow stage>`.
+- Completed / blocker: `<completed work>`.
+- Next stage: `<next workflow stage or skill>`.
+- Entry condition: `<what must be true to enter it>`.
+
+### Blocked report
+
+- Current stage: `<detected workflow stage>`.
+- Completed / blocker: `<blocking fact or missing evidence>`.
+- Next stage: `<stage that resumes after the blocker>`.
+- Entry condition: `<the approval, artifact, validation, or fix required>`.
+
+### Approval-wait report
+
+- Current stage: `<detected workflow stage>`.
+- Completed / blocker: `<work ready for the named decision>`.
+- Next stage: `<stage that follows approval>`.
+- Entry condition: `<explicit user approval or recorded decision>`.
+
+### Successful terminal report
+
+- Current stage: successfully persisted `closing` or `abandoned`.
+- Completed / blocker: `<persisted terminal outcome>`.
+- Next stage: `none`.
+- Entry condition: no further transition exists.
