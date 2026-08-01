@@ -9,7 +9,7 @@ import { readState, writeState } from './state-loader.mjs';
 
 const SUBCOMMANDS = ['recommend', 'plan', 'show', 'revise', 'review'];
 
-export async function run(args, io = { stdout: process.stdout, stderr: process.stderr }) {
+export function run(args, io = { stdout: process.stdout, stderr: process.stderr }) {
   const { positionals, values } = parseArgs({
     args,
     options: {

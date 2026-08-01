@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { acceptWorkflowRecommendation, saveWorkflowRecommendation } from '../../scripts/lib/workflow-recommendation.mjs';
 import { getPlanScopedPaths } from '../../scripts/lib/sdd-overlay.mjs';
+import { runGuard as runGuardInProcess } from '../../scripts/guard/guard.mjs';
 import { createGitSeedFixture } from '../helpers/git-seed-fixture.mjs';
 
 let tempDir;
@@ -386,16 +387,17 @@ describe('guard: execution control records', () => {
     fixture?.dispose();
   });
 
-  function run(fromState, toState, workflow = 'full') {
+  async function run(fromState, toState, workflow = 'full') {
+    const output = { stdout: '', stderr: '' };
+    const io = {
+      stdout: { write: text => { output.stdout += text; } },
+      stderr: { write: text => { output.stderr += text; } },
+    };
     try {
-      const stdout = runNodeScript(GUARD_PATH, ['check', dir, fromState, toState, '--json', '--workflow', workflow]);
-      return { exitCode: 0, output: JSON.parse(stdout.trim()) };
-    } catch (err) {
-      if (err.stdout) {
-        try { return { exitCode: err.status, output: JSON.parse(err.stdout.trim()) }; }
-        catch { return { exitCode: err.status, output: err.stderr || err.message }; }
-      }
-      return { exitCode: err.status || 1, output: err.stderr || err.message };
+      const result = await runGuardInProcess(['check', dir, fromState, toState, '--json', '--workflow', workflow], io);
+      return { exitCode: result.exitCode, output: JSON.parse(output.stdout.trim()) };
+    } catch (error) {
+      return { exitCode: 1, output: output.stderr || error.message };
     }
   }
 
@@ -444,11 +446,11 @@ describe('guard: execution control records', () => {
     return reportPath;
   }
 
-  it('rejects arbitrary DP-4 text when no current execution plan exists', () => {
+  it('rejects arbitrary DP-4 text when no current execution plan exists', async () => {
     prepareFreshFullState();
     setStateField('dp_4_result', 'anything');
 
-    const result = run('approved-for-build', 'executing');
+    const result = await run('approved-for-build', 'executing');
 
     assert.equal(result.exitCode, 1);
     const planCheck = result.output.checks.find(check => check.dimension === 'execution-plan-ready');
@@ -457,10 +459,10 @@ describe('guard: execution control records', () => {
     assert.match(planCheck.failures.join('\n'), /plan.*missing|execution plan/i);
   });
 
-  it('rejects a debugging return without a current execution plan in full workflow', () => {
+  it('rejects a debugging return without a current execution plan in full workflow', async () => {
     prepareFreshFullState();
 
-    const result = run('debugging', 'executing');
+    const result = await run('debugging', 'executing');
 
     assert.equal(result.exitCode, 1);
     const planCheck = result.output.checks.find(check => check.dimension === 'execution-plan-ready');
@@ -469,11 +471,11 @@ describe('guard: execution control records', () => {
     assert.match(planCheck.failures.join('\n'), /plan.*missing|execution plan/i);
   });
 
-  it('rejects a debugging return without a current execution plan in hotfix workflow', () => {
+  it('rejects a debugging return without a current execution plan in hotfix workflow', async () => {
     prepareFreshFullState();
     setStateField('workflow', 'hotfix');
 
-    const result = run('debugging', 'executing', 'hotfix');
+    const result = await run('debugging', 'executing', 'hotfix');
 
     assert.equal(result.exitCode, 1);
     const planCheck = result.output.checks.find(check => check.dimension === 'execution-plan-ready');
@@ -482,22 +484,22 @@ describe('guard: execution control records', () => {
     assert.match(planCheck.failures.join('\n'), /plan.*missing|execution plan/i);
   });
 
-  it('keeps a debugging return in tweak workflow free of contract checks', () => {
+  it('keeps a debugging return in tweak workflow free of contract checks', async () => {
     prepareFreshFullState();
     setStateField('workflow', 'tweak');
 
-    const result = run('debugging', 'executing', 'tweak');
+    const result = await run('debugging', 'executing', 'tweak');
 
     assert.equal(result.exitCode, 0, JSON.stringify(result.output));
     assert.deepEqual(result.output.checks, []);
   });
 
-  it('rejects a debugging return when the execution plan is stale', () => {
+  it('rejects a debugging return when the execution plan is stale', async () => {
     prepareFreshFullState();
     createCurrentPlan();
     writeFileSync(join(dir, 'tasks.md'), '# Tasks\n\n- [x] 1.1 Changed task\n');
 
-    const result = run('debugging', 'executing');
+    const result = await run('debugging', 'executing');
 
     assert.equal(result.exitCode, 1);
     const planCheck = result.output.checks.find(check => check.dimension === 'execution-plan-ready');
@@ -506,12 +508,12 @@ describe('guard: execution control records', () => {
     assert.match(planCheck.failures.join('\n'), /stale: artifacts hash mismatch/i);
   });
 
-  it('rejects a debugging return when the execution plan mode mismatches state', () => {
+  it('rejects a debugging return when the execution plan mode mismatches state', async () => {
     prepareFreshFullState();
     createCurrentPlan();
     setStateField('execution_mode', 'inline');
 
-    const result = run('debugging', 'executing');
+    const result = await run('debugging', 'executing');
 
     assert.equal(result.exitCode, 1);
     const planCheck = result.output.checks.find(check => check.dimension === 'execution-plan-ready');
@@ -520,12 +522,12 @@ describe('guard: execution control records', () => {
     assert.match(planCheck.failures.join('\n'), /mode does not match state/i);
   });
 
-  it('rejects a debugging return when DP-4 forges the current plan revision', () => {
+  it('rejects a debugging return when DP-4 forges the current plan revision', async () => {
     prepareFreshFullState();
     createCurrentPlan();
     setStateField('dp_4_result', 'sdd: plan revision 10; forged revision reference');
 
-    const result = run('debugging', 'executing');
+    const result = await run('debugging', 'executing');
 
     assert.equal(result.exitCode, 1);
     const planCheck = result.output.checks.find(check => check.dimension === 'execution-plan-ready');
@@ -534,12 +536,12 @@ describe('guard: execution control records', () => {
     assert.match(planCheck.failures.join('\n'), /DP-4.*revision/i);
   });
 
-  it('rejects DP-4 that names a different execution plan revision', () => {
+  it('rejects DP-4 that names a different execution plan revision', async () => {
     prepareFreshFullState();
     createCurrentPlan();
     setStateField('dp_4_result', 'sdd: plan revision 10; forged revision reference');
 
-    const result = run('approved-for-build', 'executing');
+    const result = await run('approved-for-build', 'executing');
 
     assert.equal(result.exitCode, 1);
     const planCheck = result.output.checks.find(check => check.dimension === 'execution-plan-ready');
@@ -547,28 +549,28 @@ describe('guard: execution control records', () => {
     assert.match(planCheck.failures.join('\n'), /DP-4.*revision/i);
   });
 
-  it('keeps tweak transitions exempt from execution plan and review receipt checks', () => {
+  it('keeps tweak transitions exempt from execution plan and review receipt checks', async () => {
     prepareFreshFullState();
     setStateField('workflow', 'tweak');
     setStateField('dp_4_result', 'tweak execution selected');
 
-    const executing = run('approved-for-build', 'executing', 'tweak');
+    const executing = await run('approved-for-build', 'executing', 'tweak');
     assert.equal(executing.exitCode, 0, JSON.stringify(executing.output));
     assert.ok(!executing.output.checks.some(check => check.dimension === 'execution-plan-ready'));
 
     recordPassingClosingPrerequisites();
-    const closing = run('executing', 'closing', 'tweak');
+    const closing = await run('executing', 'closing', 'tweak');
     assert.equal(closing.exitCode, 0, JSON.stringify(closing.output));
     assert.ok(!closing.output.checks.some(check => check.dimension === 'execution-reviews-passed'));
   });
 
-  it('rejects full and hotfix closing without a current execution plan', () => {
+  it('rejects full and hotfix closing without a current execution plan', async () => {
     for (const workflow of ['full', 'hotfix']) {
       prepareFreshFullState();
       setStateField('workflow', workflow);
       recordPassingClosingPrerequisites();
 
-      const result = run('executing', 'closing', workflow);
+      const result = await run('executing', 'closing', workflow);
       const planCheck = result.output.checks.find(check => check.dimension === 'execution-plan-ready');
       assert.equal(result.exitCode, 1, workflow);
       assert.ok(planCheck, workflow);
@@ -577,12 +579,12 @@ describe('guard: execution control records', () => {
     }
   });
 
-  it('rejects stale and state-mismatched execution plans before executing', () => {
+  it('rejects stale and state-mismatched execution plans before executing', async () => {
     prepareFreshFullState();
     createCurrentPlan();
     writeFileSync(join(dir, 'tasks.md'), '# Tasks\n\n- [x] 1.1 Changed task\n');
 
-    let result = run('approved-for-build', 'executing');
+    let result = await run('approved-for-build', 'executing');
     let planCheck = result.output.checks.find(check => check.dimension === 'execution-plan-ready');
     assert.equal(result.exitCode, 1);
     assert.equal(planCheck.pass, false);
@@ -591,19 +593,19 @@ describe('guard: execution control records', () => {
     prepareFreshFullState();
     createCurrentPlan();
     setStateField('execution_mode', 'inline');
-    result = run('approved-for-build', 'executing');
+    result = await run('approved-for-build', 'executing');
     planCheck = result.output.checks.find(check => check.dimension === 'execution-plan-ready');
     assert.equal(result.exitCode, 1);
     assert.equal(planCheck.pass, false);
     assert.match(planCheck.failures.join('\n'), /mode does not match state/i);
   });
 
-  it('blocks closing until every planned wave has a passing review receipt', () => {
+  it('blocks closing until every planned wave has a passing review receipt', async () => {
     prepareFreshFullState();
     createCurrentPlan();
     recordPassingClosingPrerequisites();
 
-    let result = run('executing', 'closing');
+    let result = await run('executing', 'closing');
     let reviewCheck = result.output.checks.find(check => check.dimension === 'execution-reviews-passed');
     assert.equal(result.exitCode, 1);
     assert.equal(reviewCheck.pass, false);
@@ -614,7 +616,7 @@ describe('guard: execution control records', () => {
     runNodeScript(CLI_PATH, ['execution', 'review', dir, '--wave', 'wave-2',
       '--base', gitRefs.base, '--head', gitRefs.head, '--report', writeReviewReport('wave-2.md'), '--verdict', 'fail']);
 
-    result = run('executing', 'closing');
+    result = await run('executing', 'closing');
     reviewCheck = result.output.checks.find(check => check.dimension === 'execution-reviews-passed');
     assert.equal(result.exitCode, 1);
     assert.equal(reviewCheck.pass, false);
@@ -623,13 +625,13 @@ describe('guard: execution control records', () => {
     runNodeScript(CLI_PATH, ['execution', 'review', dir, '--wave', 'wave-2',
       '--base', gitRefs.base, '--head', gitRefs.head, '--report', writeReviewReport('wave-2-repair.md'), '--verdict', 'pass']);
 
-    result = run('executing', 'closing');
+    result = await run('executing', 'closing');
     reviewCheck = result.output.checks.find(check => check.dimension === 'execution-reviews-passed');
     assert.equal(result.exitCode, 0, JSON.stringify(result.output));
     assert.equal(reviewCheck.pass, true);
   });
 
-  it('allows closing with passing receipts when existing checks also pass', () => {
+  it('allows closing with passing receipts when existing checks also pass', async () => {
     prepareFreshFullState();
     createCurrentPlan();
     recordPassingClosingPrerequisites();
@@ -638,13 +640,13 @@ describe('guard: execution control records', () => {
     runNodeScript(CLI_PATH, ['execution', 'review', dir, '--wave', 'wave-2',
       '--base', gitRefs.base, '--head', gitRefs.head, '--report', writeReviewReport('wave-2.md'), '--verdict', 'pass']);
 
-    const result = run('executing', 'closing');
+    const result = await run('executing', 'closing');
 
     assert.equal(result.exitCode, 0, JSON.stringify(result.output));
     assert.equal(result.output.checks.find(check => check.dimension === 'execution-reviews-passed').pass, true);
   });
 
-  it('blocks closing when a persisted passing review report is no longer safe evidence', () => {
+  it('blocks closing when a persisted passing review report is no longer safe evidence', async () => {
     const replacements = [
       {
         name: 'deleted',
@@ -692,7 +694,7 @@ describe('guard: execution control records', () => {
 
       replacement.replace(waveOneReport);
 
-      const result = run('executing', 'closing');
+      const result = await run('executing', 'closing');
       const reviewCheck = result.output.checks.find(check => check.dimension === 'execution-reviews-passed');
       assert.equal(result.exitCode, 1, replacement.name);
       assert.equal(reviewCheck.pass, false, replacement.name);

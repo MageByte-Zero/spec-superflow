@@ -5,6 +5,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, 
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { getPlanScopedPaths } from '../../scripts/lib/sdd-overlay.mjs';
+import { run as runExecution } from '../../scripts/lib/cmd-execution.mjs';
 import { createGitSeedFixture } from '../helpers/git-seed-fixture.mjs';
 
 const CLI = join(process.cwd(), 'scripts/spec-superflow.mjs');
@@ -23,15 +24,12 @@ function runSsf(args, cwd = process.cwd(), { confirmPlan = true, acknowledgePlan
     const changePath = effectiveArgs[2];
     const waves = effectiveArgs.flatMap((value, index) => value === '--wave' ? ['--wave', effectiveArgs[index + 1]] : []).filter(Boolean);
     try {
-      execFileSync(process.execPath, [CLI, 'execution', 'recommend', changePath, ...waves], {
-        cwd,
-        encoding: 'utf8',
-        stdio: ['ignore', 'ignore', 'pipe'],
-      });
+      runExecutionInProcess(['recommend', changePath, ...waves]);
     } catch {
       // Let the requested command report malformed arguments through the usual test helper.
     }
   }
+  if (effectiveArgs[0] === 'execution') return runExecutionInProcess(effectiveArgs.slice(1));
   try {
     const stdout = execFileSync(process.execPath, [CLI, ...effectiveArgs], {
       cwd,
@@ -46,6 +44,20 @@ function runSsf(args, cwd = process.cwd(), { confirmPlan = true, acknowledgePlan
       stderr: error.stderr?.toString() ?? '',
       json: tryJson(error.stdout?.toString() ?? ''),
     };
+  }
+}
+
+function runExecutionInProcess(args) {
+  const output = { stdout: '', stderr: '' };
+  const io = {
+    stdout: { write: text => { output.stdout += text; } },
+    stderr: { write: text => { output.stderr += text; } },
+  };
+  try {
+    const result = runExecution(args, io);
+    return { exitCode: result.exitCode, ...output, json: tryJson(output.stdout) };
+  } catch (error) {
+    return { exitCode: 1, ...output, stderr: `${output.stderr}${error.message}\n`, json: tryJson(output.stdout) };
   }
 }
 
