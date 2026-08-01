@@ -13,7 +13,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: hashgraph-online/ai-plugin-scanner-action@c4737ed2f724bb612bd7df8c63f6835dd34181a3 # v1.2.392 / plugin-scanner 2.0.992 — pinned (last version under which main passed; @v1 auto-bumps). TODO: bump forward once shell-injection findings are cleaned up.
         with:
           plugin_dir: "."
