@@ -29,4 +29,23 @@ describe('verification risk ownership matrix', () => {
     const owners = rows.map(row => row[2]);
     assert.equal(new Set(owners).size, owners.length, 'each migrated risk has one distinct end-to-end owner');
   });
+
+  it('assigns every non-removable anchor to one distinct end-to-end owner', () => {
+    const matrix = readFileSync(MATRIX_PATH, 'utf8');
+    const anchors = [
+      '公共 wrapper 成功/失败',
+      '状态迁移',
+      'Git ancestry',
+      '发布回执新鲜度',
+      '首次可重试',
+      '第五次熔断',
+    ];
+
+    for (const anchor of anchors) {
+      const row = matrix.split('\n').find(line => line.startsWith('|') && line.includes(anchor));
+      assert.ok(row, `matrix records the non-removable ${anchor} anchor`);
+      const owner = row.split('|').filter(Boolean).map(value => value.trim())[2];
+      assert.ok(owner, `${anchor} has an end-to-end owner`);
+    }
+  });
 });

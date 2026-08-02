@@ -2,30 +2,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { validateSpecPathLayout, relativeSpecPath } from '../../lib/spec-paths.mjs';
-
-// Cached Validator instance, lazily loaded from dist/
-let _Validator = null;
-
-async function getValidator() {
-  if (_Validator) return _Validator;
-  try {
-    const distPath = new URL('../../../dist/index.js', import.meta.url).pathname;
-    const mod = await import(distPath);
-    _Validator = mod.Validator;
-    return _Validator;
-  } catch (err) {
-    throw new Error(`Failed to load Validator engine. Run 'npm run build' first. Original error: ${err.message}`);
-  }
-}
+import { Validator } from '../../../dist/index.js';
 
 /**
  * Validate all artifacts in a change directory using the Validator engine.
  * Returns { pass, failures[] } — pass is true only if all artifacts are valid.
  */
-export async function checkSchemaValid(changeDir) {
+export function checkSchemaValid(changeDir) {
   const failures = [];
   const warnings = [];
-  const Validator = await getValidator();
   const validator = new Validator();
 
   // Validate proposal.md

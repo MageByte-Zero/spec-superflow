@@ -9,6 +9,9 @@ import { execFileSync } from 'node:child_process';
 import { acceptWorkflowRecommendation, saveWorkflowRecommendation } from '../../scripts/lib/workflow-recommendation.mjs';
 import { getPlanScopedPaths } from '../../scripts/lib/sdd-overlay.mjs';
 import { runGuard as runGuardInProcess } from '../../scripts/guard/guard.mjs';
+import { run as runExecution } from '../../scripts/lib/cmd-execution.mjs';
+import { readState, writeState, rebuildState } from '../../scripts/lib/state-loader.mjs';
+import { computeArtifactsHash, computeContractHash } from '../../scripts/lib/hash.mjs';
 import { createGitSeedFixture } from '../helpers/git-seed-fixture.mjs';
 
 let tempDir;
@@ -17,10 +20,48 @@ const GUARD_PATH = join(process.cwd(), 'scripts/guard/guard.mjs');
 const CLI_PATH = join(process.cwd(), 'scripts/spec-superflow.mjs');
 
 function runNodeScript(scriptPath, args) {
-  return execFileSync(process.execPath, [scriptPath, ...args], {
-    encoding: 'utf-8',
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
+  const output = { stdout: '', stderr: '' };
+  const io = {
+    stdout: { write: text => { output.stdout += text; } },
+    stderr: { write: text => { output.stderr += text; } },
+  };
+  let result;
+  try {
+    if (scriptPath === GUARD_PATH) result = runGuardInProcess(args, io);
+    else if (scriptPath === CLI_PATH && args[0] === 'execution') result = runExecution(args.slice(1), io);
+    else if (scriptPath === CLI_PATH && args[0] === 'state') result = runStateInProcess(args.slice(1), io);
+    else throw new Error(`No in-process boundary for ${scriptPath}`);
+  } catch (error) {
+    output.stderr += `${error.message}\n`;
+    result = { exitCode: 1 };
+  }
+  if (result.exitCode === 0) return output.stdout;
+  const error = new Error(output.stderr || `command exited ${result.exitCode}`);
+  error.status = result.exitCode;
+  error.stdout = output.stdout;
+  error.stderr = output.stderr;
+  throw error;
+}
+
+function runStateInProcess(args, io) {
+  const [subcommand, directory, field, value] = args;
+  const useJson = args.includes('--json');
+  if (subcommand === 'init') {
+    mkdirSync(directory, { recursive: true });
+    const state = rebuildState(directory, { computeArtifactsHash, computeContractHash });
+    io.stdout.write(useJson
+      ? `${JSON.stringify({ ok: true, artifacts_hash: state.artifacts_hash, contract_hash: state.contract_hash })}\n`
+      : 'State initialized.\n');
+    return { exitCode: 0 };
+  }
+  if (subcommand === 'set') {
+    const state = readState(directory);
+    state[field] = value;
+    writeState(directory, state);
+    io.stdout.write(useJson ? `${JSON.stringify({ ok: true, field, value })}\n` : `Set ${field}.\n`);
+    return { exitCode: 0 };
+  }
+  throw new Error(`unsupported in-process state subcommand: ${subcommand}`);
 }
 
 function runGit(directory, args) {

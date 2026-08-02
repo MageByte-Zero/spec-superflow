@@ -6,9 +6,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { getPlanScopedPaths } from '../../scripts/lib/sdd-overlay.mjs';
 import { run as runExecution } from '../../scripts/lib/cmd-execution.mjs';
+import { readState, writeState, rebuildState } from '../../scripts/lib/state-loader.mjs';
+import { computeArtifactsHash, computeContractHash } from '../../scripts/lib/hash.mjs';
 import { createGitSeedFixture } from '../helpers/git-seed-fixture.mjs';
 
-const CLI = join(process.cwd(), 'scripts/spec-superflow.mjs');
 let changeDir;
 let gitRefs;
 let fixture;
@@ -30,21 +31,8 @@ function runSsf(args, cwd = process.cwd(), { confirmPlan = true, acknowledgePlan
     }
   }
   if (effectiveArgs[0] === 'execution') return runExecutionInProcess(effectiveArgs.slice(1));
-  try {
-    const stdout = execFileSync(process.execPath, [CLI, ...effectiveArgs], {
-      cwd,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    return { exitCode: 0, stdout, stderr: '', json: tryJson(stdout) };
-  } catch (error) {
-    return {
-      exitCode: error.status ?? 1,
-      stdout: error.stdout?.toString() ?? '',
-      stderr: error.stderr?.toString() ?? '',
-      json: tryJson(error.stdout?.toString() ?? ''),
-    };
-  }
+  if (effectiveArgs[0] === 'state') return runStateInProcess(effectiveArgs.slice(1));
+  throw new Error(`Test helper has no in-process boundary for ${effectiveArgs[0]}`);
 }
 
 function runExecutionInProcess(args) {
@@ -58,6 +46,34 @@ function runExecutionInProcess(args) {
     return { exitCode: result.exitCode, ...output, json: tryJson(output.stdout) };
   } catch (error) {
     return { exitCode: 1, ...output, stderr: `${output.stderr}${error.message}\n`, json: tryJson(output.stdout) };
+  }
+}
+
+function runStateInProcess(args) {
+  const [subcommand, directory, field, value] = args;
+  const useJson = args.includes('--json');
+  const output = { stdout: '', stderr: '' };
+  try {
+    if (subcommand === 'init') {
+      mkdirSync(directory, { recursive: true });
+      rebuildState(directory, { computeArtifactsHash, computeContractHash });
+      output.stdout = useJson
+        ? JSON.stringify({ ok: true, artifacts_hash: computeArtifactsHash(directory), contract_hash: computeContractHash(directory) })
+        : 'State initialized.\n';
+    } else if (subcommand === 'get') {
+      const state = readState(directory);
+      output.stdout = useJson ? JSON.stringify({ field, value: state[field] ?? null }) : `${state[field] ?? 'null'}\n`;
+    } else if (subcommand === 'set') {
+      const state = readState(directory);
+      state[field] = value;
+      writeState(directory, state);
+      output.stdout = useJson ? JSON.stringify({ ok: true, field, value }) : `Set ${field}.\n`;
+    } else {
+      throw new Error(`unsupported in-process state subcommand: ${subcommand}`);
+    }
+    return { exitCode: 0, ...output, json: tryJson(output.stdout) };
+  } catch (error) {
+    return { exitCode: 1, ...output, stderr: `${error.message}\n`, json: tryJson(output.stdout) };
   }
 }
 

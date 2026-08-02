@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { realpathSync } from 'node:fs';
 import { checkArtifactsExist } from './checks/artifacts-exist.mjs';
+import { checkSchemaValid } from './checks/schema-valid.mjs';
 import { checkTasksComplete } from './checks/tasks-complete.mjs';
 import { checkTestsPassing } from './checks/tests-passing.mjs';
 import { checkContractFresh } from './checks/contract-fresh.mjs';
@@ -130,7 +131,7 @@ function directTestResultCheck(changeDir) {
   };
 }
 
-export async function runGuard(args, {
+export function runGuard(args, {
   stdout = process.stdout,
   stderr = process.stderr,
 } = {}) {
@@ -202,7 +203,7 @@ export async function runGuard(args, {
 
   const CHECK_RUNNERS = {
     'artifacts-exist': (dir) => checkArtifactsExist(dir),
-    'schema-valid': async (dir) => (await import('./checks/schema-valid.mjs')).checkSchemaValid(dir),
+    'schema-valid': (dir) => checkSchemaValid(dir),
     'contract-fresh': (dir) => checkContractFresh(dir),
     'contract-current': (dir) => checkContractCurrent(dir),
     'tasks-complete': (dir) => checkTasksComplete(dir),
@@ -222,7 +223,7 @@ export async function runGuard(args, {
   for (const dim of dimensions) {
     const runner = CHECK_RUNNERS[dim];
     const result = runner
-      ? await runner(changeDir)
+      ? runner(changeDir)
       : { pass: false, failures: [`Unknown dimension: ${dim}`] };
     checks.push({ dimension: dim, pass: result.pass, failures: result.failures || [] });
     if (!result.pass) pass = false;
@@ -250,9 +251,9 @@ export async function runGuard(args, {
   return { exitCode: pass ? 0 : 1 };
 }
 
-async function main() {
+function main() {
   try {
-    const result = await runGuard(process.argv.slice(2));
+    const result = runGuard(process.argv.slice(2));
     process.exitCode = result.exitCode;
   } catch (err) {
     console.error('Guard error:', err.message);
