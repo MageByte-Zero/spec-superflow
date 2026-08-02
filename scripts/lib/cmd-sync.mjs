@@ -75,16 +75,19 @@ function candidateValidationIssues(candidateReport, baseline, capabilityDir, val
   return candidateReport.issues.filter(issue => !isMissingPurposeIssue(issue, purposeErrorMessage));
 }
 
-export async function run(args) {
+export async function run(args, {
+  stdout = process.stdout,
+  stderr = process.stderr,
+} = {}) {
   if (args.length < 1) {
-    console.error('Usage: ssf sync <change-dir>');
-    process.exit(2);
+    stderr.write('Usage: ssf sync <change-dir>\n');
+    return { exitCode: 2 };
   }
 
   const requestedChangeDir = args[0];
   if (!existsSync(requestedChangeDir)) {
-    console.error(`Error: "${requestedChangeDir}" not found`);
-    process.exit(2);
+    stderr.write(`Error: "${requestedChangeDir}" not found\n`);
+    return { exitCode: 2 };
   }
 
   const context = resolvePublicationContext(requestedChangeDir);
@@ -111,8 +114,8 @@ export async function run(args) {
       }
       const layout = validateSpecPathLayout(dirPath, { requireSpecs: false });
       if (!layout.pass) {
-        for (const failure of layout.failures) console.error(failure);
-        process.exit(1);
+        for (const failure of layout.failures) stderr.write(`${failure}\n`);
+        return { exitCode: 1 };
       }
       for (const specFile of layout.specFiles) {
         allDeltas.push({ changeName: dir, content: readFileSync(specFile, 'utf-8') });
@@ -123,20 +126,20 @@ export async function run(args) {
   if (allDeltas.length > 0) {
     const conflictReport = validator.detectSyncConflicts(allDeltas);
     if (conflictReport.hasConflicts) {
-      console.log('⚠️  Sync conflicts detected:\n');
+      stdout.write('⚠️  Sync conflicts detected:\n\n');
       for (const conflict of conflictReport.conflicts) {
-        console.log(`  Requirement: "${conflict.requirement}"`);
-        console.log(`  Modified by: ${conflict.changes.join(', ')}\n`);
+        stdout.write(`  Requirement: "${conflict.requirement}"\n`);
+        stdout.write(`  Modified by: ${conflict.changes.join(', ')}\n\n`);
       }
-      console.log('Resolve conflicts before syncing. Consider syncing changes one at a time.');
-      process.exit(1);
+      stdout.write('Resolve conflicts before syncing. Consider syncing changes one at a time.\n');
+      return { exitCode: 1 };
     }
   }
 
   const layout = validateSpecPathLayout(changeDir, { requireSpecs: true });
   if (!layout.pass) {
-    for (const failure of layout.failures) console.error(failure);
-    process.exit(1);
+    for (const failure of layout.failures) stderr.write(`${failure}\n`);
+    return { exitCode: 1 };
   }
 
   const changeSpecsDir = join(changeDir, 'specs');
@@ -180,11 +183,11 @@ export async function run(args) {
   publishAtomically(publications.filter(publication => publication.changed));
   for (const publication of publications) {
     if (publication.changed) {
-      console.log(`  📋 Published canonical baseline: specs/${publication.capabilityDir}/spec.md`);
+      stdout.write(`  📋 Published canonical baseline: specs/${publication.capabilityDir}/spec.md\n`);
     } else {
-      console.log(`  📋 Canonical baseline already synchronized: specs/${publication.capabilityDir}/spec.md`);
+      stdout.write(`  📋 Canonical baseline already synchronized: specs/${publication.capabilityDir}/spec.md\n`);
     }
-    for (const warning of publication.warnings) console.log(`  ⚠️  ${warning}`);
+    for (const warning of publication.warnings) stdout.write(`  ⚠️  ${warning}\n`);
   }
 
   // A receipt belongs to the active change, never to the published baseline.
@@ -196,10 +199,11 @@ export async function run(args) {
     state.spec_merged = true;
     state.spec_publication_receipt = encodePublicationReceipt(receipt);
     writeState(changeDir, state);
-    console.log('  🧾 Wrote publication receipt to .spec-superflow.yaml');
+    stdout.write('  🧾 Wrote publication receipt to .spec-superflow.yaml\n');
   }
 
-  console.log(`\n✅ Published ${layout.specFiles.length} canonical spec(s) from ${path.basename(changeDir)} to specs/`);
+  stdout.write(`\n✅ Published ${layout.specFiles.length} canonical spec(s) from ${path.basename(changeDir)} to specs/\n`);
+  return { exitCode: 0 };
 }
 
 function publishAtomically(publications) {

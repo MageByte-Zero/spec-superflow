@@ -5,13 +5,8 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, appendFileSync, rmSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { fileURLToPath } from 'node:url';
-import { dirname } from 'node:path';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(__dirname, '..', '..');
-const GUARD = join(ROOT, 'scripts', 'guard', 'guard.mjs');
-const CLI = join(ROOT, 'scripts', 'spec-superflow.mjs');
+import { dispatchCli } from '../../scripts/spec-superflow.mjs';
+import { runGuard } from '../../scripts/guard/guard.mjs';
 
 function makeChangeFixture(withDelta) {
   const repo = mkdtempSync(join(tmpdir(), 'ssf-specs-merged-'));
@@ -48,7 +43,27 @@ function cleanup(fixture) {
   if (fixture && existsSync(fixture.repo)) rmSync(fixture.repo, { recursive: true, force: true });
 }
 
-function runClosingGuard(fixture, { extraState = '', synchronize = false, mutateSource = false, mutateBaseline = false } = {}) {
+async function runCli(args) {
+  const output = { stdout: '', stderr: '' };
+  const io = {
+    stdout: { write: text => { output.stdout += text; } },
+    stderr: { write: text => { output.stderr += text; } },
+  };
+  const result = await dispatchCli(args, io);
+  return { ...result, output };
+}
+
+async function runGuardWithCapturedOutput(args) {
+  const output = { stdout: '', stderr: '' };
+  const io = {
+    stdout: { write: text => { output.stdout += text; } },
+    stderr: { write: text => { output.stderr += text; } },
+  };
+  const result = await runGuard(args, io);
+  return { ...result, output };
+}
+
+async function runClosingGuard(fixture, { extraState = '', synchronize = false, mutateSource = false, mutateBaseline = false } = {}) {
   const { repo, dir } = fixture;
   try {
     rmSync(join(dir, '.superpowers'), { recursive: true, force: true });
@@ -57,27 +72,32 @@ function runClosingGuard(fixture, { extraState = '', synchronize = false, mutate
       `state: executing\nworkflow: full\nchange_name: test\ndp_6_result: pass: ok\n${extraState}`,
     );
     if (synchronize) {
-      execFileSync('node', [CLI, 'sync', dir], { cwd: repo, stdio: 'pipe', timeout: 5000 });
+      const sync = await runCli(['sync', dir]);
+      if (sync.exitCode !== 0) throw new Error(`${sync.output.stdout}\n${sync.output.stderr}`);
     }
     if (mutateSource) appendFileSync(join(dir, 'specs', 'test', 'spec.md'), '\n<!-- changed after publication -->\n');
     if (mutateBaseline) appendFileSync(join(repo, 'specs', 'test', 'spec.md'), '\n<!-- changed after publication -->\n');
-    execFileSync('node', [CLI, 'execution', 'recommend', dir,
-      '--wave', 'close:serial:1.1'], { cwd: repo, stdio: 'pipe', timeout: 5000 });
-    execFileSync('node', [CLI, 'execution', 'plan', dir, '--mode', 'sdd',
+    const recommendation = await runCli(['execution', 'recommend', dir,
+      '--wave', 'close:serial:1.1']);
+    if (recommendation.exitCode !== 0) throw new Error(`${recommendation.output.stdout}\n${recommendation.output.stderr}`);
+    const plan = await runCli(['execution', 'plan', dir, '--mode', 'sdd',
       '--confirm', '--acknowledge-recommendation', '--reason', 'closing guard regression fixture',
-      '--wave', 'close:serial:1.1'], { cwd: repo, stdio: 'pipe', timeout: 5000 });
+      '--wave', 'close:serial:1.1']);
+    if (plan.exitCode !== 0) throw new Error(`${plan.output.stdout}\n${plan.output.stderr}`);
     const report = join(dir, '.superpowers', 'sdd', 'reviews', 'close-review.md');
     mkdirSync(join(dir, '.superpowers', 'sdd', 'reviews'), { recursive: true });
     writeFileSync(report, 'review passed\n');
     const base = runGit(repo, ['rev-parse', 'HEAD~1']);
     const head = runGit(repo, ['rev-parse', 'HEAD']);
-    execFileSync('node', [CLI, 'execution', 'review', dir, '--wave', 'close',
-      '--base', base, '--head', head, '--report', report, '--verdict', 'pass'], { cwd: repo, stdio: 'pipe', timeout: 5000 });
-    execFileSync('node', [GUARD, 'check', dir, 'executing', 'closing', '--json'], { cwd: repo, stdio: 'pipe', timeout: 5000 });
+    const review = await runCli(['execution', 'review', dir, '--wave', 'close',
+      '--base', base, '--head', head, '--report', report, '--verdict', 'pass']);
+    if (review.exitCode !== 0) throw new Error(`${review.output.stdout}\n${review.output.stderr}`);
+    const guard = await runGuardWithCapturedOutput(['check', dir, 'executing', 'closing', '--json']);
+    if (guard.exitCode !== 0) throw new Error(`${guard.output.stdout}\n${guard.output.stderr}`);
     return { ok: true, out: '' };
   } catch (e) {
     const out = `${e.stdout?.toString() || ''}\n${e.stderr?.toString() || ''}`;
-    return { ok: false, out: out || e.message };
+    return { ok: false, out: out.trim() || e.message };
   }
 }
 
@@ -95,36 +115,49 @@ describe('BUG/#28: publication receipt gate before closing', () => {
     [noDelta, delta, legacyBoolean, published, staleSource, staleBaseline].forEach(cleanup);
   });
 
-  it('SHALL allow closing when there are no delta specs', () => {
-    const r = runClosingGuard(noDelta);
+  it('routes publication through the in-process dispatcher while preserving its visible result', async () => {
+    const output = { stdout: '', stderr: '' };
+    const io = {
+      stdout: { write: text => { output.stdout += text; } },
+      stderr: { write: text => { output.stderr += text; } },
+    };
+
+    const result = await dispatchCli(['sync', published.dir], io);
+
+    assert.equal(result.exitCode, 0, output.stderr);
+    assert.match(output.stdout, /Published 1 canonical spec/i);
+  });
+
+  it('SHALL allow closing when there are no delta specs', async () => {
+    const r = await runClosingGuard(noDelta);
     assert.equal(r.ok, true, `closing should be allowed without delta specs, got: ${r.out}`);
   });
 
-  it('SHALL block closing when delta specs exist but no publication receipt exists', () => {
-    const r = runClosingGuard(delta);
+  it('SHALL block closing when delta specs exist but no publication receipt exists', async () => {
+    const r = await runClosingGuard(delta);
     assert.equal(r.ok, false, 'closing must be blocked until a receipt is recorded');
     assert.match(r.out, /publication receipt|sync|delta specs/i);
   });
 
-  it('SHALL block a legacy spec_merged boolean without a publication receipt', () => {
-    const r = runClosingGuard(legacyBoolean, { extraState: 'spec_merged: true\n' });
+  it('SHALL block a legacy spec_merged boolean without a publication receipt', async () => {
+    const r = await runClosingGuard(legacyBoolean, { extraState: 'spec_merged: true\n' });
     assert.equal(r.ok, false, 'spec_merged=true alone must not prove publication');
     assert.match(r.out, /publication receipt|spec_merged/i);
   });
 
-  it('SHALL allow closing with a current publication receipt', () => {
-    const r = runClosingGuard(published, { synchronize: true });
+  it('SHALL allow closing with a current publication receipt', async () => {
+    const r = await runClosingGuard(published, { synchronize: true });
     assert.equal(r.ok, true, `closing should be allowed after unchanged publication, got: ${r.out}`);
   });
 
-  it('SHALL block closing when the source delta changes after publication', () => {
-    const r = runClosingGuard(staleSource, { synchronize: true, mutateSource: true });
+  it('SHALL block closing when the source delta changes after publication', async () => {
+    const r = await runClosingGuard(staleSource, { synchronize: true, mutateSource: true });
     assert.equal(r.ok, false, 'a changed delta must invalidate its publication receipt');
     assert.match(r.out, /delta has changed|publication receipt/i);
   });
 
-  it('SHALL block closing when the published baseline changes after publication', () => {
-    const r = runClosingGuard(staleBaseline, { synchronize: true, mutateBaseline: true });
+  it('SHALL block closing when the published baseline changes after publication', async () => {
+    const r = await runClosingGuard(staleBaseline, { synchronize: true, mutateBaseline: true });
     assert.equal(r.ok, false, 'a changed baseline must invalidate its publication receipt');
     assert.match(r.out, /baseline has changed|publication receipt/i);
   });
