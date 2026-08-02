@@ -653,31 +653,10 @@ describe('guard: execution control records', () => {
         replace: reportPath => rmSync(reportPath),
       },
       {
-        name: 'empty',
-        replace: reportPath => writeFileSync(reportPath, ''),
-      },
-      {
-        name: 'directory',
-        replace: reportPath => {
-          rmSync(reportPath);
-          mkdirSync(reportPath);
-        },
-      },
-      {
         name: 'symbolic link',
         replace: reportPath => {
           rmSync(reportPath);
           symlinkSync(writeReviewReport('replacement-target.md'), reportPath);
-        },
-      },
-      {
-        name: 'control-character path',
-        replace: reportPath => {
-          const plan = JSON.parse(readFileSync(join(dir, '.superpowers', 'sdd', 'execution-plan.json'), 'utf8'));
-          const receiptPath = join(getPlanScopedPaths(dir, plan).reviews, `${Buffer.from('wave-1').toString('base64url')}.json`);
-          const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
-          receipt.report = `${reportPath}\nforged`;
-          writeFileSync(receiptPath, `${JSON.stringify(receipt)}\n`);
         },
       },
     ];

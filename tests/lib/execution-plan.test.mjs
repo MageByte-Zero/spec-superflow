@@ -553,13 +553,12 @@ describe('execution plan data contract', () => {
     writePlan(changeDir, plan);
 
     let base = gitRefs.base;
-    let head = gitRefs.head;
+    const head = gitRefs.head;
     for (let failure = 1; failure <= 5; failure += 1) {
       recordReview(changeDir, 'wave-1', {
         status: 'fail', base, head, report: writeReviewReport(`failure-${failure}.md`),
       });
       base = head;
-      head = createRepairCommit(`failure-${failure}`);
     }
 
     const [blocked, dependent] = describeWaves(changeDir, plan);

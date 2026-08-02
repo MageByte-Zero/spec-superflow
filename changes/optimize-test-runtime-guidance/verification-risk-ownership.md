@@ -1,0 +1,6 @@
+| 独立风险 | 原完整链路 | 唯一端到端所有者 | 快速合同位置 | 删减理由 |
+| --- | --- | --- | --- | --- |
+| 发布回执的新鲜度与 closing gate | `guard-specs-merged` 中每例重启 `sync`、`execution` 和 guard | `tests/lib/guard-specs-merged.test.mjs`：六个 `BUG/#28` 场景 | 同文件的 `dispatchCli`/`runGuard` 注入流测试；`tests/lib/internal-command-guard-boundaries.test.mjs` | 公共 wrapper 已有独立冒烟；重复 Node 启动不增加回执风险覆盖。 |
+| review 报告证据不可用 | `guard.test.mjs` 为删除、空文件、目录、符号链接和控制字符路径分别重建 plan/review | `tests/lib/guard.test.mjs`：`blocks closing when a persisted passing review report is no longer safe evidence`（删除、符号链接） | `tests/lib/execution-plan.test.mjs`：`rejects missing, non-file, empty, and symbolic-link report evidence before writing a receipt` | guard 只需端到端代表例；其余输入类别属于同一证据验证器。 |
+| repair 阈值与熔断 | 每个失败计数都创建新的 Git repair commit 并重建完整 review 链 | `tests/lib/execution-plan.test.mjs`：`opens an adjudication circuit breaker after five unresolved review failures and blocks dependents` | 同测试以连续 receipt 直接推进中间计数；`starts repair state from the first failed review and rejects a non-contiguous repair range` 覆盖 Git 连续性 | 首次 repair 和第五次熔断仍可观察；中间计数不需要五次不同 Git 工作树。 |
+| 公共 CLI/guard wrapper 语义 | 重型套件把每个内部断言都作为 child process 执行 | `tests/lib/internal-command-guard-boundaries.test.mjs`：`public command wrappers` 四个场景 | 同文件的 `internal command and guard boundaries` 场景 | 成功/失败、stdout/stderr、exit code、cwd 仅需一组公共边界证明。 |
