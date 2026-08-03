@@ -111,6 +111,24 @@ describe('execution plan data contract', () => {
     assert.equal(calls.length, 8, 'symbolic revisions must be resolved and validated again');
   });
 
+  it('reuses an immutable non-ancestor result without treating it as valid', () => {
+    const base = 'c'.repeat(40);
+    const head = 'd'.repeat(40);
+    const calls = [];
+    const validator = createGitRangeValidator((args) => {
+      calls.push(args);
+      if (args[2] === 'rev-parse' && args[3] === '--show-toplevel') return '/repo\n';
+      if (args[2] === 'rev-parse' && args[3] === '--verify') return `${args[4].replace(/\^\{commit\}$/, '')}\n`;
+      if (args[2] === 'merge-base' && args[3] === '--is-ancestor') throw new Error('not an ancestor');
+      throw new Error(`Unexpected Git command: ${args.join(' ')}`);
+    });
+
+    assert.throws(() => validator.validate('/change', base, head), /ancestor/i);
+    assert.equal(calls.length, 4);
+    assert.throws(() => validator.validate('/change', base, head), /ancestor/i);
+    assert.equal(calls.length, 4, 'the same immutable failing range must not relaunch Git');
+  });
+
   it('recommends inline for one small sequential task', () => {
     const result = recommendExecutionModes({
       workflow: 'full',

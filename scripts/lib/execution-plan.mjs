@@ -461,10 +461,15 @@ export function createGitRangeValidator(runGit = defaultRunGit) {
       const resolvedBase = resolveCommit(gitRoot, base, 'base', cacheable);
       const resolvedHead = resolveCommit(gitRoot, head, 'head', cacheable);
       const rangeKey = `${gitRoot}\u0000${resolvedBase}\u0000${resolvedHead}`;
-      if (cacheable && verifiedRanges.has(rangeKey)) return verifiedRanges.get(rangeKey);
+      if (cacheable && verifiedRanges.has(rangeKey)) {
+        const cached = verifiedRanges.get(rangeKey);
+        if (cached === null) throw new Error('Review receipt base must be an ancestor of head');
+        return cached;
+      }
       try {
         runGit(['-C', gitRoot, 'merge-base', '--is-ancestor', resolvedBase, resolvedHead], { stdio: 'ignore' });
       } catch {
+        if (cacheable) verifiedRanges.set(rangeKey, null);
         throw new Error('Review receipt base must be an ancestor of head');
       }
       const result = { base: resolvedBase, head: resolvedHead };
