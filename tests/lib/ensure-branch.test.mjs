@@ -35,7 +35,10 @@ describe('BUG/#15: ensure-branch enforces isolation', () => {
     repoDir = mkdtempSync(join(tmpdir(), 'ssf-ensure-repo-'));
     mkdirSync(join(repoDir, 'specs'), { recursive: true });
     writeFileSync(join(repoDir, 'README.md'), 'x');
-    git(repoDir, 'init', '-q');
+    // The fixture checks out the protected `main` branch below. Pin it here
+    // instead of inheriting Git's host-specific init.defaultBranch (CI may
+    // otherwise create `master`).
+    git(repoDir, 'init', '-q', '--initial-branch=main');
     git(repoDir, 'add', '-A');
     git(repoDir, 'commit', '-q', '-m', 'init');
     git(repoDir, 'checkout', '-q', '-b', 'feature/work');
