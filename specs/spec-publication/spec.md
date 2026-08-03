@@ -53,3 +53,12 @@
 - **WHEN** delta 应用后产生缺少 Purpose 或 Requirements 的候选主规格
 - **THEN** 同步失败并报告能力路径和校验原因
 - **AND** 任何目标主规格均不发生变化
+
+### Requirement: Delta baseline preflight
+
+The system SHALL report an invalid MODIFIED, REMOVED, or RENAMED delta during standard change validation when its canonical baseline cannot accept that operation.
+
+#### Scenario: Missing modified requirement
+
+- **WHEN** a change modifies a requirement absent from its canonical baseline
+- **THEN** `ssf validate` fails before implementation or release synchronization

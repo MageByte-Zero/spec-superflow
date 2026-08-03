@@ -9,7 +9,7 @@ import { readState, writeState } from './state-loader.mjs';
 
 const SUBCOMMANDS = ['recommend', 'plan', 'show', 'revise', 'review'];
 
-export async function run(args) {
+export function run(args, io = { stdout: process.stdout, stderr: process.stderr }) {
   const { positionals, values } = parseArgs({
     args,
     options: {
@@ -31,27 +31,31 @@ export async function run(args) {
   const changeDir = positionals[1];
 
   if (values.help || subcommand === undefined) {
-    printHelp();
-    return;
+    printHelp(io);
+    return { exitCode: 0 };
   }
-  if (!SUBCOMMANDS.includes(subcommand)) usage(`Unknown execution subcommand: ${subcommand}`);
-  if (!changeDir) usage('Usage: ssf execution <subcommand> <change-dir> [options]');
+  if (!SUBCOMMANDS.includes(subcommand)) return usage(`Unknown execution subcommand: ${subcommand}`, io);
+  if (!changeDir) return usage('Usage: ssf execution <subcommand> <change-dir> [options]', io);
 
   switch (subcommand) {
     case 'recommend':
-      return recommendAndPrint(changeDir, values);
+      recommendAndPrint(changeDir, values, io);
+      return { exitCode: 0 };
     case 'plan':
-      return createAndPrintPlan(changeDir, values, false);
+      createAndPrintPlan(changeDir, values, false, io);
+      return { exitCode: 0 };
     case 'show':
-      return showPlan(changeDir, values.json);
+      return showPlan(changeDir, values.json, io);
     case 'revise':
-      return createAndPrintPlan(changeDir, values, true);
+      createAndPrintPlan(changeDir, values, true, io);
+      return { exitCode: 0 };
     case 'review':
-      return recordAndPrintReview(changeDir, values);
+      recordAndPrintReview(changeDir, values, io);
+      return { exitCode: 0 };
   }
 }
 
-function createAndPrintPlan(changeDir, values, revise) {
+function createAndPrintPlan(changeDir, values, revise, io) {
   requireMode(values.mode);
   requireOption(values.reason, '--reason');
   requireSafeReason(values.reason);
@@ -98,10 +102,10 @@ function createAndPrintPlan(changeDir, values, revise) {
   });
   const saved = writePlan(changeDir, plan);
   writeExecutionSummary(changeDir, saved);
-  print(values.json, { ok: true, plan: saved }, `Execution plan revision ${saved.revision} recorded (${saved.mode}).`);
+  print(values.json, { ok: true, plan: saved }, `Execution plan revision ${saved.revision} recorded (${saved.mode}).`, io);
 }
 
-function recommendAndPrint(changeDir, values) {
+function recommendAndPrint(changeDir, values, io) {
   const waves = values.wave?.length ? parseWaves(values.wave) : [];
   const receipt = writeRecommendationReceipt(changeDir, createRecommendationReceipt(changeDir, waves));
   const recommendation = receipt.recommendation;
@@ -111,21 +115,21 @@ function recommendAndPrint(changeDir, values) {
     `Recommended: ${recommendation.recommendation.mode}`,
     ...recommendation.recommendation.reasons.map(reason => `- ${reason}`),
   ];
-  print(values.json, { ok: true, recommendation, receipt }, lines.join('\n'));
+  print(values.json, { ok: true, recommendation, receipt }, lines.join('\n'), io);
 }
 
-function showPlan(changeDir, json) {
+function showPlan(changeDir, json, io) {
   const plan = readPlan(changeDir);
   if (!plan) throw new Error('No execution plan has been recorded');
   const validation = validatePlan(changeDir, plan);
   const current = validation.valid;
   const waves = describeWaves(changeDir, plan);
   print(json, { ok: current, current, plan, valid: current, failures: validation.failures, waves },
-    validation.valid ? `Execution plan revision ${plan.revision} is current.` : validation.failures.join('\n'));
-  if (!validation.valid) process.exitCode = 1;
+    validation.valid ? `Execution plan revision ${plan.revision} is current.` : validation.failures.join('\n'), io);
+  return { exitCode: validation.valid ? 0 : 1 };
 }
 
-function recordAndPrintReview(changeDir, values) {
+function recordAndPrintReview(changeDir, values, io) {
   requireOption(values.wave?.[0], '--wave');
   if (values.wave.length !== 1) throw new Error('Review requires exactly one --wave value');
   requireOption(values.base, '--base');
@@ -138,7 +142,7 @@ function recordAndPrintReview(changeDir, values) {
     head: values.head,
     report: values.report,
   });
-  print(values.json, { ok: true, wave: values.wave[0], receipt }, `Review for ${values.wave[0]} recorded: ${receipt.status}.`);
+  print(values.json, { ok: true, wave: values.wave[0], receipt }, `Review for ${values.wave[0]} recorded: ${receipt.status}.`, io);
 }
 
 function writeExecutionSummary(changeDir, plan) {
@@ -186,21 +190,21 @@ function requireSafeReason(reason) {
   }
 }
 
-function usage(message) {
-  console.error(message);
-  printHelp();
-  process.exit(2);
+function usage(message, io) {
+  io.stderr.write(`${message}\n`);
+  printHelp(io);
+  return { exitCode: 2 };
 }
 
-function print(json, value, message) {
-  console.log(json ? JSON.stringify(value) : message);
+function print(json, value, message, io) {
+  io.stdout.write(`${json ? JSON.stringify(value) : message}\n`);
 }
 
-function printHelp() {
-  console.log(`Usage:
+function printHelp(io) {
+  io.stdout.write(`Usage:
   ssf execution recommend <dir> [--wave <id>:<strategy>:<task,...>[:<depends-on,...>]] [--json]
   ssf execution plan <dir> --mode <mode> --confirm --reason <text> --wave <id>:<strategy>:<task,...>[:<depends-on,...>] [--acknowledge-recommendation]
   ssf execution show <dir> [--json]
   ssf execution revise <dir> --mode sdd --confirm --reason <text> --wave <id>:<strategy>:<task,...>[:<depends-on,...>] [--acknowledge-recommendation]
-  ssf execution review <dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict pass|fail`);
+  ssf execution review <dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict pass|fail\n`);
 }

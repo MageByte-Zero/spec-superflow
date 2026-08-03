@@ -4,10 +4,14 @@ import { parseArgs } from 'node:util';
 import {
   WORKFLOW_MODES,
   acceptWorkflowRecommendation,
+  escalateLightweightWorkflow,
+  hasLightweightCompletionEvidence,
   recommendWorkflowPath,
+  recordLightweightCompletionEvidence,
   readWorkflowSelection,
   recordWorkflowSelection,
   saveWorkflowRecommendation,
+  isDirectWorkflowReceipt,
 } from './workflow-recommendation.mjs';
 import { readState, writeState } from './state-loader.mjs';
 
@@ -21,9 +25,23 @@ const OPTIONS = {
   'cross-module-change': { type: 'string' },
   uncertainty: { type: 'string' },
   'request-kind': { type: 'string' },
+  'affected-path': { type: 'string', multiple: true },
+  'production-behavior': { type: 'string' },
+  'public-boundary': { type: 'string' },
+  installer: { type: 'string' },
+  'state-machine': { type: 'string' },
+  'external-side-effect': { type: 'string' },
+  'data-permission-config-semantics': { type: 'string' },
+  'expected-behavior-clear': { type: 'string' },
+  'verification-reproducible': { type: 'string' },
+  'impact-paths-complete': { type: 'string' },
   mode: { type: 'string' },
   confirm: { type: 'boolean', default: false },
   reason: { type: 'string' },
+  'scope-confirmation': { type: 'string' },
+  'focused-review': { type: 'string' },
+  'verification-command': { type: 'string' },
+  'verification-result': { type: 'string' },
   'acknowledge-recommendation': { type: 'boolean', default: false },
   source: { type: 'string' },
   verification: { type: 'string' },
@@ -39,7 +57,19 @@ const BOOLEAN_FACTS = {
   'cross-module-change': ['yes', 'no', 'unknown'],
 };
 
-const SELECTABLE_WORKFLOW_MODES = Object.freeze(['full', 'hotfix', 'tweak', 'quick']);
+const SELECTABLE_WORKFLOW_MODES = Object.freeze([...WORKFLOW_MODES]);
+
+const LIGHTWEIGHT_EXCLUSION_OPTIONS = {
+  'production-behavior': 'production_behavior',
+  'public-boundary': 'public_boundary',
+  installer: 'installer',
+  'state-machine': 'state_machine',
+  'external-side-effect': 'external_side_effect',
+  'data-permission-config-semantics': 'data_permission_config_semantics',
+  'expected-behavior-clear': 'expected_behavior_clear',
+  'verification-reproducible': 'verification_reproducible',
+  'impact-paths-complete': 'impact_paths_complete',
+};
 
 class UsageError extends Error {}
 
@@ -54,11 +84,11 @@ export async function run(args) {
   const { positionals, values } = parsed;
   const [subcommand, changeDir] = positionals;
   if (values.help || subcommand === undefined) return printHelp();
-  if (!['recommend', 'select', 'accept', 'show'].includes(subcommand)) {
-    return fail('Usage: ssf workflow <recommend|select|accept|show> <change-dir>', 2);
+  if (!['recommend', 'select', 'accept', 'evidence', 'escalate', 'show'].includes(subcommand)) {
+    return fail('Usage: ssf workflow <recommend|select|accept|evidence|escalate|show> <change-dir>', 2);
   }
   if (positionals.length !== 2 || !changeDir) {
-    return fail('Usage: ssf workflow <recommend|select|accept|show> <change-dir>', 2);
+    return fail('Usage: ssf workflow <recommend|select|accept|evidence|escalate|show> <change-dir>', 2);
   }
 
   try {
@@ -77,6 +107,8 @@ export async function run(args) {
     if (subcommand === 'recommend') return recommend(changeDir, values);
     if (subcommand === 'show') return show(changeDir, state, values.json);
     if (subcommand === 'accept') return accept(changeDir, state, values);
+    if (subcommand === 'evidence') return evidence(changeDir, state, values);
+    if (subcommand === 'escalate') return escalate(changeDir, state, values);
     return select(changeDir, state, values);
   } catch (error) {
     if (error instanceof UsageError) return fail(error.message, 2);
@@ -99,6 +131,7 @@ function select(changeDir, state, values) {
     confirmed: values.confirm,
     acknowledged: values['acknowledge-recommendation'],
     verificationStrategy: parseVerification(values.verification),
+    scopeConfirmation: values['scope-confirmation'],
   });
   persistWorkflowSelection(changeDir, state, record);
   return print({ ok: true, source: 'user-confirmed', record }, values.json);
@@ -115,6 +148,49 @@ function accept(changeDir, state, values) {
   });
   persistWorkflowSelection(changeDir, state, record);
   return print({ ok: true, source: 'direct-request', record }, values.json);
+}
+
+function evidence(changeDir, state, values) {
+  const loaded = readWorkflowSelection(changeDir);
+  if (state.workflow !== 'lightweight' || !loaded.valid || !isDirectWorkflowReceipt(loaded.record, state)) {
+    throw new Error('lightweight completion evidence requires an active selected lightweight receipt');
+  }
+  const record = recordLightweightCompletionEvidence(changeDir, {
+    focusedReview: values['focused-review'],
+    verificationCommand: values['verification-command'],
+    verificationResult: values['verification-result'],
+  });
+  if (!hasLightweightCompletionEvidence(record)) {
+    throw new Error('lightweight completion evidence must contain one focused review and a passing verification result');
+  }
+  return print({ ok: true, source: 'lightweight-completion-evidence', record }, values.json);
+}
+
+function escalate(changeDir, state, values) {
+  if (state.workflow !== 'lightweight') {
+    throw new Error('only an active lightweight workflow can be escalated');
+  }
+  const record = escalateLightweightWorkflow(changeDir, { reason: values.reason });
+  const fromState = state.state;
+  state.workflow = 'full';
+  state.state = fromState === 'exploring' ? 'exploring' : 'specifying';
+  state.execution_mode = null;
+  state.execution_plan_hash = null;
+  state.execution_plan_revision = null;
+  state.batches_completed = 0;
+  state.test_result = null;
+  state.spec_merged = false;
+  for (const decision of [2, 3, 4, 6, 7]) {
+    state[`dp_${decision}_result`] = null;
+    state[`dp_${decision}_confirmed`] = null;
+    state[`dp_${decision}_timestamp`] = null;
+  }
+  state.dp_0_decisions = appendDecision(state.dp_0_decisions, 'workflow_path=full; escalated_from=lightweight');
+  state.last_transition_from = fromState;
+  state.last_transition_to = state.state;
+  state.last_transition = new Date().toISOString();
+  writeState(changeDir, state);
+  return print({ ok: true, source: 'lightweight-escalation', record, workflow: state.workflow, state: state.state }, values.json);
 }
 
 function persistWorkflowSelection(changeDir, state, record) {
@@ -175,6 +251,9 @@ function factsFrom(values) {
     cross_module_change: parseFact(values['cross-module-change'], 'cross-module-change'),
     uncertainty: parseFact(values.uncertainty, 'uncertainty'),
     request_kind: parseRequestKind(values['request-kind']),
+    affected_paths: values['affected-path'] ?? null,
+    exclusion_checks: Object.fromEntries(Object.entries(LIGHTWEIGHT_EXCLUSION_OPTIONS)
+      .map(([option, key]) => [key, parseFact(values[option], option)])),
   };
 }
 
@@ -206,7 +285,9 @@ function parseCount(value, name) {
 
 function parseFact(value, name) {
   if (value === undefined) return 'unknown';
-  const allowed = name === 'uncertainty' ? ['low', 'high', 'unknown'] : BOOLEAN_FACTS[name];
+  const allowed = name === 'uncertainty'
+    ? ['low', 'high', 'unknown']
+    : (BOOLEAN_FACTS[name] ?? ['yes', 'no', 'unknown']);
   if (!allowed.includes(value)) throw new UsageError(`${name} must be one of: ${allowed.join(', ')}`);
   return value;
 }
@@ -295,8 +376,10 @@ function fail(message, exitCode) {
 
 function printHelp() {
   console.log(`Usage:
-  ssf workflow recommend <change-dir> [--task-count <n>] [--file-count <n>] [--config-doc-only yes|no|unknown] [--schema-api-change yes|no|unknown] [--new-module yes|no|unknown] [--behavioral-constraint-change yes|no] [--cross-module-change yes|no] [--uncertainty low|high|unknown] [--request-kind standard|incident] [--json]
-  ssf workflow select <change-dir> --mode full|hotfix|tweak|quick --confirm --reason <text> [--acknowledge-recommendation] [--verification tdd|new-test|bounded] [--json]
+  ssf workflow recommend <change-dir> [--task-count <n>] [--file-count <n>] [--config-doc-only yes|no|unknown] [--schema-api-change yes|no|unknown] [--new-module yes|no|unknown] [--behavioral-constraint-change yes|no] [--cross-module-change yes|no] [--uncertainty low|high|unknown] [--request-kind standard|incident] [--affected-path <path>] [--production-behavior yes|no|unknown] [--public-boundary yes|no|unknown] [--installer yes|no|unknown] [--state-machine yes|no|unknown] [--external-side-effect yes|no|unknown] [--data-permission-config-semantics yes|no|unknown] [--expected-behavior-clear yes|no|unknown] [--verification-reproducible yes|no|unknown] [--impact-paths-complete yes|no|unknown] [--json]
+  ssf workflow select <change-dir> --mode full|hotfix|tweak|quick|lightweight --confirm --reason <text> [--scope-confirmation <text>] [--acknowledge-recommendation] [--verification tdd|new-test|bounded] [--json]
   ssf workflow accept <change-dir> --source direct-request [--verification tdd|new-test|bounded] [--json]
+  ssf workflow evidence <change-dir> --focused-review <summary> --verification-command <command> --verification-result pass [--json]
+  ssf workflow escalate <change-dir> --reason <discovered-risk> [--json]
   ssf workflow show <change-dir> [--json]`);
 }

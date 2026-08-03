@@ -3,6 +3,9 @@
 // Usage: ssf <command> [options]
 
 import { parseArgs } from 'node:util';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
+import { realpathSync } from 'node:fs';
 
 const COMMANDS = {
   list:           () => import('./lib/cmd-list.mjs'),
@@ -86,9 +89,9 @@ Commands:
                         Recover an explicit change context without changing the shell
   runtime check-update  Run a portable update check for canonical skills
   runtime infer <dir>   Infer workflow mode without a plugin-root path
-  workflow recommend <change-dir> [--task-count <n>] [--file-count <n>] [--config-doc-only yes|no|unknown] [--schema-api-change yes|no|unknown] [--new-module yes|no|unknown] [--behavioral-constraint-change yes|no] [--cross-module-change yes|no] [--uncertainty low|high|unknown] [--request-kind standard|incident]
-                        Persist observed intake facts and recommend full, hotfix, tweak, or quick without selecting one
-  workflow select <change-dir> --mode full|hotfix|tweak|quick --confirm --reason <text> [--acknowledge-recommendation] [--verification tdd|new-test|bounded]
+  workflow recommend <change-dir> [--task-count <n>] [--file-count <n>] [--config-doc-only yes|no|unknown] [--schema-api-change yes|no|unknown] [--new-module yes|no|unknown] [--behavioral-constraint-change yes|no] [--cross-module-change yes|no] [--uncertainty low|high|unknown] [--request-kind standard|incident] [--affected-path <path>] [--production-behavior yes|no|unknown] [--public-boundary yes|no|unknown] [--installer yes|no|unknown] [--state-machine yes|no|unknown] [--external-side-effect yes|no|unknown] [--data-permission-config-semantics yes|no|unknown] [--expected-behavior-clear yes|no|unknown] [--verification-reproducible yes|no|unknown] [--impact-paths-complete yes|no|unknown]
+                        Persist observed intake facts and recommend full, hotfix, tweak, quick, or lightweight without selecting one
+  workflow select <change-dir> --mode full|hotfix|tweak|quick|lightweight --confirm --reason <text> [--scope-confirmation <text>] [--acknowledge-recommendation] [--verification tdd|new-test|bounded]
                         Persist a user-confirmed path; a risk-acknowledged Quick requires a verification choice
   workflow accept <change-dir> --source direct-request --verification tdd|new-test|bounded
                         Directly accept a recommended quick or hotfix workflow with the user's chosen verification
@@ -144,12 +147,17 @@ Examples:
   ssf uninstall-codebuddy --dry-run
 `;
 
-async function main() {
-  const args = process.argv.slice(2);
+export async function dispatchCli(args, {
+  commands = COMMANDS,
+  stdout = process.stdout,
+  stderr = process.stderr,
+} = {}) {
+  const writeStdout = text => stdout.write(text);
+  const writeStderr = text => stderr.write(text);
 
   if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
-    console.log(HELP);
-    process.exit(0);
+    writeStdout(`${HELP}\n`);
+    return { exitCode: 0 };
   }
 
   if (args.includes('--version') || args.includes('-v')) {
@@ -158,24 +166,42 @@ async function main() {
         new URL('../package.json', import.meta.url), 'utf-8'
       )
     );
-    console.log(pkg.version);
-    process.exit(0);
+    writeStdout(`${pkg.version}\n`);
+    return { exitCode: 0 };
   }
 
   const command = args[0];
   const commandArgs = args.slice(1);
 
-  if (!COMMANDS[command]) {
-    console.error(`Unknown command: ${command}`);
-    console.error(`Run "ssf --help" for available commands.`);
-    process.exit(2);
+  if (!commands[command]) {
+    writeStderr(`Unknown command: ${command}\n`);
+    writeStderr('Run "ssf --help" for available commands.\n');
+    return { exitCode: 2 };
   }
 
-  const mod = await COMMANDS[command]();
-  await mod.run(commandArgs);
+  const previousExitCode = process.exitCode;
+  process.exitCode = undefined;
+  try {
+    const mod = await commands[command]();
+    const result = await mod.run(commandArgs, { stdout, stderr });
+    const exitCode = result?.exitCode ?? process.exitCode ?? 0;
+    process.exitCode = previousExitCode;
+    return { exitCode };
+  } catch (err) {
+    process.exitCode = previousExitCode;
+    writeStderr(`Error: ${err.message}\n`);
+    return { exitCode: 1 };
+  }
 }
 
-main().catch(err => {
-  console.error(`Error: ${err.message}`);
-  process.exit(1);
-});
+async function main() {
+  const result = await dispatchCli(process.argv.slice(2));
+  process.exitCode = result.exitCode;
+}
+
+if (process.argv[1] && realpathSync(resolve(process.argv[1])) === fileURLToPath(import.meta.url)) {
+  main().catch(err => {
+    console.error(`Error: ${err.message}`);
+    process.exitCode = 1;
+  });
+}

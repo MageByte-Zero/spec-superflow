@@ -1,0 +1,10 @@
+{
+  "status": "pass",
+  "base": "bd6d2848785538e1f4159bc7dbc724ba0ed0a615",
+  "head": "2e47381342371e9dbf1f56c1e175d88c7683d426",
+  "report": ".superpowers/sdd/reviews/wave-1-final-review.md",
+  "report_sha256": "sha256:4321285c563404c0da5cc90a44eb407d13eaed136cbc9b29b8ed9775c35cedb5",
+  "plan_hash": "sha256:e6c2ad664930f4769e76d2fa0319fb1cd5b556a65a46970f41ad7d0b53ff07cf",
+  "plan_revision": 3,
+  "recorded_at": "2026-07-31T15:28:59.246Z"
+}

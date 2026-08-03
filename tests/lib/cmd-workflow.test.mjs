@@ -70,10 +70,114 @@ afterEach(() => {
 });
 
 describe('ssf workflow', () => {
+  it('writes a lightweight selection with one scope confirmation through the CLI', () => {
+    const recommendResult = runSsf(['workflow', 'recommend', changeDir,
+      '--task-count', '2', '--file-count', '2', '--config-doc-only', 'no',
+      '--schema-api-change', 'no', '--new-module', 'no',
+      '--behavioral-constraint-change', 'no', '--cross-module-change', 'no', '--uncertainty', 'low',
+      '--affected-path', 'tests/lib/workflow-recommendation.test.mjs',
+      '--affected-path', 'tests/helpers/workflow-fixture.mjs',
+      '--production-behavior', 'no', '--public-boundary', 'no', '--installer', 'no',
+      '--state-machine', 'no', '--external-side-effect', 'no', '--data-permission-config-semantics', 'no',
+      '--expected-behavior-clear', 'yes', '--verification-reproducible', 'yes', '--impact-paths-complete', 'yes',
+      '--json']);
+    assert.equal(recommendResult.exitCode, 0, recommendResult.stderr);
+    assert.equal(recommendResult.json.recommendation.mode, 'lightweight');
+
+    const selected = runSsf(['workflow', 'select', changeDir, '--mode', 'lightweight',
+      '--confirm', '--reason', 'internal test refactor',
+      '--scope-confirmation', 'affected paths and exclusions reviewed once',
+      '--verification', 'new-test', '--json']);
+    assert.equal(selected.exitCode, 0, selected.stderr);
+    assert.equal(readState(changeDir).workflow, 'lightweight');
+    assert.equal(selected.json.record.selection.scope_confirmation, 'affected paths and exclusions reviewed once');
+    assert.match(selected.json.record.selection.confirmed_at, /^\d{4}-\d{2}-\d{2}T/);
+
+    const guard = runSsf(['runtime', 'guard', 'check', changeDir,
+      'exploring', 'approved-for-build', '--workflow', 'lightweight', '--json']);
+    assert.equal(guard.exitCode, 0, guard.stderr);
+    assert.equal(guard.json.pass, true);
+  });
+
+  it('requires one focused review and persisted verification before lightweight closing', () => {
+    const recommended = runSsf(['workflow', 'recommend', changeDir,
+      '--task-count', '2', '--file-count', '2', '--config-doc-only', 'no',
+      '--schema-api-change', 'no', '--new-module', 'no',
+      '--behavioral-constraint-change', 'no', '--cross-module-change', 'no', '--uncertainty', 'low',
+      '--affected-path', 'tests/lib/workflow-recommendation.test.mjs',
+      '--production-behavior', 'no', '--public-boundary', 'no', '--installer', 'no',
+      '--state-machine', 'no', '--external-side-effect', 'no', '--data-permission-config-semantics', 'no',
+      '--expected-behavior-clear', 'yes', '--verification-reproducible', 'yes', '--impact-paths-complete', 'yes',
+      '--json']);
+    assert.equal(recommended.exitCode, 0, recommended.stderr);
+    assert.equal(runSsf(['workflow', 'select', changeDir, '--mode', 'lightweight', '--confirm',
+      '--reason', 'internal test refactor', '--scope-confirmation', 'scope reviewed once',
+      '--verification', 'new-test']).exitCode, 0);
+    writeState('state: executing\nworkflow: lightweight\ntest_result: pass: targeted coverage\n');
+
+    const blocked = runSsf(['runtime', 'guard', 'check', changeDir,
+      'executing', 'closing', '--workflow', 'lightweight', '--json']);
+    assert.equal(blocked.exitCode, 1, blocked.stderr);
+    assert.equal(blocked.json.checks.find(check => check.dimension === 'lightweight-completion-evidence').pass, false);
+
+    const evidence = runSsf(['workflow', 'evidence', changeDir,
+      '--focused-review', 'Focused review: no scope expansion and assertions remain independent.',
+      '--verification-command', 'node --test tests/lib/workflow-recommendation.test.mjs',
+      '--verification-result', 'pass', '--json']);
+    assert.equal(evidence.exitCode, 0, evidence.stderr);
+    assert.equal(evidence.json.record.selection.completion.verification.result, 'pass');
+
+    const closing = runSsf(['runtime', 'guard', 'check', changeDir,
+      'executing', 'closing', '--workflow', 'lightweight', '--json']);
+    assert.equal(closing.exitCode, 0, closing.stderr);
+    assert.deepEqual(closing.json.checks.map(check => check.dimension), [
+      'direct-short-path', 'direct-test-result', 'lightweight-completion-evidence',
+    ]);
+
+    const secondReview = runSsf(['workflow', 'evidence', changeDir,
+      '--focused-review', 'Second focused review must be rejected.',
+      '--verification-command', 'node --test tests/lib/workflow-recommendation.test.mjs',
+      '--verification-result', 'pass', '--json']);
+    assert.equal(secondReview.exitCode, 1);
+    assert.match(secondReview.stderr, /already recorded/i);
+  });
+
+  it('stops lightweight execution and restores Full planning gates when risk appears', () => {
+    const recommended = runSsf(['workflow', 'recommend', changeDir,
+      '--task-count', '2', '--file-count', '2', '--config-doc-only', 'no',
+      '--schema-api-change', 'no', '--new-module', 'no',
+      '--behavioral-constraint-change', 'no', '--cross-module-change', 'no', '--uncertainty', 'low',
+      '--affected-path', 'tests/lib/workflow-recommendation.test.mjs',
+      '--production-behavior', 'no', '--public-boundary', 'no', '--installer', 'no',
+      '--state-machine', 'no', '--external-side-effect', 'no', '--data-permission-config-semantics', 'no',
+      '--expected-behavior-clear', 'yes', '--verification-reproducible', 'yes', '--impact-paths-complete', 'yes',
+      '--json']);
+    assert.equal(recommended.exitCode, 0, recommended.stderr);
+    assert.equal(runSsf(['workflow', 'select', changeDir, '--mode', 'lightweight', '--confirm',
+      '--reason', 'internal test refactor', '--scope-confirmation', 'scope reviewed once',
+      '--verification', 'new-test']).exitCode, 0);
+    writeState('state: executing\nworkflow: lightweight\ndp_3_result: approved legacy contract\ndp_4_result: approved legacy plan\n');
+
+    const escalated = runSsf(['workflow', 'escalate', changeDir,
+      '--reason', 'public CLI behavior is now affected', '--json']);
+    assert.equal(escalated.exitCode, 0, escalated.stderr);
+    assert.equal(readState(changeDir).workflow, 'full');
+    assert.equal(readState(changeDir).state, 'specifying');
+    assert.equal(readState(changeDir).dp_3_result, null);
+    assert.equal(readState(changeDir).dp_4_result, null);
+    assert.equal(escalated.json.record.selection.escalation_reason, 'public CLI behavior is now affected');
+
+    const fullGate = runSsf(['runtime', 'guard', 'check', changeDir,
+      'specifying', 'bridging', '--workflow', 'full', '--json']);
+    assert.equal(fullGate.exitCode, 1);
+    assert.equal(fullGate.json.pass, false);
+    assert.equal(fullGate.json.checks.some(check => check.dimension === 'artifacts-exist' && !check.pass), true);
+  });
+
   it('advertises both direct acceptance and an explicit risk-acknowledged Quick selection', () => {
     const result = runSsf(['--help']);
     assert.equal(result.exitCode, 0, result.stderr);
-    assert.match(result.stdout, /workflow select .*full\|hotfix\|tweak\|quick/);
+    assert.match(result.stdout, /workflow select .*full\|hotfix\|tweak\|quick\|lightweight/);
     assert.match(result.stdout, /workflow accept <change-dir> --source direct-request/);
   });
 
@@ -319,7 +423,7 @@ describe('ssf workflow', () => {
       'task_count', 'file_count', 'config_doc_only', 'schema_api_change',
       'new_module', 'behavioral_constraint_change', 'cross_module_change', 'uncertainty',
     ]);
-    assert.deepEqual(result.json.available_modes, ['full', 'hotfix', 'tweak', 'quick']);
+    assert.deepEqual(result.json.available_modes, ['full', 'hotfix', 'tweak', 'quick', 'lightweight']);
     assert.equal(result.json.recommendation, null);
     assert.equal(result.json.receipt.exists, false);
 

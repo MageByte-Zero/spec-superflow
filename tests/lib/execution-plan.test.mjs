@@ -1,29 +1,51 @@
-import { afterEach, beforeEach, describe, it } from 'node:test';
+import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import {
-  createPlan as createRawPlan, describeWaves, readPlan, recordReview, validatePlan, writePlan,
+  createGitRangeValidator, createPlan as createRawPlan, describeWaves, readPlan, recordReview, validatePlan, writePlan,
 } from '../../scripts/lib/execution-plan.mjs';
 import { createRecommendationReceipt, recommendExecutionModes } from '../../scripts/lib/execution-recommendation.mjs';
 import { readState } from '../../scripts/lib/state-loader.mjs';
 import { getPlanScopedPaths } from '../../scripts/lib/sdd-overlay.mjs';
+import { createGitSeedFixture } from '../helpers/git-seed-fixture.mjs';
 
 let changeDir;
 let gitRefs;
+let fixture;
+
+function writeExecutionPlanChange(directory) {
+  writeFileSync(join(directory, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 First task\n- [ ] 1.2 Second task\n');
+  writeFileSync(join(directory, 'execution-contract.md'), '# Execution Contract\n\nCurrent contract.\n');
+  writeFileSync(join(directory, '.spec-superflow.yaml'), 'state: approved-for-build\nworkflow: full\nrevision: 2\n');
+}
+
+before(() => {
+  fixture = createGitSeedFixture({
+    setup: writeExecutionPlanChange,
+    initialCommitMessage: 'initial execution plan change',
+    secondCommit: {
+      path: 'git-range-marker.txt',
+      content: 'second commit\n',
+      message: 'second execution plan change',
+    },
+    prefix: 'execution-plan-seed-',
+    copyPrefix: 'execution-plan-',
+  });
+});
 
 beforeEach(() => {
-  changeDir = mkdtempSync(join(tmpdir(), 'execution-plan-'));
-  writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 First task\n- [ ] 1.2 Second task\n');
-  writeFileSync(join(changeDir, 'execution-contract.md'), '# Execution Contract\n\nCurrent contract.\n');
-  writeFileSync(join(changeDir, '.spec-superflow.yaml'), 'state: approved-for-build\nworkflow: full\nrevision: 2\n');
-  gitRefs = initializeGitRepository(changeDir);
+  changeDir = fixture.createCopy();
+  gitRefs = { base: fixture.base, head: fixture.head };
 });
 
 afterEach(() => {
   rmSync(changeDir, { recursive: true, force: true });
+});
+
+after(() => {
+  fixture.dispose();
 });
 
 function writeReviewReport(name, content = 'Review completed without blocking findings.\n') {
@@ -36,19 +58,6 @@ function writeReviewReport(name, content = 'Review completed without blocking fi
 
 function runGit(directory, args) {
   return execFileSync('git', args, { cwd: directory, encoding: 'utf8' }).trim();
-}
-
-function initializeGitRepository(directory) {
-  runGit(directory, ['init', '--quiet']);
-  runGit(directory, ['config', 'user.email', 'tests@example.invalid']);
-  runGit(directory, ['config', 'user.name', 'Execution Plan Test']);
-  runGit(directory, ['add', '--all']);
-  runGit(directory, ['commit', '--quiet', '--message', 'initial execution plan change']);
-  const base = runGit(directory, ['rev-parse', 'HEAD']);
-  writeFileSync(join(directory, 'git-range-marker.txt'), 'second commit\n');
-  runGit(directory, ['add', 'git-range-marker.txt']);
-  runGit(directory, ['commit', '--quiet', '--message', 'second execution plan change']);
-  return { base, head: runGit(directory, ['rev-parse', 'HEAD']) };
 }
 
 function createRepairCommit(label) {
@@ -77,6 +86,49 @@ function createPlan(directory, input) {
 }
 
 describe('execution plan data contract', () => {
+  it('reuses one immutable Git review range but re-resolves symbolic revisions', () => {
+    const base = 'a'.repeat(40);
+    const head = 'b'.repeat(40);
+    const calls = [];
+    const validator = createGitRangeValidator((args) => {
+      calls.push(args);
+      if (args[2] === 'rev-parse' && args[3] === '--show-toplevel') return '/repo\n';
+      if (args[2] === 'rev-parse' && args[3] === '--verify') {
+        const revision = args[4].replace(/\^\{commit\}$/, '');
+        return `${revision === 'HEAD' ? base : revision}\n`;
+      }
+      if (args[2] === 'merge-base' && args[3] === '--is-ancestor') return '';
+      throw new Error(`Unexpected Git command: ${args.join(' ')}`);
+    });
+
+    assert.deepEqual(validator.validate('/change', base, head), { base, head });
+    assert.equal(calls.length, 4, 'the first immutable range resolves root, two commits, and ancestry');
+
+    assert.deepEqual(validator.validate('/change', base, head), { base, head });
+    assert.equal(calls.length, 4, 'the same immutable range must not relaunch Git');
+
+    assert.deepEqual(validator.validate('/change', 'HEAD', head), { base, head });
+    assert.equal(calls.length, 8, 'symbolic revisions must be resolved and validated again');
+  });
+
+  it('reuses an immutable non-ancestor result without treating it as valid', () => {
+    const base = 'c'.repeat(40);
+    const head = 'd'.repeat(40);
+    const calls = [];
+    const validator = createGitRangeValidator((args) => {
+      calls.push(args);
+      if (args[2] === 'rev-parse' && args[3] === '--show-toplevel') return '/repo\n';
+      if (args[2] === 'rev-parse' && args[3] === '--verify') return `${args[4].replace(/\^\{commit\}$/, '')}\n`;
+      if (args[2] === 'merge-base' && args[3] === '--is-ancestor') throw new Error('not an ancestor');
+      throw new Error(`Unexpected Git command: ${args.join(' ')}`);
+    });
+
+    assert.throws(() => validator.validate('/change', base, head), /ancestor/i);
+    assert.equal(calls.length, 4);
+    assert.throws(() => validator.validate('/change', base, head), /ancestor/i);
+    assert.equal(calls.length, 4, 'the same immutable failing range must not relaunch Git');
+  });
+
   it('recommends inline for one small sequential task', () => {
     const result = recommendExecutionModes({
       workflow: 'full',
@@ -400,6 +452,17 @@ describe('execution plan data contract', () => {
     );
   });
 
+  it('initializes the review overlay when an execution plan is written', () => {
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'first review must not need mkdir',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+
+    writePlan(changeDir, plan);
+
+    assert.equal(existsSync(join(changeDir, '.superpowers', 'sdd', 'reviews')), true);
+  });
+
   it('persists receipts independently for wave IDs with encoded-name collisions', () => {
     const plan = createPlan(changeDir, {
       mode: 'sdd', source: 'default', rationale: 'review receipt naming',
@@ -533,13 +596,12 @@ describe('execution plan data contract', () => {
     writePlan(changeDir, plan);
 
     let base = gitRefs.base;
-    let head = gitRefs.head;
+    const head = gitRefs.head;
     for (let failure = 1; failure <= 5; failure += 1) {
       recordReview(changeDir, 'wave-1', {
         status: 'fail', base, head, report: writeReviewReport(`failure-${failure}.md`),
       });
       base = head;
-      head = createRepairCommit(`failure-${failure}`);
     }
 
     const [blocked, dependent] = describeWaves(changeDir, plan);

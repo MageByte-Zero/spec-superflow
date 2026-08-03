@@ -132,8 +132,9 @@ For Full/legacy Hotfix by default. Dispatch according to the persisted plan, rev
 4. After every wave, write a non-empty persisted regular-file review report (separate from the implementer's report), then record exactly one receipt that names that review report:
    ```bash
    ssf execution review <change-dir> \
-     --wave <wave-id> --base <sha> --head <sha> --report <review-report-path> --verdict <pass|fail>
+     --wave <wave-id> --base <sha> --head <sha> --report .superpowers/sdd/reviews/<wave-id>.md --verdict <pass|fail>
    ```
+   `ssf execution plan` creates this review overlay. Store report evidence in it; paths outside the overlay are rejected for audit safety.
    Do not begin a dependent wave until its predecessor receipt is `pass`.
 5. Critical/Important findings require a `fail` receipt, a focused repair, re-review, then a replacement `pass` receipt. Never advance or close with a missing or failed receipt.
 
@@ -157,7 +158,7 @@ history, and must not write, edit, or modify a repair-state file directly.
   sixth repair.
 - Every focused re-review still writes its separate persisted report and is
   recorded only through `ssf execution review <change-dir> --wave <id> --base
-  <sha> --head <sha> --report <review-report-path> --verdict <pass|fail>`.
+  <sha> --head <sha> --report .superpowers/sdd/reviews/<wave-id>-rereview.md --verdict <pass|fail>`.
   A replacement `pass` receipt is the only evidence that resolves the wave.
 
 ### Per-Task Loop
@@ -233,3 +234,36 @@ For Full or legacy Hotfix, do not report completion until tests pass, contract o
 - **Parse failures**: Stop and report exact line/format issue. Route back to `contract-builder`.
 - **Missing artifacts**: Route back to appropriate upstream skill. Don't guess.
 - **User interruption**: Progress ledger enables recovery. Check ledger on resume.
+
+## Standard User-Facing Handoff
+
+End every user-facing phase report with this concise handoff. Only a successfully
+persisted `closing` state and `abandoned` are terminal.
+
+### Normal report
+
+- Current stage: `<detected workflow stage>`.
+- Completed / blocker: `<completed work>`.
+- Next stage: `<next workflow stage or skill>`.
+- Entry condition: `<what must be true to enter it>`.
+
+### Blocked report
+
+- Current stage: `<detected workflow stage>`.
+- Completed / blocker: `<blocking fact or missing evidence>`.
+- Next stage: `<stage that resumes after the blocker>`.
+- Entry condition: `<the approval, artifact, validation, or fix required>`.
+
+### Approval-wait report
+
+- Current stage: `<detected workflow stage>`.
+- Completed / blocker: `<work ready for the named decision>`.
+- Next stage: `<stage that follows approval>`.
+- Entry condition: `<explicit user approval or recorded decision>`.
+
+### Successful terminal report
+
+- Current stage: successfully persisted `closing` or `abandoned`.
+- Completed / blocker: `<persisted terminal outcome>`.
+- Next stage: `none`.
+- Entry condition: no further transition exists.

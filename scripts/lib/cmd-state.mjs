@@ -171,6 +171,8 @@ export async function run(args) {
       }
 
       state.state = toState;
+      state.artifacts_hash = computeArtifactsHash(changeDir);
+      state.contract_hash = computeContractHash(changeDir);
       state.last_transition_from = fromState;
       state.last_transition_to = toState;
       state.last_transition = new Date().toISOString();

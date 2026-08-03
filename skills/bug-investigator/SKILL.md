@@ -75,3 +75,36 @@ If truly environmental/timing-dependent/external: document what you investigated
 - **Parse failures**: Report raw output, ask for clarification — don't guess
 - **Missing files**: Escalate immediately — not a normal debugging scenario
 - **User interruption**: Re-read investigation report on resume, continue from last completed phase
+
+## Standard User-Facing Handoff
+
+End every user-facing phase report with this concise handoff. Only a successfully
+persisted `closing` state and `abandoned` are terminal.
+
+### Normal report
+
+- Current stage: `<detected workflow stage>`.
+- Completed / blocker: `<completed work>`.
+- Next stage: `<next workflow stage or skill>`.
+- Entry condition: `<what must be true to enter it>`.
+
+### Blocked report
+
+- Current stage: `<detected workflow stage>`.
+- Completed / blocker: `<blocking fact or missing evidence>`.
+- Next stage: `<stage that resumes after the blocker>`.
+- Entry condition: `<the approval, artifact, validation, or fix required>`.
+
+### Approval-wait report
+
+- Current stage: `<detected workflow stage>`.
+- Completed / blocker: `<work ready for the named decision>`.
+- Next stage: `<stage that follows approval>`.
+- Entry condition: `<explicit user approval or recorded decision>`.
+
+### Successful terminal report
+
+- Current stage: successfully persisted `closing` or `abandoned`.
+- Completed / blocker: `<persisted terminal outcome>`.
+- Next stage: `none`.
+- Entry condition: no further transition exists.
