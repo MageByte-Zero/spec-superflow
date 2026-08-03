@@ -70,10 +70,39 @@ afterEach(() => {
 });
 
 describe('ssf workflow', () => {
+  it('writes a lightweight selection with one scope confirmation through the CLI', () => {
+    const recommendResult = runSsf(['workflow', 'recommend', changeDir,
+      '--task-count', '2', '--file-count', '2', '--config-doc-only', 'no',
+      '--schema-api-change', 'no', '--new-module', 'no',
+      '--behavioral-constraint-change', 'no', '--cross-module-change', 'no', '--uncertainty', 'low',
+      '--affected-path', 'tests/lib/workflow-recommendation.test.mjs',
+      '--affected-path', 'tests/helpers/workflow-fixture.mjs',
+      '--production-behavior', 'no', '--public-boundary', 'no', '--installer', 'no',
+      '--state-machine', 'no', '--external-side-effect', 'no', '--data-permission-config-semantics', 'no',
+      '--expected-behavior-clear', 'yes', '--verification-reproducible', 'yes', '--impact-paths-complete', 'yes',
+      '--json']);
+    assert.equal(recommendResult.exitCode, 0, recommendResult.stderr);
+    assert.equal(recommendResult.json.recommendation.mode, 'lightweight');
+
+    const selected = runSsf(['workflow', 'select', changeDir, '--mode', 'lightweight',
+      '--confirm', '--reason', 'internal test refactor',
+      '--scope-confirmation', 'affected paths and exclusions reviewed once',
+      '--verification', 'new-test', '--json']);
+    assert.equal(selected.exitCode, 0, selected.stderr);
+    assert.equal(readState(changeDir).workflow, 'lightweight');
+    assert.equal(selected.json.record.selection.scope_confirmation, 'affected paths and exclusions reviewed once');
+    assert.match(selected.json.record.selection.confirmed_at, /^\d{4}-\d{2}-\d{2}T/);
+
+    const guard = runSsf(['runtime', 'guard', 'check', changeDir,
+      'exploring', 'approved-for-build', '--workflow', 'lightweight', '--json']);
+    assert.equal(guard.exitCode, 0, guard.stderr);
+    assert.equal(guard.json.pass, true);
+  });
+
   it('advertises both direct acceptance and an explicit risk-acknowledged Quick selection', () => {
     const result = runSsf(['--help']);
     assert.equal(result.exitCode, 0, result.stderr);
-    assert.match(result.stdout, /workflow select .*full\|hotfix\|tweak\|quick/);
+    assert.match(result.stdout, /workflow select .*full\|hotfix\|tweak\|quick\|lightweight/);
     assert.match(result.stdout, /workflow accept <change-dir> --source direct-request/);
   });
 
@@ -319,7 +348,7 @@ describe('ssf workflow', () => {
       'task_count', 'file_count', 'config_doc_only', 'schema_api_change',
       'new_module', 'behavioral_constraint_change', 'cross_module_change', 'uncertainty',
     ]);
-    assert.deepEqual(result.json.available_modes, ['full', 'hotfix', 'tweak', 'quick']);
+    assert.deepEqual(result.json.available_modes, ['full', 'hotfix', 'tweak', 'quick', 'lightweight']);
     assert.equal(result.json.recommendation, null);
     assert.equal(result.json.receipt.exists, false);
 

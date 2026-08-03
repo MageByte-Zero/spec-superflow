@@ -77,7 +77,7 @@ const DIRECT_SHORT_PATH_CHECKS = {
 
 const TRANSITION_WORKFLOW_REQUIREMENTS = {
   'exploring:bridging': ['hotfix'],
-  'exploring:approved-for-build': ['tweak', 'quick', 'hotfix'],
+  'exploring:approved-for-build': ['tweak', 'quick', 'hotfix', 'lightweight'],
 };
 
 function checkWorkflowAllowed(key, workflow) {
@@ -94,7 +94,7 @@ function checkWorkflowAllowed(key, workflow) {
 }
 
 function resolveDimensions(key, workflow, directShortPath) {
-  if (workflow === 'quick') return DIRECT_SHORT_PATH_CHECKS[key] ?? TRANSITION_CHECKS[key];
+  if (workflow === 'quick' || workflow === 'lightweight') return DIRECT_SHORT_PATH_CHECKS[key] ?? TRANSITION_CHECKS[key];
   if (workflow === 'hotfix' && key === 'exploring:approved-for-build') {
     return DIRECT_SHORT_PATH_CHECKS[key];
   }
@@ -156,7 +156,7 @@ export function runGuard(args, {
   const useJson = values.json;
   const workflow = values.workflow;
 
-  const VALID_WORKFLOWS = ['full', 'hotfix', 'tweak', 'quick'];
+  const VALID_WORKFLOWS = ['full', 'hotfix', 'tweak', 'quick', 'lightweight'];
   if (!VALID_WORKFLOWS.includes(workflow)) {
     stderr.write(`Invalid workflow: ${workflow}. Must be one of: ${VALID_WORKFLOWS.join(', ')}\n`);
     return { exitCode: 2 };

@@ -21,9 +21,20 @@ const OPTIONS = {
   'cross-module-change': { type: 'string' },
   uncertainty: { type: 'string' },
   'request-kind': { type: 'string' },
+  'affected-path': { type: 'string', multiple: true },
+  'production-behavior': { type: 'string' },
+  'public-boundary': { type: 'string' },
+  installer: { type: 'string' },
+  'state-machine': { type: 'string' },
+  'external-side-effect': { type: 'string' },
+  'data-permission-config-semantics': { type: 'string' },
+  'expected-behavior-clear': { type: 'string' },
+  'verification-reproducible': { type: 'string' },
+  'impact-paths-complete': { type: 'string' },
   mode: { type: 'string' },
   confirm: { type: 'boolean', default: false },
   reason: { type: 'string' },
+  'scope-confirmation': { type: 'string' },
   'acknowledge-recommendation': { type: 'boolean', default: false },
   source: { type: 'string' },
   verification: { type: 'string' },
@@ -39,7 +50,19 @@ const BOOLEAN_FACTS = {
   'cross-module-change': ['yes', 'no', 'unknown'],
 };
 
-const SELECTABLE_WORKFLOW_MODES = Object.freeze(['full', 'hotfix', 'tweak', 'quick']);
+const SELECTABLE_WORKFLOW_MODES = Object.freeze([...WORKFLOW_MODES]);
+
+const LIGHTWEIGHT_EXCLUSION_OPTIONS = {
+  'production-behavior': 'production_behavior',
+  'public-boundary': 'public_boundary',
+  installer: 'installer',
+  'state-machine': 'state_machine',
+  'external-side-effect': 'external_side_effect',
+  'data-permission-config-semantics': 'data_permission_config_semantics',
+  'expected-behavior-clear': 'expected_behavior_clear',
+  'verification-reproducible': 'verification_reproducible',
+  'impact-paths-complete': 'impact_paths_complete',
+};
 
 class UsageError extends Error {}
 
@@ -99,6 +122,7 @@ function select(changeDir, state, values) {
     confirmed: values.confirm,
     acknowledged: values['acknowledge-recommendation'],
     verificationStrategy: parseVerification(values.verification),
+    scopeConfirmation: values['scope-confirmation'],
   });
   persistWorkflowSelection(changeDir, state, record);
   return print({ ok: true, source: 'user-confirmed', record }, values.json);
@@ -175,6 +199,9 @@ function factsFrom(values) {
     cross_module_change: parseFact(values['cross-module-change'], 'cross-module-change'),
     uncertainty: parseFact(values.uncertainty, 'uncertainty'),
     request_kind: parseRequestKind(values['request-kind']),
+    affected_paths: values['affected-path'] ?? null,
+    exclusion_checks: Object.fromEntries(Object.entries(LIGHTWEIGHT_EXCLUSION_OPTIONS)
+      .map(([option, key]) => [key, parseFact(values[option], option)])),
   };
 }
 
@@ -206,7 +233,9 @@ function parseCount(value, name) {
 
 function parseFact(value, name) {
   if (value === undefined) return 'unknown';
-  const allowed = name === 'uncertainty' ? ['low', 'high', 'unknown'] : BOOLEAN_FACTS[name];
+  const allowed = name === 'uncertainty'
+    ? ['low', 'high', 'unknown']
+    : (BOOLEAN_FACTS[name] ?? ['yes', 'no', 'unknown']);
   if (!allowed.includes(value)) throw new UsageError(`${name} must be one of: ${allowed.join(', ')}`);
   return value;
 }
@@ -295,8 +324,8 @@ function fail(message, exitCode) {
 
 function printHelp() {
   console.log(`Usage:
-  ssf workflow recommend <change-dir> [--task-count <n>] [--file-count <n>] [--config-doc-only yes|no|unknown] [--schema-api-change yes|no|unknown] [--new-module yes|no|unknown] [--behavioral-constraint-change yes|no] [--cross-module-change yes|no] [--uncertainty low|high|unknown] [--request-kind standard|incident] [--json]
-  ssf workflow select <change-dir> --mode full|hotfix|tweak|quick --confirm --reason <text> [--acknowledge-recommendation] [--verification tdd|new-test|bounded] [--json]
+  ssf workflow recommend <change-dir> [--task-count <n>] [--file-count <n>] [--config-doc-only yes|no|unknown] [--schema-api-change yes|no|unknown] [--new-module yes|no|unknown] [--behavioral-constraint-change yes|no] [--cross-module-change yes|no] [--uncertainty low|high|unknown] [--request-kind standard|incident] [--affected-path <path>] [--production-behavior yes|no|unknown] [--public-boundary yes|no|unknown] [--installer yes|no|unknown] [--state-machine yes|no|unknown] [--external-side-effect yes|no|unknown] [--data-permission-config-semantics yes|no|unknown] [--expected-behavior-clear yes|no|unknown] [--verification-reproducible yes|no|unknown] [--impact-paths-complete yes|no|unknown] [--json]
+  ssf workflow select <change-dir> --mode full|hotfix|tweak|quick|lightweight --confirm --reason <text> [--scope-confirmation <text>] [--acknowledge-recommendation] [--verification tdd|new-test|bounded] [--json]
   ssf workflow accept <change-dir> --source direct-request [--verification tdd|new-test|bounded] [--json]
   ssf workflow show <change-dir> [--json]`);
 }
