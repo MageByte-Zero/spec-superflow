@@ -99,6 +99,49 @@ describe('ssf workflow', () => {
     assert.equal(guard.json.pass, true);
   });
 
+  it('requires one focused review and persisted verification before lightweight closing', () => {
+    const recommended = runSsf(['workflow', 'recommend', changeDir,
+      '--task-count', '2', '--file-count', '2', '--config-doc-only', 'no',
+      '--schema-api-change', 'no', '--new-module', 'no',
+      '--behavioral-constraint-change', 'no', '--cross-module-change', 'no', '--uncertainty', 'low',
+      '--affected-path', 'tests/lib/workflow-recommendation.test.mjs',
+      '--production-behavior', 'no', '--public-boundary', 'no', '--installer', 'no',
+      '--state-machine', 'no', '--external-side-effect', 'no', '--data-permission-config-semantics', 'no',
+      '--expected-behavior-clear', 'yes', '--verification-reproducible', 'yes', '--impact-paths-complete', 'yes',
+      '--json']);
+    assert.equal(recommended.exitCode, 0, recommended.stderr);
+    assert.equal(runSsf(['workflow', 'select', changeDir, '--mode', 'lightweight', '--confirm',
+      '--reason', 'internal test refactor', '--scope-confirmation', 'scope reviewed once',
+      '--verification', 'new-test']).exitCode, 0);
+    writeState('state: executing\nworkflow: lightweight\ntest_result: pass: targeted coverage\n');
+
+    const blocked = runSsf(['runtime', 'guard', 'check', changeDir,
+      'executing', 'closing', '--workflow', 'lightweight', '--json']);
+    assert.equal(blocked.exitCode, 1, blocked.stderr);
+    assert.equal(blocked.json.checks.find(check => check.dimension === 'lightweight-completion-evidence').pass, false);
+
+    const evidence = runSsf(['workflow', 'evidence', changeDir,
+      '--focused-review', 'Focused review: no scope expansion and assertions remain independent.',
+      '--verification-command', 'node --test tests/lib/workflow-recommendation.test.mjs',
+      '--verification-result', 'pass', '--json']);
+    assert.equal(evidence.exitCode, 0, evidence.stderr);
+    assert.equal(evidence.json.record.selection.completion.verification.result, 'pass');
+
+    const closing = runSsf(['runtime', 'guard', 'check', changeDir,
+      'executing', 'closing', '--workflow', 'lightweight', '--json']);
+    assert.equal(closing.exitCode, 0, closing.stderr);
+    assert.deepEqual(closing.json.checks.map(check => check.dimension), [
+      'direct-short-path', 'direct-test-result', 'lightweight-completion-evidence',
+    ]);
+
+    const secondReview = runSsf(['workflow', 'evidence', changeDir,
+      '--focused-review', 'Second focused review must be rejected.',
+      '--verification-command', 'node --test tests/lib/workflow-recommendation.test.mjs',
+      '--verification-result', 'pass', '--json']);
+    assert.equal(secondReview.exitCode, 1);
+    assert.match(secondReview.stderr, /already recorded/i);
+  });
+
   it('stops lightweight execution and restores Full planning gates when risk appears', () => {
     const recommended = runSsf(['workflow', 'recommend', changeDir,
       '--task-count', '2', '--file-count', '2', '--config-doc-only', 'no',

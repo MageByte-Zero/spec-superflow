@@ -5,10 +5,13 @@ import {
   WORKFLOW_MODES,
   acceptWorkflowRecommendation,
   escalateLightweightWorkflow,
+  hasLightweightCompletionEvidence,
   recommendWorkflowPath,
+  recordLightweightCompletionEvidence,
   readWorkflowSelection,
   recordWorkflowSelection,
   saveWorkflowRecommendation,
+  isDirectWorkflowReceipt,
 } from './workflow-recommendation.mjs';
 import { readState, writeState } from './state-loader.mjs';
 
@@ -36,6 +39,9 @@ const OPTIONS = {
   confirm: { type: 'boolean', default: false },
   reason: { type: 'string' },
   'scope-confirmation': { type: 'string' },
+  'focused-review': { type: 'string' },
+  'verification-command': { type: 'string' },
+  'verification-result': { type: 'string' },
   'acknowledge-recommendation': { type: 'boolean', default: false },
   source: { type: 'string' },
   verification: { type: 'string' },
@@ -78,11 +84,11 @@ export async function run(args) {
   const { positionals, values } = parsed;
   const [subcommand, changeDir] = positionals;
   if (values.help || subcommand === undefined) return printHelp();
-  if (!['recommend', 'select', 'accept', 'escalate', 'show'].includes(subcommand)) {
-    return fail('Usage: ssf workflow <recommend|select|accept|escalate|show> <change-dir>', 2);
+  if (!['recommend', 'select', 'accept', 'evidence', 'escalate', 'show'].includes(subcommand)) {
+    return fail('Usage: ssf workflow <recommend|select|accept|evidence|escalate|show> <change-dir>', 2);
   }
   if (positionals.length !== 2 || !changeDir) {
-    return fail('Usage: ssf workflow <recommend|select|accept|escalate|show> <change-dir>', 2);
+    return fail('Usage: ssf workflow <recommend|select|accept|evidence|escalate|show> <change-dir>', 2);
   }
 
   try {
@@ -101,6 +107,7 @@ export async function run(args) {
     if (subcommand === 'recommend') return recommend(changeDir, values);
     if (subcommand === 'show') return show(changeDir, state, values.json);
     if (subcommand === 'accept') return accept(changeDir, state, values);
+    if (subcommand === 'evidence') return evidence(changeDir, state, values);
     if (subcommand === 'escalate') return escalate(changeDir, state, values);
     return select(changeDir, state, values);
   } catch (error) {
@@ -141,6 +148,22 @@ function accept(changeDir, state, values) {
   });
   persistWorkflowSelection(changeDir, state, record);
   return print({ ok: true, source: 'direct-request', record }, values.json);
+}
+
+function evidence(changeDir, state, values) {
+  const loaded = readWorkflowSelection(changeDir);
+  if (state.workflow !== 'lightweight' || !loaded.valid || !isDirectWorkflowReceipt(loaded.record, state)) {
+    throw new Error('lightweight completion evidence requires an active selected lightweight receipt');
+  }
+  const record = recordLightweightCompletionEvidence(changeDir, {
+    focusedReview: values['focused-review'],
+    verificationCommand: values['verification-command'],
+    verificationResult: values['verification-result'],
+  });
+  if (!hasLightweightCompletionEvidence(record)) {
+    throw new Error('lightweight completion evidence must contain one focused review and a passing verification result');
+  }
+  return print({ ok: true, source: 'lightweight-completion-evidence', record }, values.json);
 }
 
 function escalate(changeDir, state, values) {
@@ -356,6 +379,7 @@ function printHelp() {
   ssf workflow recommend <change-dir> [--task-count <n>] [--file-count <n>] [--config-doc-only yes|no|unknown] [--schema-api-change yes|no|unknown] [--new-module yes|no|unknown] [--behavioral-constraint-change yes|no] [--cross-module-change yes|no] [--uncertainty low|high|unknown] [--request-kind standard|incident] [--affected-path <path>] [--production-behavior yes|no|unknown] [--public-boundary yes|no|unknown] [--installer yes|no|unknown] [--state-machine yes|no|unknown] [--external-side-effect yes|no|unknown] [--data-permission-config-semantics yes|no|unknown] [--expected-behavior-clear yes|no|unknown] [--verification-reproducible yes|no|unknown] [--impact-paths-complete yes|no|unknown] [--json]
   ssf workflow select <change-dir> --mode full|hotfix|tweak|quick|lightweight --confirm --reason <text> [--scope-confirmation <text>] [--acknowledge-recommendation] [--verification tdd|new-test|bounded] [--json]
   ssf workflow accept <change-dir> --source direct-request [--verification tdd|new-test|bounded] [--json]
+  ssf workflow evidence <change-dir> --focused-review <summary> --verification-command <command> --verification-result pass [--json]
   ssf workflow escalate <change-dir> --reason <discovered-risk> [--json]
   ssf workflow show <change-dir> [--json]`);
 }

@@ -17,7 +17,11 @@ import { checkDp3Approved } from './checks/dp3-approved.mjs';
 import { checkExecutionPlanReady } from './checks/execution-plan-ready.mjs';
 import { checkExecutionReviewsPassed } from './checks/execution-reviews-passed.mjs';
 import { readState } from '../lib/state-loader.mjs';
-import { isDirectWorkflowReceipt, readWorkflowSelection } from '../lib/workflow-recommendation.mjs';
+import {
+  hasLightweightCompletionEvidence,
+  isDirectWorkflowReceipt,
+  readWorkflowSelection,
+} from '../lib/workflow-recommendation.mjs';
 
 // Transition matrix: <from>:<to> → required check dimensions
 const TRANSITION_CHECKS = {
@@ -75,6 +79,11 @@ const DIRECT_SHORT_PATH_CHECKS = {
   'debugging:executing': ['direct-short-path'],
 };
 
+const LIGHTWEIGHT_SHORT_PATH_CHECKS = {
+  ...DIRECT_SHORT_PATH_CHECKS,
+  'executing:closing': ['direct-short-path', 'direct-test-result', 'lightweight-completion-evidence'],
+};
+
 const TRANSITION_WORKFLOW_REQUIREMENTS = {
   'exploring:bridging': ['hotfix'],
   'exploring:approved-for-build': ['tweak', 'quick', 'hotfix', 'lightweight'],
@@ -94,7 +103,8 @@ function checkWorkflowAllowed(key, workflow) {
 }
 
 function resolveDimensions(key, workflow, directShortPath) {
-  if (workflow === 'quick' || workflow === 'lightweight') return DIRECT_SHORT_PATH_CHECKS[key] ?? TRANSITION_CHECKS[key];
+  if (workflow === 'quick') return DIRECT_SHORT_PATH_CHECKS[key] ?? TRANSITION_CHECKS[key];
+  if (workflow === 'lightweight') return LIGHTWEIGHT_SHORT_PATH_CHECKS[key] ?? TRANSITION_CHECKS[key];
   if (workflow === 'hotfix' && key === 'exploring:approved-for-build') {
     return DIRECT_SHORT_PATH_CHECKS[key];
   }
@@ -129,6 +139,17 @@ function directTestResultCheck(changeDir) {
     pass: false,
       failures: ['fast-path closing requires test_result starting with pass; DP-6 is not a substitute'],
   };
+}
+
+function lightweightCompletionEvidenceCheck(changeDir) {
+  const receipt = readWorkflowSelection(changeDir);
+  if (!receipt.valid || !hasLightweightCompletionEvidence(receipt.record)) {
+    return {
+      pass: false,
+      failures: ['lightweight closing requires exactly one focused review and a persisted passing verification command/result'],
+    };
+  }
+  return { pass: true, failures: [] };
 }
 
 export function runGuard(args, {
@@ -215,6 +236,7 @@ export function runGuard(args, {
     'execution-reviews-passed': (dir) => checkExecutionReviewsPassed(dir),
     'direct-short-path': (dir) => directShortPathCheck(dir, workflow),
     'direct-test-result': (dir) => directTestResultCheck(dir),
+    'lightweight-completion-evidence': (dir) => lightweightCompletionEvidenceCheck(dir),
   };
 
   const checks = [];

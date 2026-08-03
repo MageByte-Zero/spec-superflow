@@ -190,6 +190,59 @@ export function recordWorkflowSelection(changeDir, {
   return selected;
 }
 
+export function recordLightweightCompletionEvidence(changeDir, {
+  focusedReview,
+  verificationCommand,
+  verificationResult,
+}) {
+  const loaded = readWorkflowSelection(changeDir);
+  if (!loaded.valid) throw new Error(loaded.failures.join('; '));
+  const selection = loaded.record.selection;
+  if (selection?.mode !== 'lightweight' || loaded.record.recommendation?.mode !== 'lightweight') {
+    throw new Error('lightweight completion evidence requires a selected lightweight receipt');
+  }
+  if (selection.completion !== null && selection.completion !== undefined) {
+    throw new Error('lightweight completion evidence is already recorded; a second focused review is not allowed');
+  }
+  if (!isSafeReason(focusedReview)) {
+    throw new Error('lightweight focused review must be non-empty single-line text');
+  }
+  if (!isSafeReason(verificationCommand)) {
+    throw new Error('lightweight verification command must be non-empty single-line text');
+  }
+  const result = String(verificationResult ?? '').trim().toLowerCase();
+  if (result !== 'pass') {
+    throw new Error('lightweight completion verification result must be pass');
+  }
+
+  const recordedAt = new Date().toISOString();
+  const updated = withHash({
+    ...withoutHash(loaded.record),
+    selection: {
+      ...selection,
+      completion: {
+        focused_review: focusedReview,
+        verification: {
+          command: verificationCommand,
+          result,
+        },
+        recorded_at: recordedAt,
+      },
+    },
+  });
+  writeRecord(changeDir, updated);
+  return updated;
+}
+
+export function hasLightweightCompletionEvidence(record) {
+  const completion = record?.selection?.completion;
+  return record?.selection?.mode === 'lightweight'
+    && isSafeReason(completion?.focused_review)
+    && isSafeReason(completion?.verification?.command)
+    && completion?.verification?.result === 'pass'
+    && isIsoTimestamp(completion?.recorded_at);
+}
+
 export function escalateLightweightWorkflow(changeDir, { reason }) {
   const loaded = readWorkflowSelection(changeDir);
   if (!loaded.valid) throw new Error(loaded.failures.join('; '));
