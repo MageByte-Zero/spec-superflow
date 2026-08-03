@@ -174,7 +174,7 @@ describe('platform runtime inventory', () => {
 
 describe('runtime version synchronization', () => {
   it('does not version source runtime commands during a release dry-run', () => {
-    const output = execFileSync(process.execPath, [CLI, 'version', '1.0.0', '--dry-run'], {
+    const output = execFileSync(process.execPath, [CLI, 'version', '2.0.0', '--dry-run'], {
       cwd: ROOT,
       encoding: 'utf8',
     });

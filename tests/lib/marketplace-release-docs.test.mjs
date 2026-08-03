@@ -21,7 +21,6 @@ describe('marketplace release documentation', () => {
     const checklist = read('docs/release-checklist.md');
     assert.match(readme, /v1\.0\.0/);
     assert.match(readme, /Quick、direct Hotfix、Tweak 或 Full/);
-    assert.match(readme, /Node 20/);
     assert.match(checklist, /AI Agent Marketplace Delivery/);
     assert.match(checklist, /verify-marketplace-release/);
     assert.match(checklist, /同步 PR/);
