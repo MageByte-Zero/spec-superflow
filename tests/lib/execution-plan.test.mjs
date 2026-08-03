@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  createPlan as createRawPlan, describeWaves, readPlan, recordReview, validatePlan, writePlan,
+  createGitRangeValidator, createPlan as createRawPlan, describeWaves, readPlan, recordReview, validatePlan, writePlan,
 } from '../../scripts/lib/execution-plan.mjs';
 import { createRecommendationReceipt, recommendExecutionModes } from '../../scripts/lib/execution-recommendation.mjs';
 import { readState } from '../../scripts/lib/state-loader.mjs';
@@ -86,6 +86,31 @@ function createPlan(directory, input) {
 }
 
 describe('execution plan data contract', () => {
+  it('reuses one immutable Git review range but re-resolves symbolic revisions', () => {
+    const base = 'a'.repeat(40);
+    const head = 'b'.repeat(40);
+    const calls = [];
+    const validator = createGitRangeValidator((args) => {
+      calls.push(args);
+      if (args[2] === 'rev-parse' && args[3] === '--show-toplevel') return '/repo\n';
+      if (args[2] === 'rev-parse' && args[3] === '--verify') {
+        const revision = args[4].replace(/\^\{commit\}$/, '');
+        return `${revision === 'HEAD' ? base : revision}\n`;
+      }
+      if (args[2] === 'merge-base' && args[3] === '--is-ancestor') return '';
+      throw new Error(`Unexpected Git command: ${args.join(' ')}`);
+    });
+
+    assert.deepEqual(validator.validate('/change', base, head), { base, head });
+    assert.equal(calls.length, 4, 'the first immutable range resolves root, two commits, and ancestry');
+
+    assert.deepEqual(validator.validate('/change', base, head), { base, head });
+    assert.equal(calls.length, 4, 'the same immutable range must not relaunch Git');
+
+    assert.deepEqual(validator.validate('/change', 'HEAD', head), { base, head });
+    assert.equal(calls.length, 8, 'symbolic revisions must be resolved and validated again');
+  });
+
   it('recommends inline for one small sequential task', () => {
     const result = recommendExecutionModes({
       workflow: 'full',

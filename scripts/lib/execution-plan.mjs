@@ -11,6 +11,8 @@ export const EXECUTION_MODES = ['inline', 'batch-inline', 'sdd'];
 const WAVE_STRATEGIES = new Set(['parallel', 'serial']);
 const REVIEW_STATUSES = new Set(['pass', 'fail']);
 const MAX_REPAIR_FAILURES = 5;
+const FULL_COMMIT_SHA = /^[0-9a-f]{40}$/i;
+const defaultGitRangeValidator = createGitRangeValidator();
 
 export function createPlan(changeDir, input) {
   const state = readState(changeDir);
@@ -409,39 +411,71 @@ function getPhysicalReviewsDirectory(changeDir) {
 }
 
 function validateReviewRange(changeDir, base, head) {
-  const gitRoot = getGitRoot(changeDir);
-  const resolvedBase = resolveGitCommit(gitRoot, base, 'base');
-  const resolvedHead = resolveGitCommit(gitRoot, head, 'head');
-  try {
-    execFileSync('git', ['-C', gitRoot, 'merge-base', '--is-ancestor', resolvedBase, resolvedHead], {
-      stdio: 'ignore',
-    });
-  } catch {
-    throw new Error('Review receipt base must be an ancestor of head');
-  }
-  return { base: resolvedBase, head: resolvedHead };
+  return defaultGitRangeValidator.validate(changeDir, base, head);
 }
 
-function getGitRoot(changeDir) {
-  try {
-    return execFileSync('git', ['-C', changeDir, 'rev-parse', '--show-toplevel'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-  } catch {
-    throw new Error('Review receipts require the change directory to be inside a Git work tree');
+/**
+ * Builds the internal Git proof boundary used by execution-plan validation.
+ * The cache is intentionally process-local and only trusts complete immutable
+ * commit IDs. Mutable revision inputs must be resolved on every call.
+ */
+export function createGitRangeValidator(runGit = defaultRunGit) {
+  const rootsByChangeDir = new Map();
+  const commitsByRepository = new Map();
+  const verifiedRanges = new Map();
+
+  function getGitRoot(changeDir, cacheable) {
+    const changeKey = resolve(changeDir);
+    if (cacheable && rootsByChangeDir.has(changeKey)) return rootsByChangeDir.get(changeKey);
+    let gitRoot;
+    try {
+      gitRoot = runGit(['-C', changeDir, 'rev-parse', '--show-toplevel'], {
+        encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+    } catch {
+      throw new Error('Review receipts require the change directory to be inside a Git work tree');
+    }
+    if (cacheable) rootsByChangeDir.set(changeKey, gitRoot);
+    return gitRoot;
   }
+
+  function resolveCommit(gitRoot, revision, field, cacheable) {
+    const cacheKey = `${gitRoot}\u0000${revision}`;
+    if (cacheable && commitsByRepository.has(cacheKey)) return commitsByRepository.get(cacheKey);
+    let resolved;
+    try {
+      resolved = runGit(['-C', gitRoot, 'rev-parse', '--verify', `${revision}^{commit}`], {
+        encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+    } catch {
+      throw new Error(`Review receipt ${field} must name an existing Git commit`);
+    }
+    if (cacheable) commitsByRepository.set(cacheKey, resolved);
+    return resolved;
+  }
+
+  return {
+    validate(changeDir, base, head) {
+      const cacheable = FULL_COMMIT_SHA.test(base) && FULL_COMMIT_SHA.test(head);
+      const gitRoot = getGitRoot(changeDir, cacheable);
+      const resolvedBase = resolveCommit(gitRoot, base, 'base', cacheable);
+      const resolvedHead = resolveCommit(gitRoot, head, 'head', cacheable);
+      const rangeKey = `${gitRoot}\u0000${resolvedBase}\u0000${resolvedHead}`;
+      if (cacheable && verifiedRanges.has(rangeKey)) return verifiedRanges.get(rangeKey);
+      try {
+        runGit(['-C', gitRoot, 'merge-base', '--is-ancestor', resolvedBase, resolvedHead], { stdio: 'ignore' });
+      } catch {
+        throw new Error('Review receipt base must be an ancestor of head');
+      }
+      const result = { base: resolvedBase, head: resolvedHead };
+      if (cacheable) verifiedRanges.set(rangeKey, result);
+      return result;
+    },
+  };
 }
 
-function resolveGitCommit(gitRoot, revision, field) {
-  try {
-    return execFileSync('git', ['-C', gitRoot, 'rev-parse', '--verify', `${revision}^{commit}`], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-  } catch {
-    throw new Error(`Review receipt ${field} must name an existing Git commit`);
-  }
+function defaultRunGit(args, options) {
+  return execFileSync('git', args, options);
 }
 
 function blockedDependencies(changeDir, plan, wave) {
