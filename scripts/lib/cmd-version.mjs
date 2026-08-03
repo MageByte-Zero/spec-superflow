@@ -18,16 +18,16 @@ const MANIFESTS = [
   { file: '.github/plugin/marketplace.json', path: ['plugins', '0', 'version'] },
 ];
 
-// ── Text files with regex patterns (first capture group = version to replace) ──
+// ── Text files with regex patterns (capture groups surround the version) ──
 // Note: CLAUDE.md is intentionally gitignored (project-local AI instructions).
 const TEXT_FILES = [
-  { file: 'README.md',              pattern: /(当前版本：`v?)0\.\d+\.\d+(`?)/g,                   replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'INSTALL.md',             pattern: /(当前发布版本：\*\*v)0\.\d+\.\d+(\*\*)/g,            replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'docs/README_en.md',      pattern: /(Current: `v)0\.\d+\.\d+(`)/g,                     replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'hooks/session-start',    pattern: /(# v)0\.\d+\.\d+(: conditional injection)/g,       replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'llms.txt',               pattern: /(Current version: v)0\.\d+\.\d+(\.)/g,             replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: '.claude/always/phase-guard.md', pattern: /(# spec-superflow v)0\.\d+\.\d+( \|)/g,      replacement: '$10.%MINOR%.%PATCH%$2' },
-  { file: 'GEMINI.md',              pattern: /(# spec-superflow v)0\.\d+\.\d+( \|)/g,              replacement: '$10.%MINOR%.%PATCH%$2' },
+  { file: 'README.md',              pattern: /(当前版本：`v?)\d+\.\d+\.\d+(`?)/g },
+  { file: 'INSTALL.md',             pattern: /(当前发布版本：\*\*v)\d+\.\d+\.\d+(\*\*)/g },
+  { file: 'docs/README_en.md',      pattern: /(Current: `v)\d+\.\d+\.\d+(`)/g },
+  { file: 'hooks/session-start',    pattern: /(# v)\d+\.\d+\.\d+(: conditional injection)/g },
+  { file: 'llms.txt',               pattern: /(Current version: v)\d+\.\d+\.\d+(\.)/g },
+  { file: '.claude/always/phase-guard.md', pattern: /(# spec-superflow v)\d+\.\d+\.\d+( \|)/g },
+  { file: 'GEMINI.md',              pattern: /(# spec-superflow v)\d+\.\d+\.\d+( \|)/g },
 ];
 
 function getNestedValue(obj, pathParts) {
@@ -62,7 +62,6 @@ export async function run(args) {
     console.error(`Invalid semver: ${newVersion}`);
     process.exit(2);
   }
-  const [, , minor, patch] = match;
 
   console.log(`Version sync → ${newVersion}${dryRun ? ' (dry run)' : ''}\n`);
   let changed = 0;
@@ -111,11 +110,10 @@ export async function run(args) {
     }
 
     const content = readFileSync(filePath, 'utf-8');
-    const replacement = entry.replacement
-      .replace('%MINOR%', minor)
-      .replace('%PATCH%', patch);
-
-    const newContent = content.replace(entry.pattern, replacement);
+    const newContent = content.replace(
+      entry.pattern,
+      (_match, prefix, suffix) => `${prefix}${newVersion}${suffix}`,
+    );
     if (newContent === content) {
       console.log(`  ✅ ${entry.file}: no version pattern matched (may already be correct)`);
       unchanged++;

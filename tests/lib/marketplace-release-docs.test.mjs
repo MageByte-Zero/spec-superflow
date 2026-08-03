@@ -16,13 +16,11 @@ describe('marketplace release documentation', () => {
     }
   });
 
-  it('records v0.9.0 highlights and the external delivery gate', () => {
+  it('records v1.0 release guidance and the external delivery gate', () => {
     const readme = read('README.md');
     const checklist = read('docs/release-checklist.md');
-    assert.match(readme, /v0\.9\.0/);
-    assert.match(readme, /Node 20/);
-    assert.match(readme, /model profiles/);
-    assert.match(readme, /最小性/);
+    assert.match(readme, /v1\.0\.0/);
+    assert.match(readme, /Quick、direct Hotfix、Tweak 或 Full/);
     assert.match(checklist, /AI Agent Marketplace Delivery/);
     assert.match(checklist, /verify-marketplace-release/);
     assert.match(checklist, /同步 PR/);
