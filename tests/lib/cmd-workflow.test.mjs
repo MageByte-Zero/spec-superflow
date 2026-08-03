@@ -99,6 +99,38 @@ describe('ssf workflow', () => {
     assert.equal(guard.json.pass, true);
   });
 
+  it('stops lightweight execution and restores Full planning gates when risk appears', () => {
+    const recommended = runSsf(['workflow', 'recommend', changeDir,
+      '--task-count', '2', '--file-count', '2', '--config-doc-only', 'no',
+      '--schema-api-change', 'no', '--new-module', 'no',
+      '--behavioral-constraint-change', 'no', '--cross-module-change', 'no', '--uncertainty', 'low',
+      '--affected-path', 'tests/lib/workflow-recommendation.test.mjs',
+      '--production-behavior', 'no', '--public-boundary', 'no', '--installer', 'no',
+      '--state-machine', 'no', '--external-side-effect', 'no', '--data-permission-config-semantics', 'no',
+      '--expected-behavior-clear', 'yes', '--verification-reproducible', 'yes', '--impact-paths-complete', 'yes',
+      '--json']);
+    assert.equal(recommended.exitCode, 0, recommended.stderr);
+    assert.equal(runSsf(['workflow', 'select', changeDir, '--mode', 'lightweight', '--confirm',
+      '--reason', 'internal test refactor', '--scope-confirmation', 'scope reviewed once',
+      '--verification', 'new-test']).exitCode, 0);
+    writeState('state: executing\nworkflow: lightweight\ndp_3_result: approved legacy contract\ndp_4_result: approved legacy plan\n');
+
+    const escalated = runSsf(['workflow', 'escalate', changeDir,
+      '--reason', 'public CLI behavior is now affected', '--json']);
+    assert.equal(escalated.exitCode, 0, escalated.stderr);
+    assert.equal(readState(changeDir).workflow, 'full');
+    assert.equal(readState(changeDir).state, 'specifying');
+    assert.equal(readState(changeDir).dp_3_result, null);
+    assert.equal(readState(changeDir).dp_4_result, null);
+    assert.equal(escalated.json.record.selection.escalation_reason, 'public CLI behavior is now affected');
+
+    const fullGate = runSsf(['runtime', 'guard', 'check', changeDir,
+      'specifying', 'bridging', '--workflow', 'full', '--json']);
+    assert.equal(fullGate.exitCode, 1);
+    assert.equal(fullGate.json.pass, false);
+    assert.equal(fullGate.json.checks.some(check => check.dimension === 'artifacts-exist' && !check.pass), true);
+  });
+
   it('advertises both direct acceptance and an explicit risk-acknowledged Quick selection', () => {
     const result = runSsf(['--help']);
     assert.equal(result.exitCode, 0, result.stderr);

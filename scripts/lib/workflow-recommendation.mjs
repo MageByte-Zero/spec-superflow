@@ -190,6 +190,37 @@ export function recordWorkflowSelection(changeDir, {
   return selected;
 }
 
+export function escalateLightweightWorkflow(changeDir, { reason }) {
+  const loaded = readWorkflowSelection(changeDir);
+  if (!loaded.valid) throw new Error(loaded.failures.join('; '));
+  const selection = loaded.record.selection;
+  if (selection?.mode !== 'lightweight') {
+    throw new Error('only an active lightweight workflow can be escalated');
+  }
+  if (!isSafeReason(reason)) {
+    throw new Error('lightweight escalation requires a non-empty single-line reason');
+  }
+
+  const escalatedAt = new Date().toISOString();
+  const escalated = withHash({
+    ...withoutHash(loaded.record),
+    selection: {
+      ...selection,
+      mode: 'full',
+      reason: `Escalated from lightweight: ${reason}`,
+      followed_recommendation: false,
+      acknowledged_non_recommendation: false,
+      risk_override: false,
+      escalation_reason: reason,
+      escalated_from: 'lightweight',
+      escalated_at: escalatedAt,
+      selected_at: escalatedAt,
+    },
+  });
+  writeRecord(changeDir, escalated);
+  return escalated;
+}
+
 export function acceptWorkflowRecommendation(changeDir, { source, verificationStrategy }) {
   const loaded = readWorkflowSelection(changeDir);
   if (!loaded.valid) throw new Error(loaded.failures.join('; '));

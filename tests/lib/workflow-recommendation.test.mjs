@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
   acceptWorkflowRecommendation,
+  escalateLightweightWorkflow,
   recommendWorkflowPath,
   recordWorkflowSelection,
   readWorkflowSelection,
@@ -87,13 +88,47 @@ describe('workflow path recommendation', () => {
     assert.equal(incomplete.recommendation.mode, 'full');
     assert.match(incomplete.recommendation.risk_reasons.join(' '), /cannot be proven/i);
 
-    const excluded = recommendWorkflowPath({
+    const safeChecks = {
+      production_behavior: 'no',
+      public_boundary: 'no',
+      installer: 'no',
+      state_machine: 'no',
+      external_side_effect: 'no',
+      data_permission_config_semantics: 'no',
+      expected_behavior_clear: 'yes',
+      verification_reproducible: 'yes',
+      impact_paths_complete: 'yes',
+    };
+    for (const [excludedCheck, value] of Object.entries({
+      production_behavior: 'yes',
+      public_boundary: 'yes',
+      installer: 'yes',
+      state_machine: 'yes',
+      external_side_effect: 'yes',
+      data_permission_config_semantics: 'yes',
+      expected_behavior_clear: 'no',
+      verification_reproducible: 'no',
+      impact_paths_complete: 'no',
+    })) {
+      const excluded = recommendWorkflowPath({
+        ...base,
+        affected_paths: ['tests/lib/workflow-recommendation.test.mjs'],
+        exclusion_checks: { ...safeChecks, [excludedCheck]: value },
+      });
+      assert.equal(excluded.recommendation.mode, 'full', excludedCheck);
+      assert.match(excluded.recommendation.risk_reasons.join(' '), new RegExp(excludedCheck));
+    }
+  });
+
+  it('records a discovered lightweight risk before routing the receipt to Full', () => {
+    const changeDir = mkdtempSync(join(tmpdir(), 'ssf-workflow-escalation-'));
+    const lightweightFacts = {
       ...base,
-      affected_paths: ['scripts/install.mjs'],
+      affected_paths: ['tests/lib/workflow-recommendation.test.mjs'],
       exclusion_checks: {
         production_behavior: 'no',
         public_boundary: 'no',
-        installer: 'yes',
+        installer: 'no',
         state_machine: 'no',
         external_side_effect: 'no',
         data_permission_config_semantics: 'no',
@@ -101,9 +136,30 @@ describe('workflow path recommendation', () => {
         verification_reproducible: 'yes',
         impact_paths_complete: 'yes',
       },
-    });
-    assert.equal(excluded.recommendation.mode, 'full');
-    assert.match(excluded.recommendation.risk_reasons.join(' '), /installer/i);
+    };
+    try {
+      saveWorkflowRecommendation(changeDir, lightweightFacts);
+      recordWorkflowSelection(changeDir, {
+        mode: 'lightweight',
+        reason: 'internal test refactor',
+        scopeConfirmation: 'affected paths and exclusions reviewed once',
+        verificationStrategy: 'new-test',
+        confirmed: true,
+        acknowledged: false,
+      });
+
+      const escalated = escalateLightweightWorkflow(changeDir, {
+        reason: 'public CLI behavior is now affected',
+      });
+
+      assert.equal(escalated.selection.mode, 'full');
+      assert.equal(escalated.selection.escalated_from, 'lightweight');
+      assert.equal(escalated.selection.escalation_reason, 'public CLI behavior is now affected');
+      assert.match(escalated.selection.escalated_at, /^\d{4}-\d{2}-\d{2}T/);
+      assert.equal(readWorkflowSelection(changeDir).record.selection.mode, 'full');
+    } finally {
+      rmSync(changeDir, { recursive: true, force: true });
+    }
   });
 
   it('recommends quick for a bounded low-risk code change', () => {

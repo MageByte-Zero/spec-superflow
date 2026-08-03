@@ -4,6 +4,7 @@ import { parseArgs } from 'node:util';
 import {
   WORKFLOW_MODES,
   acceptWorkflowRecommendation,
+  escalateLightweightWorkflow,
   recommendWorkflowPath,
   readWorkflowSelection,
   recordWorkflowSelection,
@@ -77,11 +78,11 @@ export async function run(args) {
   const { positionals, values } = parsed;
   const [subcommand, changeDir] = positionals;
   if (values.help || subcommand === undefined) return printHelp();
-  if (!['recommend', 'select', 'accept', 'show'].includes(subcommand)) {
-    return fail('Usage: ssf workflow <recommend|select|accept|show> <change-dir>', 2);
+  if (!['recommend', 'select', 'accept', 'escalate', 'show'].includes(subcommand)) {
+    return fail('Usage: ssf workflow <recommend|select|accept|escalate|show> <change-dir>', 2);
   }
   if (positionals.length !== 2 || !changeDir) {
-    return fail('Usage: ssf workflow <recommend|select|accept|show> <change-dir>', 2);
+    return fail('Usage: ssf workflow <recommend|select|accept|escalate|show> <change-dir>', 2);
   }
 
   try {
@@ -100,6 +101,7 @@ export async function run(args) {
     if (subcommand === 'recommend') return recommend(changeDir, values);
     if (subcommand === 'show') return show(changeDir, state, values.json);
     if (subcommand === 'accept') return accept(changeDir, state, values);
+    if (subcommand === 'escalate') return escalate(changeDir, state, values);
     return select(changeDir, state, values);
   } catch (error) {
     if (error instanceof UsageError) return fail(error.message, 2);
@@ -139,6 +141,33 @@ function accept(changeDir, state, values) {
   });
   persistWorkflowSelection(changeDir, state, record);
   return print({ ok: true, source: 'direct-request', record }, values.json);
+}
+
+function escalate(changeDir, state, values) {
+  if (state.workflow !== 'lightweight') {
+    throw new Error('only an active lightweight workflow can be escalated');
+  }
+  const record = escalateLightweightWorkflow(changeDir, { reason: values.reason });
+  const fromState = state.state;
+  state.workflow = 'full';
+  state.state = fromState === 'exploring' ? 'exploring' : 'specifying';
+  state.execution_mode = null;
+  state.execution_plan_hash = null;
+  state.execution_plan_revision = null;
+  state.batches_completed = 0;
+  state.test_result = null;
+  state.spec_merged = false;
+  for (const decision of [2, 3, 4, 6, 7]) {
+    state[`dp_${decision}_result`] = null;
+    state[`dp_${decision}_confirmed`] = null;
+    state[`dp_${decision}_timestamp`] = null;
+  }
+  state.dp_0_decisions = appendDecision(state.dp_0_decisions, 'workflow_path=full; escalated_from=lightweight');
+  state.last_transition_from = fromState;
+  state.last_transition_to = state.state;
+  state.last_transition = new Date().toISOString();
+  writeState(changeDir, state);
+  return print({ ok: true, source: 'lightweight-escalation', record, workflow: state.workflow, state: state.state }, values.json);
 }
 
 function persistWorkflowSelection(changeDir, state, record) {
@@ -327,5 +356,6 @@ function printHelp() {
   ssf workflow recommend <change-dir> [--task-count <n>] [--file-count <n>] [--config-doc-only yes|no|unknown] [--schema-api-change yes|no|unknown] [--new-module yes|no|unknown] [--behavioral-constraint-change yes|no] [--cross-module-change yes|no] [--uncertainty low|high|unknown] [--request-kind standard|incident] [--affected-path <path>] [--production-behavior yes|no|unknown] [--public-boundary yes|no|unknown] [--installer yes|no|unknown] [--state-machine yes|no|unknown] [--external-side-effect yes|no|unknown] [--data-permission-config-semantics yes|no|unknown] [--expected-behavior-clear yes|no|unknown] [--verification-reproducible yes|no|unknown] [--impact-paths-complete yes|no|unknown] [--json]
   ssf workflow select <change-dir> --mode full|hotfix|tweak|quick|lightweight --confirm --reason <text> [--scope-confirmation <text>] [--acknowledge-recommendation] [--verification tdd|new-test|bounded] [--json]
   ssf workflow accept <change-dir> --source direct-request [--verification tdd|new-test|bounded] [--json]
+  ssf workflow escalate <change-dir> --reason <discovered-risk> [--json]
   ssf workflow show <change-dir> [--json]`);
 }
