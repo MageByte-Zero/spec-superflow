@@ -174,7 +174,7 @@ describe('platform runtime inventory', () => {
 
 describe('runtime version synchronization', () => {
   it('does not version source runtime commands during a release dry-run', () => {
-    const output = execFileSync(process.execPath, [CLI, 'version', '0.9.2', '--dry-run'], {
+    const output = execFileSync(process.execPath, [CLI, 'version', '1.0.0', '--dry-run'], {
       cwd: ROOT,
       encoding: 'utf8',
     });
@@ -183,12 +183,17 @@ describe('runtime version synchronization', () => {
     assert.doesNotMatch(output, /skills\/build-executor\/implementer-prompt\.md: version string updated/);
     assert.doesNotMatch(output, /skills\/build-executor\/task-reviewer-prompt\.md: version string updated/);
     assert.doesNotMatch(output, /skills\/code-reviewer\/code-reviewer-prompt\.md: version string updated/);
+    assert.match(output, /README\.md: version string updated/);
+    assert.match(output, /INSTALL\.md: version string updated/);
+    assert.match(output, /hooks\/session-start: version string updated/);
   });
 
   it('updates npm lock metadata without rewriting source recovery commands', () => {
     const target = mkdtempSync(join(tmpdir(), 'ssf-version-release-assets-'));
     try {
       mkdirSync(join(target, 'commands', 'ssf'), { recursive: true });
+      mkdirSync(join(target, 'docs'), { recursive: true });
+      mkdirSync(join(target, 'hooks'), { recursive: true });
       writeFileSync(join(target, 'package.json'), '{"name":"fixture","version":"0.10.0"}\n');
       writeFileSync(join(target, 'package-lock.json'), `${JSON.stringify({
         name: 'fixture',
@@ -202,15 +207,25 @@ describe('runtime version synchronization', () => {
           `Run \`${SOURCE_RUNTIME_COMMAND} ${name}\`.\n`,
         );
       }
+      writeFileSync(join(target, 'README.md'), '当前版本：`v0.10.0`\n');
+      writeFileSync(join(target, 'INSTALL.md'), '当前发布版本：**v0.10.0**。\n');
+      writeFileSync(join(target, 'docs', 'README_en.md'), 'Current: `v0.10.0`\n');
+      writeFileSync(join(target, 'hooks', 'session-start'), '# v0.10.0: conditional injection\n');
+      writeFileSync(join(target, 'llms.txt'), 'Current version: v0.10.0.\n');
 
-      execFileSync(process.execPath, [CLI, 'version', '0.11.0'], {
+      execFileSync(process.execPath, [CLI, 'version', '1.0.0'], {
         cwd: target,
         encoding: 'utf8',
       });
 
       const lock = JSON.parse(readFileSync(join(target, 'package-lock.json'), 'utf8'));
-      assert.equal(lock.version, '0.11.0');
-      assert.equal(lock.packages[''].version, '0.11.0');
+      assert.equal(lock.version, '1.0.0');
+      assert.equal(lock.packages[''].version, '1.0.0');
+      assert.equal(readFileSync(join(target, 'README.md'), 'utf8'), '当前版本：`v1.0.0`\n');
+      assert.equal(readFileSync(join(target, 'INSTALL.md'), 'utf8'), '当前发布版本：**v1.0.0**。\n');
+      assert.equal(readFileSync(join(target, 'docs', 'README_en.md'), 'utf8'), 'Current: `v1.0.0`\n');
+      assert.equal(readFileSync(join(target, 'hooks', 'session-start'), 'utf8'), '# v1.0.0: conditional injection\n');
+      assert.equal(readFileSync(join(target, 'llms.txt'), 'utf8'), 'Current version: v1.0.0.\n');
       for (const name of ['resume', 'switch', 'save']) {
         assert.match(
           readFileSync(join(target, 'commands', 'ssf', `${name}.md`), 'utf8'),

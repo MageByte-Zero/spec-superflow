@@ -1,7 +1,7 @@
 <h1 align="center">spec-superflow</h1>
 
 <p align="center">
-  <strong>A self-contained AI coding workflow plugin fusing OpenSpec planning + Superpowers execution discipline</strong>
+  <strong>An AI coding workflow that uses lightweight or full controls based on change risk</strong>
 </p>
 
 <p align="center">
@@ -89,7 +89,7 @@ gemini extensions install https://github.com/MageByte-Zero/spec-superflow
 gemini extensions update spec-superflow   # upgrade
 ```
 
-### OpenCode / WorkBuddy / Trae
+### Other supported platforms
 
 | Platform | Method | Status |
 |----------|--------|--------|
@@ -97,8 +97,18 @@ gemini extensions update spec-superflow   # upgrade
 | **WorkBuddy** | `npx spec-superflow@latest install-workbuddy` | Installer provided |
 | **CodeBuddy Code CLI** | `ssf install-codebuddy` | Installer provided |
 | **Trae IDE / TRAE Work** | `.trae/skills/`, `~/.trae/skills/`, or zip/.skill upload | Manual/import |
+| **Cline** | `npx spec-superflow@latest install-cline` | Installer provided |
+| **Kiro** | `npx spec-superflow@latest install-kiro` | Installer provided |
+| **Windsurf** | `npx spec-superflow@latest install-windsurf` | Installer provided |
+| **Qwen Code** | `npx spec-superflow@latest install-qwen` | Installer provided |
+| **Amazon Q Developer** | `npx spec-superflow@latest install-amazon-q` | Installer provided |
+| **Roo Code** | `npx spec-superflow@latest install-roocode` | Installer provided |
+| **Continue** | `npx spec-superflow@latest install-continue` | Installer provided |
+| **Pi** | `npx spec-superflow@latest install-pi` | Installer provided |
+| **Qoder** | `npx spec-superflow@latest install-qoder` | Installer provided |
+| **ZCODE** | `ssf install-zcode` | Installer provided |
 
-> Full installation guide: [INSTALL.md](../INSTALL.md)
+> spec-superflow supports 19 platforms. See [INSTALL.md](../INSTALL.md) and the [platform matrix](platform-matrix.md) for the full matrix.
 
 ### CLI Toolchain
 
@@ -132,8 +142,8 @@ npm install -g spec-superflow
 
 ### Version
 
-- Current: `v0.12.1`
-- v0.9.1 highlights: DP-4 execution-mode recommendations, a portable runtime across 17 platforms, and a raw-package smoke with no plugin-root variable.
+- Current: `v1.0.0`
+- v1.0: Quick, direct Hotfix, Tweak, and Full paths keep small changes bounded while reserving planning, contracts, and reviews for complex work.
 - Self-contained — no OpenSpec or Superpowers runtime required
 - Upstream: [Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec), [obra/superpowers](https://github.com/obra/superpowers)
 - Changelog: [CHANGELOG.md](../CHANGELOG.md)
@@ -183,22 +193,21 @@ In a **project that uses this plugin**, `changes/<change>/specs/` remains the ac
 
 ## Why
 
-AI coding sessions fail in one of two ways:
+AI coding sessions commonly fail in two ways:
 
 - **The AI starts coding before you've decided what to build.** You say "add authorization" and it touches 40 files before you realize — RBAC or ABAC?
 
 - **The plan is solid, but execution drifts.** The proposal, specs, and design are written, but nobody enforces testing, nobody gates reviews, and by merge time the behavior doesn't match.
 
-**spec-superflow builds a hard wall between these two failure points:** intent exploration → formal artifacts (Schema-validated) → execution contract bridge → TDD + SDD + Review Gate enforcement → verified closure → delta spec sync to prevent spec rot.
+spec-superflow handles these cases differently: it first assesses change risk; small changes stay within a clear boundary and verification step, while complex changes use intent, specs, an execution contract, implementation, and review. This keeps routine work short without skipping the checks that matter for risky work.
 
 | Principle | Meaning |
 |---|---|
-| Spec First | No stable planning artifacts → implementation blocked |
-| Guarded Handoff | `execution-contract.md` is the only bridge to implementation |
-| Strong Guardrails | Contract violations intercepted and rolled back |
-| Schema Validated | Planning artifacts validated by embedded engine |
-| Execute Disciplined | TDD Iron Law + SDD subagents + Review Gates |
-| Self-Contained | No external runtime dependencies |
+| Choose the path first | Select Quick, Hotfix, Tweak, or Full from scope and risk |
+| Align complex work | Full uses specs and an execution contract to agree scope and acceptance |
+| Verify implementation | Every path requires tests or checks proportionate to risk |
+| Diagnose before changing | Reproduce and locate failures before attempting a fix |
+| Self-contained | No OpenSpec or Superpowers runtime is required |
 
 ### When to Use
 
@@ -255,7 +264,7 @@ You: "add authorization to the API"
    closing            CLOSED successful terminal state (no next skill)
 ```
 
-**Hard constraints:** Full and legacy Hotfix require an approved `execution-contract.md`; Quick, direct Hotfix, and Tweak instead stay within their accepted boundary and persist `test_result: pass`. Requirements change mid-execution → forced rollback. Bug encountered → must enter debugging state, no ad-hoc fixes.
+**Path selection:** Quick, direct Hotfix, and Tweak remain lightweight: record the boundary and verification only. Full and legacy Hotfix require an execution contract, execution plan, and review receipt. Risks are explained for the user to choose from; they do not silently upgrade a path.
 
 ### Guarded execution plans
 
