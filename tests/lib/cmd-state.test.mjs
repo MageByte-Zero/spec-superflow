@@ -378,6 +378,15 @@ describe('cmd-state: set', () => {
     assert.match(result.stderr || result.stdout, /not settable/);
   });
 
+  it('rejects manual edits to guarded DP-5 fields', () => {
+    ssf(`state init ${tempDir}`);
+    for (const field of ['dp_5_result', 'dp_5_timestamp', 'dp_5_decisions', 'dp_5_confirmed']) {
+      const result = ssf(`state set ${tempDir} ${field} forged`);
+      assert.equal(result.exitCode, 1, `${field} should be guarded`);
+      assert.match(result.stderr || result.stdout, /not settable/);
+    }
+  });
+
   it('rejects unknown fields', () => {
     ssf(`state init ${tempDir}`);
     const result = ssf(`state set ${tempDir} nonexistent_field value`);

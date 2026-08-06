@@ -266,6 +266,8 @@ You: "add authorization to the API"
 
 **Path selection:** Quick, direct Hotfix, and Tweak remain lightweight: record the boundary and verification only. Full and legacy Hotfix require an execution contract, execution plan, and review receipt. Risks are explained for the user to choose from; they do not silently upgrade a path.
 
+**DP-5 debugging gate:** Record every failed fix with `ssf debug attempt record` and distinct, verifiable evidence. Wave Review failures do not count as debugging attempts. DP-5 is persisted only after at least three failed attempts in the current execution context and an explicit `ssf debug escalate ... --confirm`; generic `state set` cannot write `dp_5_*`.
+
 ### Guarded execution plans
 
 For Full/legacy Hotfix, DP-4 is a persisted, current execution plan at

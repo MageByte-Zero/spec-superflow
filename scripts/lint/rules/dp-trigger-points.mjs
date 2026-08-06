@@ -12,6 +12,11 @@ const DP_SKILL_MAP = {
   'DP-7': { skills: ['release-archivist'], name: '归档确认' },
 };
 
+const GUARDED_RECORD_COMMANDS = {
+  'DP-4': /ssf execution (plan|revise)/,
+  'DP-5': /ssf debug escalate/,
+};
+
 export default {
   name: 'dp-trigger-points',
 
@@ -24,9 +29,11 @@ export default {
       // Check 1: Is DP referenced by name/number?
       const dpReferenced = content.includes(dp);
 
-      // Check 2: Is there a record command (ssf state set ... dp_N_*)?
+      // Check 2: Is there a raw DP field command or the DP's guarded command?
       const dpNum = dp.slice(-1);
-      const hasRecordCommand = new RegExp(`dp_${dpNum}_(result|timestamp|confirmed)`).test(content);
+      const guardedCommand = GUARDED_RECORD_COMMANDS[dp];
+      const hasRecordCommand = guardedCommand?.test(content)
+        || new RegExp(`dp_${dpNum}_(result|timestamp|confirmed)`).test(content);
 
       // Check 3: Is the trigger condition described?
       const hasTriggerDesc = new RegExp(
@@ -49,7 +56,7 @@ export default {
         if (!hasRecordCommand) {
           issues.push({
             severity: 'warning',
-            message: `${dp} has no ssf state set dp_${dpNum}_* record command`,
+            message: `${dp} has no recognized record command`,
           });
         }
       }

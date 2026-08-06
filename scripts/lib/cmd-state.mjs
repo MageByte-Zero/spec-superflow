@@ -20,7 +20,6 @@ const SETTABLE_FIELDS = [
   'dp_1_result', 'dp_1_timestamp', 'dp_1_decisions', 'dp_1_confirmed',
   'dp_2_result', 'dp_2_timestamp', 'dp_2_decisions', 'dp_2_confirmed',
   'dp_3_result', 'dp_3_timestamp', 'dp_3_decisions', 'dp_3_confirmed',
-  'dp_5_result', 'dp_5_timestamp', 'dp_5_decisions', 'dp_5_confirmed',
   'dp_6_result', 'dp_6_timestamp', 'dp_6_decisions', 'dp_6_confirmed',
   'dp_7_result', 'dp_7_timestamp', 'dp_7_decisions', 'dp_7_confirmed',
 ];

@@ -49,7 +49,29 @@ Scientific method: form a single hypothesis ("I think X is the root cause becaus
 
 ### DP-5: Debug Escalation (3+ Failures)
 
-3+ failed fixes = architectural problem. Each fix revealing new problems elsewhere = wrong architecture. Record: `ssf state set <change-dir> dp_5_result <decision>`. Discuss with user before attempting more fixes.
+3+ failed fixes = architectural problem. Each fix revealing new problems elsewhere = wrong architecture.
+
+After every failed fix, preserve its failure output in a physical file inside the change directory, then record the distinct attempt:
+
+```bash
+ssf debug attempt record <change-dir> \
+  --id <unique-attempt-id> \
+  --summary "<what was tried and why it failed>" \
+  --evidence <change-local-failure-log>
+```
+
+Use `ssf debug attempt show <change-dir> --json` to present the complete attempt ledger. Wave Review repair failures are separate evidence and never count as debugging attempts.
+
+After at least three distinct evidence-backed attempts, stop and discuss the architectural decision with the user. Only after the user explicitly chooses may DP-5 be recorded:
+
+```bash
+ssf debug escalate <change-dir> \
+  --decision <continue|abandon> \
+  --reason "<user-confirmed decision>" \
+  --confirm
+```
+
+Never write `dp_5_*` through raw `ssf state set`; those fields are guarded by the debug ledger. If the user chooses `abandon`, transition to `abandoned` only after the guarded DP-5 receipt is recorded.
 
 ## Red Flags — Return to Phase 1
 

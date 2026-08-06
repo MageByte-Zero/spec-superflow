@@ -2,9 +2,12 @@
 // Tests for scripts/lib/cmd-audit.mjs
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { recordDebugAttempt, recordDebugEscalation } from '../../scripts/lib/debug-attempts.mjs';
+import { computeArtifactsHash, computeContractHash } from '../../scripts/lib/hash.mjs';
+import { readState, rebuildState, writeState } from '../../scripts/lib/state-loader.mjs';
 
 let tempDir;
 
@@ -132,7 +135,8 @@ describe('cmd-audit: generateReport()', () => {
       assert.ok(report.includes(name), `Report should include DP-${dpNum} name: ${name}`);
     }
 
-    assert.ok(report.includes('8/8 已记录'));
+    assert.ok(report.includes('7/8 已记录'));
+    assert.match(report, /DP-5.*unsupported/i);
   });
 
   it('formats timestamps correctly', () => {
@@ -198,5 +202,54 @@ describe('cmd-audit: generateReport()', () => {
     // Verify table structure
     assert.ok(report.includes('| DP | 名称 | 结果 | 时间戳 |'), 'Should have table header');
     assert.ok(report.includes('|----|------|------|--------|'), 'Should have table separator');
+  });
+
+  it('flags a legacy DP-5 record without three attempts as unsupported', () => {
+    const state = {
+      change_name: 'legacy-debug-escalation',
+      state: 'debugging',
+      dp_5_result: 'continue: recorded through raw state set',
+      dp_5_timestamp: '2026-08-06T00:00:00Z',
+    };
+
+    const report = generateReport(tempDir, state);
+
+    assert.match(report, /DP-5.*unsupported/i);
+    assert.match(report, /three|3/i);
+  });
+
+  it('counts an evidence-backed confirmed DP-5 record as supported', () => {
+    const validDir = mkdtempSync(join(tmpdir(), 'ssf-audit-debug-valid-'));
+    try {
+      writeFileSync(join(validDir, 'proposal.md'), '## Why\nAudit a guarded DP-5 record with durable evidence.\n## What Changes\n- Guard escalation.\n');
+      writeFileSync(join(validDir, 'design.md'), '# Design\n');
+      writeFileSync(join(validDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 Guard escalation\n');
+      writeFileSync(join(validDir, 'execution-contract.md'), '# Execution Contract\n');
+      rebuildState(validDir, { computeArtifactsHash, computeContractHash });
+      const state = readState(validDir);
+      state.state = 'debugging';
+      state.workflow = 'quick';
+      writeState(validDir, state);
+
+      const evidenceDir = join(validDir, '.superpowers', 'sdd', 'debug-evidence');
+      mkdirSync(evidenceDir, { recursive: true });
+      for (const id of ['fix-1', 'fix-2', 'fix-3']) {
+        const evidencePath = join(evidenceDir, `${id}.log`);
+        writeFileSync(evidencePath, `${id} failed\n`);
+        recordDebugAttempt(validDir, { id, summary: `${id} failed`, evidence: evidencePath });
+      }
+      recordDebugEscalation(validDir, {
+        decision: 'continue',
+        reason: 'Three fixes failed',
+        confirm: true,
+      });
+
+      const report = generateReport(validDir, readState(validDir));
+      assert.match(report, /\| DP-5 \| 调试升级 \| continue: Three fixes failed \|/);
+      assert.ok(report.includes('1/8 已记录'));
+      assert.doesNotMatch(report, /DP-5 unsupported/i);
+    } finally {
+      rmSync(validDir, { recursive: true, force: true });
+    }
   });
 });

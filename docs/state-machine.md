@@ -195,7 +195,9 @@ During `executing`, if a bug, test failure, or unexpected behavior blocks progre
 1. Pause `executing` and enter `debugging`
 2. `bug-investigator` performs 4-phase root cause analysis
 3. If root cause found → fix (with TDD) → return to `executing`
-4. If 3+ fix attempts fail → question architecture → escalate to user
+4. After each failed fix, record one distinct evidence-backed attempt with `ssf debug attempt record`; Wave Review repair failures remain separate
+5. If 3+ recorded fix attempts fail → question architecture → present the ledger to the user
+6. Persist DP-5 only through `ssf debug escalate ... --confirm`; raw `state set dp_5_*` is blocked
 
 ## Anti-Pattern
 

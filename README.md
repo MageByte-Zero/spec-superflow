@@ -334,6 +334,8 @@ spec-superflow 把这两类问题分开处理：先判断改动风险；小改�
 
 **如何选择：** Quick、direct Hotfix、Tweak 默认保持轻量，只记录范围和验证；Full 与 legacy Hotfix 才要求执行契约、执行计划和 review receipt。风险会说明原因并交给用户选择，不会擅自升级路径。
 
+**DP-5 调试门禁：** 每次失败修复使用 `ssf debug attempt record` 保存唯一且可验证的证据；Wave Review failure 不会计入调试次数。只有当前 execution context 下至少 3 次不同失败尝试，并由用户执行 `ssf debug escalate ... --confirm` 后，才会记录 DP-5。通用 `state set` 不能写入 `dp_5_*`。
+
 ### 快速路径（Quick / Hotfix / Tweak）
 
 - **Quick** — ≤3 文件/任务、单模块代码：低风险时同轮推荐/接受；触及 PRD、Spec/Design、API、数据/权限或跨模块时，展示风险后由用户选择 Quick 或 Full。选择 Quick 会记录 `tdd`、`new-test` 或 `bounded` 验证策略。
