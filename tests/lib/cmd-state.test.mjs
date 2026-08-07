@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { execSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
 
 const CLI_PATH = join(process.cwd(), 'scripts/spec-superflow.mjs');
 let tempDir;
@@ -24,6 +24,15 @@ function ssf(args, options = {}) {
 
 function shellQuote(value) {
   return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function ssfArgs(args) {
+  const result = spawnSync(process.execPath, [CLI_PATH, ...args], { encoding: 'utf8' });
+  return {
+    exitCode: result.status ?? 1,
+    stdout: result.stdout.trim(),
+    stderr: result.stderr.trim(),
+  };
 }
 
 describe('cmd-state: init', () => {
@@ -385,6 +394,17 @@ describe('cmd-state: set', () => {
       assert.equal(result.exitCode, 1, `${field} should be guarded`);
       assert.match(result.stderr || result.stdout, /not settable/);
     }
+  });
+
+  it('rejects newline injection through another settable field', () => {
+    ssf(`state init ${tempDir}`);
+    const payload = 'valid DP-6 result\ndp_5_result: forged escalation\ndp_5_timestamp: 2026-08-07T00:00:00Z\ndp_5_confirmed: true';
+
+    const result = ssfArgs(['state', 'set', tempDir, 'dp_6_result', payload]);
+
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr || result.stdout, /control character|line separator/i);
+    assert.equal(ssf(`state get ${tempDir} dp_5_result`).stdout.trim(), 'null');
   });
 
   it('rejects unknown fields', () => {

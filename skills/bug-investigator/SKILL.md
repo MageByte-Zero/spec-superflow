@@ -53,6 +53,8 @@ Scientific method: form a single hypothesis ("I think X is the root cause becaus
 
 After every failed fix, preserve its failure output in a physical file inside the change directory, then record the distinct attempt:
 
+Before this command, every workflow path (including Quick/direct Hotfix/Tweak) must have a current, valid execution plan. If it does not, establish and confirm one with `ssf execution recommend` and `ssf execution plan` before recording the attempt; the debug command rejects a missing or stale plan.
+
 ```bash
 ssf debug attempt record <change-dir> \
   --id <unique-attempt-id> \

@@ -56,7 +56,7 @@
 - **名称**：调试升级
 - **触发条件**：bug-investigator 连续 3 次或更多修复尝试失败后，无法自动解决当前问题
 - **所需输入**：失败日志、每次修复尝试的具体方案与结果、错误根因分析、剩余可行方案（如有）
-- **证据门禁**：每次失败修复必须通过 `ssf debug attempt record` 写入结构化 ledger，包含唯一 attempt id、摘要和 change 目录内的物理证据文件。Wave Review 的 repair failure 不计入 debugging attempt；重复证据和陈旧 execution context 会被拒绝。
+- **证据门禁**：每次失败修复必须通过 `ssf debug attempt record` 写入结构化 ledger，包含唯一 attempt id、摘要和 change 目录内的物理证据文件。所有路径都必须先有 current、有效的 execution plan；缺失、陈旧或不匹配的 plan 会被拒绝。Wave Review 的 repair failure 不计入 debugging attempt；重复证据也会被拒绝。
 - **预期输出**：至少 3 次不同且证据完整的失败尝试后，用户决定继续调试或放弃；仅 `ssf debug escalate ... --confirm` 可以持久化 DP-5，通用 `state set` 不可写入 `dp_5_*`。
 - **关联 skill**：`spec-superflow:bug-investigator`
 

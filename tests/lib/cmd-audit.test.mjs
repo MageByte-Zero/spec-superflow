@@ -5,11 +5,22 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
 import { recordDebugAttempt, recordDebugEscalation } from '../../scripts/lib/debug-attempts.mjs';
 import { computeArtifactsHash, computeContractHash } from '../../scripts/lib/hash.mjs';
 import { readState, rebuildState, writeState } from '../../scripts/lib/state-loader.mjs';
 
+const CLI_PATH = join(process.cwd(), 'scripts/spec-superflow.mjs');
 let tempDir;
+
+function ssf(args) {
+  const result = spawnSync(process.execPath, [CLI_PATH, ...args], { encoding: 'utf8' });
+  return {
+    exitCode: result.status ?? 1,
+    stdout: result.stdout.trim(),
+    stderr: result.stderr.trim(),
+  };
+}
 
 describe('cmd-audit: generateReport()', () => {
   let generateReport, DP_NAMES;
@@ -227,9 +238,21 @@ describe('cmd-audit: generateReport()', () => {
       writeFileSync(join(validDir, 'execution-contract.md'), '# Execution Contract\n');
       rebuildState(validDir, { computeArtifactsHash, computeContractHash });
       const state = readState(validDir);
-      state.state = 'debugging';
+      state.state = 'approved-for-build';
       state.workflow = 'quick';
       writeState(validDir, state);
+      const wave = 'audit-debug:serial:1.1';
+      assert.equal(ssf(['execution', 'recommend', validDir, '--wave', wave]).exitCode, 0);
+      assert.equal(ssf([
+        'execution', 'plan', validDir,
+        '--mode', 'inline',
+        '--confirm',
+        '--reason', 'Bind audit evidence to the current plan',
+        '--wave', wave,
+      ]).exitCode, 0);
+      const plannedState = readState(validDir);
+      plannedState.state = 'debugging';
+      writeState(validDir, plannedState);
 
       const evidenceDir = join(validDir, '.superpowers', 'sdd', 'debug-evidence');
       mkdirSync(evidenceDir, { recursive: true });
@@ -246,7 +269,7 @@ describe('cmd-audit: generateReport()', () => {
 
       const report = generateReport(validDir, readState(validDir));
       assert.match(report, /\| DP-5 \| 调试升级 \| continue: Three fixes failed \|/);
-      assert.ok(report.includes('1/8 已记录'));
+      assert.ok(report.includes('2/8 已记录'));
       assert.doesNotMatch(report, /DP-5 unsupported/i);
     } finally {
       rmSync(validDir, { recursive: true, force: true });

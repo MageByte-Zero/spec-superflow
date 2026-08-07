@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, unlinkSync, writeFileSync,
+  existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -34,6 +34,26 @@ function writeChange(directory) {
   state.state = 'debugging';
   state.workflow = 'quick';
   writeState(directory, state);
+}
+
+function prepareCurrentPlan() {
+  const state = readState(changeDir);
+  state.state = 'approved-for-build';
+  state.workflow = 'quick';
+  writeState(changeDir, state);
+  const wave = 'debug-guard:serial:1.1';
+  assert.equal(ssf(['execution', 'recommend', changeDir, '--wave', wave]).exitCode, 0);
+  const planned = ssf([
+    'execution', 'plan', changeDir,
+    '--mode', 'inline',
+    '--confirm',
+    '--reason', 'Bind debugging evidence to the current plan',
+    '--wave', wave,
+  ]);
+  assert.equal(planned.exitCode, 0, planned.stderr);
+  const plannedState = readState(changeDir);
+  plannedState.state = 'debugging';
+  writeState(changeDir, plannedState);
 }
 
 function evidence(name, content = name) {
@@ -76,6 +96,18 @@ afterEach(() => {
 });
 
 describe('ssf debug', () => {
+  it('rejects a Quick debugging context without a current execution plan', () => {
+    const result = record('attempt-1');
+
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /execution plan/i);
+    const escalation = escalate(['--confirm']);
+    assert.equal(escalation.exitCode, 1);
+    assert.match(escalation.stderr, /execution plan/i);
+    assert.equal(existsSync(join(changeDir, '.superpowers', 'sdd', 'debug-attempts.json')), false);
+    assert.equal(readState(changeDir).dp_5_result, null);
+  });
+
   it('rejects attempt recording outside debugging state', () => {
     const state = readState(changeDir);
     state.state = 'executing';
@@ -88,6 +120,7 @@ describe('ssf debug', () => {
   });
 
   it('records and shows one evidence-backed failed attempt', () => {
+    prepareCurrentPlan();
     const recorded = record('attempt-1');
     assert.equal(recorded.exitCode, 0, recorded.stderr);
 
@@ -100,6 +133,7 @@ describe('ssf debug', () => {
   });
 
   it('rejects DP-5 escalation with fewer than three failed attempts', () => {
+    prepareCurrentPlan();
     assert.equal(record('attempt-1').exitCode, 0);
     assert.equal(record('attempt-2').exitCode, 0);
 
@@ -111,6 +145,7 @@ describe('ssf debug', () => {
   });
 
   it('rejects duplicate failure evidence', () => {
+    prepareCurrentPlan();
     const sharedEvidence = evidence('shared', 'same failure output');
     assert.equal(record('attempt-1', sharedEvidence).exitCode, 0);
 
@@ -121,7 +156,9 @@ describe('ssf debug', () => {
   });
 
   it('rejects a ledger path redirected outside the change directory by a symlink', () => {
-    symlinkSync(outsideDir, join(changeDir, '.superpowers'), 'dir');
+    prepareCurrentPlan();
+    renameSync(join(changeDir, '.superpowers'), join(outsideDir, 'overlay'));
+    symlinkSync(join(outsideDir, 'overlay'), join(changeDir, '.superpowers'), 'dir');
     const evidencePath = join(changeDir, 'attempt-1.log');
     writeFileSync(evidencePath, 'failed test output\n');
 
@@ -129,10 +166,11 @@ describe('ssf debug', () => {
 
     assert.equal(result.exitCode, 1);
     assert.match(result.stderr, /physical directory/i);
-    assert.equal(existsSync(join(outsideDir, 'sdd', 'debug-attempts.json')), false);
+    assert.equal(existsSync(join(outsideDir, 'overlay', 'sdd', 'debug-attempts.json')), false);
   });
 
   it('does not count Wave Review repair failures as debugging attempts', () => {
+    prepareCurrentPlan();
     const repairDirectory = join(changeDir, '.superpowers', 'sdd', 'repair-state');
     mkdirSync(repairDirectory, { recursive: true });
     writeFileSync(join(repairDirectory, 'wave-review.json'), JSON.stringify({ failure_count: 5 }));
@@ -144,6 +182,7 @@ describe('ssf debug', () => {
   });
 
   it('rejects escalation when the recorded context is stale', () => {
+    prepareCurrentPlan();
     for (const id of ['attempt-1', 'attempt-2', 'attempt-3']) {
       assert.equal(record(id).exitCode, 0);
     }
@@ -156,6 +195,7 @@ describe('ssf debug', () => {
   });
 
   it('rejects escalation when recorded evidence is missing', () => {
+    prepareCurrentPlan();
     const evidencePaths = [];
     for (const id of ['attempt-1', 'attempt-2', 'attempt-3']) {
       const evidencePath = evidence(id);
@@ -171,23 +211,7 @@ describe('ssf debug', () => {
   });
 
   it('rejects attempts and escalation when the current execution plan is stale', () => {
-    const state = readState(changeDir);
-    state.state = 'approved-for-build';
-    state.workflow = 'full';
-    writeState(changeDir, state);
-    const wave = 'wave-1:serial:1.1';
-    assert.equal(ssf(['execution', 'recommend', changeDir, '--wave', wave]).exitCode, 0);
-    const planned = ssf([
-      'execution', 'plan', changeDir,
-      '--mode', 'inline',
-      '--confirm',
-      '--reason', 'Guard debugging against the current plan',
-      '--wave', wave,
-    ]);
-    assert.equal(planned.exitCode, 0, planned.stderr);
-    const plannedState = readState(changeDir);
-    plannedState.state = 'debugging';
-    writeState(changeDir, plannedState);
+    prepareCurrentPlan();
     assert.equal(record('attempt-1').exitCode, 0);
 
     writeFileSync(join(changeDir, 'proposal.md'), '## Why\nThe execution plan is now stale.\n## What Changes\n- Changed scope.\n');
@@ -198,6 +222,7 @@ describe('ssf debug', () => {
   });
 
   it('requires explicit confirmation even after three failed attempts', () => {
+    prepareCurrentPlan();
     for (const id of ['attempt-1', 'attempt-2', 'attempt-3']) {
       assert.equal(record(id).exitCode, 0);
     }
@@ -209,6 +234,7 @@ describe('ssf debug', () => {
   });
 
   it('persists DP-5 only after three distinct attempts and confirmation', () => {
+    prepareCurrentPlan();
     for (const id of ['attempt-1', 'attempt-2', 'attempt-3']) {
       assert.equal(record(id).exitCode, 0);
     }

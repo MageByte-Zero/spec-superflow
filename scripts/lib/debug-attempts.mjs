@@ -20,7 +20,7 @@ export function recordDebugAttempt(changeDir, input) {
   requireSafeText(input?.summary, 'summary');
   requireSafeText(input?.evidence, 'evidence');
 
-  const loaded = loadCurrentLedger(changeDir, { requireDebugging: true });
+  const loaded = loadCurrentLedger(changeDir, { requireDebugging: true, requirePlan: true });
   if (loaded.ledger.escalation) {
     throw new Error('DP-5 is already recorded for the current debugging context');
   }
@@ -63,7 +63,7 @@ export function recordDebugEscalation(changeDir, input) {
   }
   requireSafeText(input?.reason, 'reason');
 
-  const loaded = loadCurrentLedger(changeDir, { requireDebugging: true });
+  const loaded = loadCurrentLedger(changeDir, { requireDebugging: true, requirePlan: true });
   if (loaded.ledger.attempts.length < MINIMUM_FAILED_ATTEMPTS) {
     throw new Error(`DP-5 escalation requires at least three distinct evidence-backed failed attempts; recorded: ${loaded.ledger.attempts.length}`);
   }
@@ -97,7 +97,7 @@ export function inspectDebugEscalation(changeDir, state = readState(changeDir)) 
     return unsupported('DP-5 is not supported by explicit confirmation and three evidence-backed failed attempts');
   }
   try {
-    const loaded = loadCurrentLedger(changeDir, { requireDebugging: false, state });
+    const loaded = loadCurrentLedger(changeDir, { requireDebugging: false, requirePlan: true, state });
     if (loaded.ledger.attempts.length < MINIMUM_FAILED_ATTEMPTS) {
       return unsupported(`DP-5 requires at least three evidence-backed failed attempts; recorded: ${loaded.ledger.attempts.length}`);
     }
@@ -122,7 +122,7 @@ export function inspectDebugEscalation(changeDir, state = readState(changeDir)) 
 
 function loadCurrentLedger(changeDir, options) {
   const state = options.state ?? readState(changeDir);
-  const { context, plan } = buildContext(changeDir, state, options.requireDebugging);
+  const { context, plan } = buildContext(changeDir, state, options.requireDebugging, options.requirePlan);
   const path = ledgerPath(changeDir, plan);
   const physicalPath = resolveLedgerPath(changeDir, path);
   if (!existsSync(physicalPath)) {
@@ -141,7 +141,7 @@ function loadCurrentLedger(changeDir, options) {
   return { state, context, path, ledger };
 }
 
-function buildContext(changeDir, state, requireDebugging) {
+function buildContext(changeDir, state, requireDebugging, requirePlan) {
   if (requireDebugging && state.state !== 'debugging') {
     throw new Error('Debug attempts and DP-5 escalation require the debugging state');
   }
@@ -149,6 +149,9 @@ function buildContext(changeDir, state, requireDebugging) {
   const plan = readPlan(changeDir);
   const hasPlanSummary = !isEmpty(state.execution_plan_hash)
     || !isEmpty(state.execution_plan_revision);
+  if (requirePlan && !plan) {
+    throw new Error('Current execution plan is required for debugging attempts and DP-5 escalation');
+  }
   if (hasPlanSummary || plan) {
     if (!plan) throw new Error('Current execution plan is missing for the recorded state summary');
     const validation = validatePlan(changeDir, plan);
