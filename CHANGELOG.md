@@ -6,6 +6,10 @@ The format loosely follows Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Evidence-backed DP-5 escalation (#102)**: replace raw `state set dp_5_*` writes with a guarded debugging-attempt ledger. `ssf debug attempt record/show` keeps failed fixes distinct from Wave Review repair failures, rejects duplicate or stale evidence, and `ssf debug escalate --confirm` requires at least three current attempts. Audit reports unsupported legacy DP-5 records instead of treating them as valid approvals.
+
 ## [1.0.0] - 2026-08-03
 
 ### Added

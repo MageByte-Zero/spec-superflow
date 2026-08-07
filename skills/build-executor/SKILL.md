@@ -223,7 +223,7 @@ Quick direct execution requires the valid receipt, a bounded diff, the receipt's
 ## DP Records
 
 DP-4 is written by `ssf execution plan`; do not write it with raw `state set`.
-DP-5 (debug escalation): `ssf state set <change-dir> dp_5_result "<resolution>"` + timestamp.
+DP-5 (debug escalation): bug-investigator records each failed fix through `ssf debug attempt record`; after at least three distinct attempts and explicit user confirmation, use `ssf debug escalate <change-dir> --decision <continue|abandon> --reason "<resolution>" --confirm`. Raw `state set dp_5_*` is blocked.
 
 ## Completion Standard
 

@@ -224,7 +224,7 @@ execution plan。它位于 `<change>/.superpowers/sdd/execution-plan.json`，不
 候选项和推荐展示给用户。`plan` 或 `revise` 只接受匹配当前 artifact、contract 和 wave 的
 凭据。用户用 `--confirm` 明确确认选择；若选择与推荐不同，必须额外
 传入 `--acknowledge-recommendation` 记录已知风险。Batch Inline 始终串行，绝不冒充并行。
-Quick、direct Hotfix 与 `tweak` 保持轻量例外：不要求 contract、execution plan、wave receipt 或 DP；在边界内验证后持久化 `test_result: pass`。
+Quick、direct Hotfix 与 `tweak` 保持轻量例外：正常完成时不要求 contract、execution plan、wave receipt 或 DP；在边界内验证后持久化 `test_result: pass`。但一旦进入 DP-5 调试升级，任何路径都必须先有当前有效的 execution plan，才可记录失败尝试或持久化升级。
 
 ```bash
 ssf execution recommend changes/my-change \
@@ -333,6 +333,8 @@ spec-superflow 把这两类问题分开处理：先判断改动风险；小改�
 ```
 
 **如何选择：** Quick、direct Hotfix、Tweak 默认保持轻量，只记录范围和验证；Full 与 legacy Hotfix 才要求执行契约、执行计划和 review receipt。风险会说明原因并交给用户选择，不会擅自升级路径。
+
+**DP-5 调试门禁：** 每次失败修复使用 `ssf debug attempt record` 保存唯一且可验证的证据；无论工作流路径，记录前都必须有 current、有效的 execution plan。Wave Review failure 不会计入调试次数。只有当前 execution context 下至少 3 次不同失败尝试，并由用户执行 `ssf debug escalate ... --confirm` 后，才会记录 DP-5。通用 `state set` 不能写入 `dp_5_*`，且不能通过多行值注入这些字段。
 
 ### 快速路径（Quick / Hotfix / Tweak）
 

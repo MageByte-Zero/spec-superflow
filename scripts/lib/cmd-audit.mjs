@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { parseArgs } from 'node:util';
 import { readState } from './state-loader.mjs';
+import { inspectDebugEscalation } from './debug-attempts.mjs';
 
 const DP_NAMES = {
   0: '用户确认门禁',
@@ -39,14 +40,26 @@ function formatDpResult(state, dp) {
 }
 
 function generateReport(changeDir, state) {
+  const debugEscalation = inspectDebugEscalation(changeDir, state);
   const rows = [];
   for (let i = 0; i <= 7; i++) {
-    const result = formatDpResult(state, i);
+    const recordedResult = formatDpResult(state, i);
+    const unsupportedDebugRecord = i === 5
+      && recordedResult !== 'not recorded'
+      && !debugEscalation.supported;
+    const result = unsupportedDebugRecord ? `unsupported: ${recordedResult}` : recordedResult;
     const timestamp = formatTimestamp(state[`dp_${i}_timestamp`]);
-    rows.push({ dp: i, name: DP_NAMES[i], result, timestamp });
+    rows.push({
+      dp: i,
+      name: DP_NAMES[i],
+      result,
+      timestamp,
+      recorded: recordedResult !== 'not recorded' && !unsupportedDebugRecord,
+      unsupportedReason: unsupportedDebugRecord ? debugEscalation.reason : null,
+    });
   }
 
-  const recordedCount = rows.filter(r => r.result !== 'not recorded').length;
+  const recordedCount = rows.filter(r => r.recorded).length;
   const missingCount = rows.length - recordedCount;
 
   let md = `# Decision-Point Audit Report\n\n`;
@@ -68,7 +81,9 @@ function generateReport(changeDir, state) {
     md += `### DP-${r.dp}: ${r.name}\n\n`;
     md += `- **结果**: ${r.result}\n`;
     md += `- **时间戳**: ${r.timestamp}\n`;
-    if (r.result === 'not recorded') {
+    if (r.unsupportedReason) {
+      md += `- **解读**: DP-5 unsupported — ${r.unsupportedReason}.\n`;
+    } else if (r.result === 'not recorded') {
       md += '- **解读**: 该决策点尚未记录结果。如果工作流已经经过该阶段，请检查是否漏记。\n';
     } else {
       md += `- **解读**: 决策点 DP-${r.dp} 已记录为 "${r.result}"。\n`;

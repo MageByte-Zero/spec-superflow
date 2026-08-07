@@ -2,11 +2,25 @@
 // Tests for scripts/lib/cmd-audit.mjs
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { recordDebugAttempt, recordDebugEscalation } from '../../scripts/lib/debug-attempts.mjs';
+import { computeArtifactsHash, computeContractHash } from '../../scripts/lib/hash.mjs';
+import { readState, rebuildState, writeState } from '../../scripts/lib/state-loader.mjs';
 
+const CLI_PATH = join(process.cwd(), 'scripts/spec-superflow.mjs');
 let tempDir;
+
+function ssf(args) {
+  const result = spawnSync(process.execPath, [CLI_PATH, ...args], { encoding: 'utf8' });
+  return {
+    exitCode: result.status ?? 1,
+    stdout: result.stdout.trim(),
+    stderr: result.stderr.trim(),
+  };
+}
 
 describe('cmd-audit: generateReport()', () => {
   let generateReport, DP_NAMES;
@@ -132,7 +146,8 @@ describe('cmd-audit: generateReport()', () => {
       assert.ok(report.includes(name), `Report should include DP-${dpNum} name: ${name}`);
     }
 
-    assert.ok(report.includes('8/8 已记录'));
+    assert.ok(report.includes('7/8 已记录'));
+    assert.match(report, /DP-5.*unsupported/i);
   });
 
   it('formats timestamps correctly', () => {
@@ -198,5 +213,66 @@ describe('cmd-audit: generateReport()', () => {
     // Verify table structure
     assert.ok(report.includes('| DP | 名称 | 结果 | 时间戳 |'), 'Should have table header');
     assert.ok(report.includes('|----|------|------|--------|'), 'Should have table separator');
+  });
+
+  it('flags a legacy DP-5 record without three attempts as unsupported', () => {
+    const state = {
+      change_name: 'legacy-debug-escalation',
+      state: 'debugging',
+      dp_5_result: 'continue: recorded through raw state set',
+      dp_5_timestamp: '2026-08-06T00:00:00Z',
+    };
+
+    const report = generateReport(tempDir, state);
+
+    assert.match(report, /DP-5.*unsupported/i);
+    assert.match(report, /three|3/i);
+  });
+
+  it('counts an evidence-backed confirmed DP-5 record as supported', () => {
+    const validDir = mkdtempSync(join(tmpdir(), 'ssf-audit-debug-valid-'));
+    try {
+      writeFileSync(join(validDir, 'proposal.md'), '## Why\nAudit a guarded DP-5 record with durable evidence.\n## What Changes\n- Guard escalation.\n');
+      writeFileSync(join(validDir, 'design.md'), '# Design\n');
+      writeFileSync(join(validDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 Guard escalation\n');
+      writeFileSync(join(validDir, 'execution-contract.md'), '# Execution Contract\n');
+      rebuildState(validDir, { computeArtifactsHash, computeContractHash });
+      const state = readState(validDir);
+      state.state = 'approved-for-build';
+      state.workflow = 'quick';
+      writeState(validDir, state);
+      const wave = 'audit-debug:serial:1.1';
+      assert.equal(ssf(['execution', 'recommend', validDir, '--wave', wave]).exitCode, 0);
+      assert.equal(ssf([
+        'execution', 'plan', validDir,
+        '--mode', 'inline',
+        '--confirm',
+        '--reason', 'Bind audit evidence to the current plan',
+        '--wave', wave,
+      ]).exitCode, 0);
+      const plannedState = readState(validDir);
+      plannedState.state = 'debugging';
+      writeState(validDir, plannedState);
+
+      const evidenceDir = join(validDir, '.superpowers', 'sdd', 'debug-evidence');
+      mkdirSync(evidenceDir, { recursive: true });
+      for (const id of ['fix-1', 'fix-2', 'fix-3']) {
+        const evidencePath = join(evidenceDir, `${id}.log`);
+        writeFileSync(evidencePath, `${id} failed\n`);
+        recordDebugAttempt(validDir, { id, summary: `${id} failed`, evidence: evidencePath });
+      }
+      recordDebugEscalation(validDir, {
+        decision: 'continue',
+        reason: 'Three fixes failed',
+        confirm: true,
+      });
+
+      const report = generateReport(validDir, readState(validDir));
+      assert.match(report, /\| DP-5 \| 调试升级 \| continue: Three fixes failed \|/);
+      assert.ok(report.includes('2/8 已记录'));
+      assert.doesNotMatch(report, /DP-5 unsupported/i);
+    } finally {
+      rmSync(validDir, { recursive: true, force: true });
+    }
   });
 });

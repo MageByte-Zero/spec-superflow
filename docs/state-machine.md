@@ -90,7 +90,7 @@ accept only a receipt whose artifacts, contract, and waves still match. The user
 selected mode with `--confirm`; a non-recommended selection also requires
 `--acknowledge-recommendation`. Batch Inline remains serial and is never a
 substitute for parallel execution.
-Quick, direct Hotfix, and Tweak are exempt from execution-plan and review-receipt requirements; each closes only with `test_result: pass`.
+Quick, direct Hotfix, and Tweak are exempt from execution-plan and review-receipt requirements on their normal bounded path; each closes with `test_result: pass`. If any enters DP-5 debugging escalation, it must first establish a current execution plan before recording an attempt or persisting DP-5.
 
 For Full/legacy Hotfix, the plan names ordered execution waves, dependencies,
 and parallel/serial strategy. `ssf execution show <change-dir> --json` reports
@@ -195,7 +195,9 @@ During `executing`, if a bug, test failure, or unexpected behavior blocks progre
 1. Pause `executing` and enter `debugging`
 2. `bug-investigator` performs 4-phase root cause analysis
 3. If root cause found → fix (with TDD) → return to `executing`
-4. If 3+ fix attempts fail → question architecture → escalate to user
+4. Before recording any attempt, require a current valid execution plan, including for Quick/direct Hotfix/Tweak; then record one distinct evidence-backed attempt with `ssf debug attempt record`; Wave Review repair failures remain separate
+5. If 3+ recorded fix attempts fail → question architecture → present the ledger to the user
+6. Persist DP-5 only through `ssf debug escalate ... --confirm`; raw `state set dp_5_*` is blocked
 
 ## Anti-Pattern
 
