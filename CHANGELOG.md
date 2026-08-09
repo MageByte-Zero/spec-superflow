@@ -8,6 +8,7 @@ The format loosely follows Keep a Changelog.
 
 ### Fixed
 
+- **Active review projection repair (#106)**: add an opt-in, fail-closed `execution review --repair-active-projection` path that rebuilds only the current root PASS projection from matching scoped evidence, preserves immutable revision state, and makes `execution show` prefer valid root evidence with a safe scoped fallback.
 - **Evidence-backed DP-5 escalation (#102)**: replace raw `state set dp_5_*` writes with a guarded debugging-attempt ledger. `ssf debug attempt record/show` keeps failed fixes distinct from Wave Review repair failures, rejects duplicate or stale evidence, and `ssf debug escalate --confirm` requires at least three current attempts. Audit reports unsupported legacy DP-5 records instead of treating them as valid approvals.
 
 ## [1.0.0] - 2026-08-03

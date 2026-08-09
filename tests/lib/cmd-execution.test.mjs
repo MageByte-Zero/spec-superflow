@@ -204,11 +204,12 @@ function prepareActiveProjectionRepairFixture() {
 
 function rejectActiveProjectionRepair(testCase) {
   const fixture = prepareActiveProjectionRepairFixture();
-  testCase.mutate(fixture);
+  const commandInputs = testCase.mutate(fixture) ?? {};
   const rootReviewsBefore = snapshotTree(rootReviewsPath());
   const immutableBefore = immutableEvidenceSnapshots(fixture.plan);
   const result = runSsf(['execution', 'review', changeDir, '--wave', testCase.wave ?? 'wave-1',
-    '--base', gitRefs.base, '--head', gitRefs.head, '--report', fixture.reportPath, '--verdict', testCase.verdict ?? 'pass',
+    '--base', commandInputs.base ?? gitRefs.base, '--head', commandInputs.head ?? gitRefs.head,
+    '--report', commandInputs.report ?? fixture.reportPath, '--verdict', testCase.verdict ?? 'pass',
     '--repair-active-projection', '--json']);
 
   assert.notEqual(result.exitCode, 0, testCase.name);
@@ -882,6 +883,27 @@ describe('ssf execution', () => {
     assert.deepEqual(immutableEvidenceSnapshots(plan), immutableBefore);
   });
 
+  it('rebuilds a matching root projection when recorded_at is missing', () => {
+    // Mutation caught: treat matching evidence fields as a no-op even when the returned receipt is incomplete.
+    const { plan, reportPath, scopedReceipt, currentReportHash } = prepareActiveProjectionRepairFixture();
+    const incompleteReceipt = { ...scopedReceipt, report_sha256: currentReportHash };
+    delete incompleteReceipt.recorded_at;
+    writeFileSync(rootReceiptPath('wave-1'), `${JSON.stringify(incompleteReceipt, null, 2)}\n`);
+    const immutableBefore = immutableEvidenceSnapshots(plan);
+
+    const result = runSsf(['execution', 'review', changeDir, '--wave', 'wave-1',
+      '--base', gitRefs.base, '--head', gitRefs.head, '--report', reportPath, '--verdict', 'pass',
+      '--repair-active-projection', '--json']);
+
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.equal(result.json.changed, true);
+    assert.equal(typeof result.json.receipt.recorded_at, 'string');
+    assert.notEqual(result.json.receipt.recorded_at.trim(), '');
+    assertRootMatchesCurrentProjection(result.json.receipt, scopedReceipt, currentReportHash);
+    assert.deepEqual(result.json.receipt, JSON.parse(readFileSync(rootReceiptPath('wave-1'), 'utf8')));
+    assert.deepEqual(immutableEvidenceSnapshots(plan), immutableBefore);
+  });
+
   it('rejects a missing scoped repair snapshot without successful JSON or writes', () => {
     // Mutation caught: create root projection before checking that scoped evidence exists.
     rejectActiveProjectionRepair({
@@ -953,6 +975,99 @@ describe('ssf execution', () => {
       wave: 'unknown-wave',
       mutate: () => {},
       expected: /unknown wave/i,
+    });
+  });
+
+  it('rejects a missing repair report without successful JSON or writes', () => {
+    // Mutation caught: defer report existence validation until after writing the root projection.
+    rejectActiveProjectionRepair({
+      name: 'missing repair report',
+      mutate: ({ reportPath }) => rmSync(reportPath),
+      expected: /report.*(regular|missing|exist|cannot be read)|enoent/i,
+    });
+  });
+
+  it('rejects an empty repair report without successful JSON or writes', () => {
+    // Mutation caught: accept an empty report as current review evidence.
+    rejectActiveProjectionRepair({
+      name: 'empty repair report',
+      mutate: ({ reportPath }) => writeFileSync(reportPath, ''),
+      expected: /report.*(empty|non-empty)/i,
+    });
+  });
+
+  it('rejects a repair report outside the review overlay without successful JSON or writes', () => {
+    // Mutation caught: omit the review-overlay containment check on the repair branch.
+    rejectActiveProjectionRepair({
+      name: 'outside repair report',
+      mutate: () => {
+        const report = join(changeDir, 'outside-active-projection.md');
+        writeFileSync(report, 'Outside report must not authorize active projection repair.\n');
+        const scopedPath = currentReceiptPath('wave-1');
+        const scopedReceipt = JSON.parse(readFileSync(scopedPath, 'utf8'));
+        writeFileSync(scopedPath, `${JSON.stringify({
+          ...scopedReceipt,
+          report: 'outside-active-projection.md',
+          report_sha256: reportHash(report),
+        }, null, 2)}\n`);
+        return { report };
+      },
+      expected: /resolve inside.*review overlay/i,
+    });
+  });
+
+  it('rejects a repair report reached through a symlink without successful JSON or writes', () => {
+    // Mutation caught: validate only the lexical report path and skip physical containment.
+    rejectActiveProjectionRepair({
+      name: 'symlink repair report',
+      mutate: () => {
+        const outsideDir = join(changeDir, 'outside-repair-reports');
+        mkdirSync(outsideDir, { recursive: true });
+        writeFileSync(join(outsideDir, 'escaped.md'), 'Symlinked report must not authorize repair.\n');
+        const linkedDir = join(rootReviewsPath(), 'linked-repair');
+        symlinkSync(outsideDir, linkedDir, 'dir');
+        const report = join(linkedDir, 'escaped.md');
+        const scopedPath = currentReceiptPath('wave-1');
+        const scopedReceipt = JSON.parse(readFileSync(scopedPath, 'utf8'));
+        writeFileSync(scopedPath, `${JSON.stringify({
+          ...scopedReceipt,
+          report: 'outside-repair-reports/escaped.md',
+          report_sha256: reportHash(report),
+        }, null, 2)}\n`);
+        return { report };
+      },
+      expected: /resolve inside.*review overlay/i,
+    });
+  });
+
+  it('rejects a repair range containing a nonexistent commit without successful JSON or writes', () => {
+    // Mutation caught: compare the requested range to scoped text before resolving both Git commits.
+    rejectActiveProjectionRepair({
+      name: 'nonexistent repair base',
+      mutate: () => ({ base: '0000000000000000000000000000000000000001' }),
+      expected: /base|commit|git/i,
+    });
+  });
+
+  it('rejects a non-ancestor repair range without successful JSON or writes', () => {
+    // Mutation caught: resolve commits without enforcing that base is an ancestor of head.
+    rejectActiveProjectionRepair({
+      name: 'non-ancestor repair range',
+      mutate: () => ({ base: gitRefs.head, head: gitRefs.divergent }),
+      expected: /ancestor|range|git/i,
+    });
+  });
+
+  it('preserves a current invalid FAIL blocker instead of repairing over it', () => {
+    // Mutation caught: fall back to scoped PASS and overwrite current failed evidence during repair.
+    rejectActiveProjectionRepair({
+      name: 'current invalid FAIL blocker',
+      mutate: () => {
+        const path = rootReceiptPath('wave-1');
+        const receipt = JSON.parse(readFileSync(path, 'utf8'));
+        writeFileSync(path, `${JSON.stringify({ ...receipt, status: 'fail' }, null, 2)}\n`);
+      },
+      expected: /current fail|fail active|cannot.*repair/i,
     });
   });
 });

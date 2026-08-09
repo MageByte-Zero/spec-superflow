@@ -237,8 +237,8 @@ function readCurrentReviewEvidence(changeDir, waveId, plan = readPlan(changeDir)
   if (!plan) return { receipt: null, blocker: null };
   const currentScope = getPlanScopedPaths(changeDir, plan);
   const currentPath = join(currentScope.reviews, `${safeFileName(waveId)}.json`);
-  const legacyPath = join(getOverlayPaths(changeDir).reviews, `${safeFileName(waveId)}.json`);
-  const rootEvidence = readReviewEvidenceFile(changeDir, legacyPath, plan);
+  const rootPath = join(getOverlayPaths(changeDir).reviews, `${safeFileName(waveId)}.json`);
+  const rootEvidence = readReviewEvidenceFile(changeDir, rootPath, plan);
   if (rootEvidence.receipt || rootEvidence.blocker) return rootEvidence;
   return readReviewEvidenceFile(changeDir, currentPath, plan);
 }
@@ -305,6 +305,7 @@ function readJsonIfPresent(filePath) {
 
 function sameReviewEvidence(actual, expected) {
   if (!actual || typeof actual !== 'object') return false;
+  if (typeof actual.recorded_at !== 'string' || actual.recorded_at.trim() === '') return false;
   return ['status', 'base', 'head', 'report', 'report_sha256', 'plan_hash', 'plan_revision']
     .every(field => actual[field] === expected[field]);
 }
