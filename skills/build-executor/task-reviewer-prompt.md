@@ -42,7 +42,7 @@ Subagent (general-purpose):
     Read the CLI-provided repair round, previous review report, and prior review
     head supplied by the controller. Review the scoped diff from that head, and
     decide whether it resolves the recorded finding without unrelated changes.
-    Do not inspect or alter receipt or repair-state files. A fifth unresolved
+    Do not inspect or alter receipt or repair-state files. A third unresolved
     review is `adjudication-required`, so report the unresolved evidence rather
     than requesting another automatic repair.
 

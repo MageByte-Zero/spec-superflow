@@ -28,9 +28,9 @@ Subagent (general-purpose):
     declared repair scope. Do not re-run a broad review, modify the worktree,
     or edit receipt and repair-state files.
 
-    Rounds 1–3 are recovery rounds. Rounds 4–5 are escalation rounds: require
-    explicit evidence of why prior recovery did not resolve the finding. If the
-    CLI status is `adjudication-required`, do not request a sixth repair;
+    Rounds 1–2 are recovery rounds. The third unresolved failure opens the
+    circuit breaker. If the CLI status is `adjudication-required`, do not
+    request a fourth repair;
     document the unresolved issue for human adjudication.
 
     ## Output
