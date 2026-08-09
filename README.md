@@ -152,7 +152,7 @@ npx spec-superflow list          # 或通过 npx 使用
 | `ssf execution plan <dir> ...` | 在用户确认选择后，为 Full/legacy Hotfix 保存受 guard 保护的执行计划 |
 | `ssf execution show <dir> [--json]` | 查看并校验当前执行计划、wave 与 receipt |
 | `ssf execution revise <dir> ...` | 将已有计划保留/升级为 SDD，并生成新 revision；不允许降级 |
-| `ssf execution review <dir> ...` | 为一个计划 wave 记录 review receipt |
+| `ssf execution review <dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict pass\|fail [--repair-active-projection] [--json]` | 為一個計畫 wave 記錄 review receipt；repair 旗標只修復 current active projection |
 | `ssf install-cursor` | 部署到 Cursor `.cursor/` 目录 |
 | `ssf install-workbuddy` | 部署到 WorkBuddy marketplace 插件（含 skills/rules/runtime） |
 | `ssf install-codebuddy` | 部署到 `~/.codebuddy/`（CodeBuddy Code CLI） |
@@ -245,6 +245,10 @@ ssf execution revise changes/my-change --mode sdd --confirm --reason "need paral
 # 每个 wave 都先写入非空 review report，再记录 receipt。
 ssf execution review changes/my-change --wave foundation --base <sha> --head <sha> \
   --report .superpowers/sdd/reviews/foundation.md --verdict pass
+# 只修復 current root active projection；必須已有相符的 current scoped PASS snapshot。
+ssf execution review changes/my-change --wave foundation --base <sha> --head <sha> \
+  --report .superpowers/sdd/reviews/foundation.md --verdict pass \
+  --repair-active-projection --json
 ```
 
 `--report` 相对于 `<change>` 解析，且必须位于
@@ -256,6 +260,16 @@ report 本身必须为普通、非空、非符号链接文件。
 每个 wave 的 review receipt 必须是当前 revision 的 `pass`，依赖 wave 和 closing
 才会放行；修订计划会使旧 receipt 失效。恢复、切换和手动保存是 control-plane
 overlay，不会增加第九个状态；其 CLI 与 CodeBuddy/WorkBuddy Markdown adapter 保持相同 guard。
+
+Repair 旗標僅接受 `pass`：root
+`<change>/.superpowers/sdd/reviews/<safe-wave>.json` 是 current active projection；
+`plans/<identity>/reviews/...` 與 `repair-state` 是 immutable revision evidence。它只會在
+current valid plan、known wave、既存且相符的 current scoped PASS snapshot、有效 Git range 與
+current report evidence 都通過時建立或更新 root，且只更新 current report hash 與
+`recorded_at`。同一 evidence 的 repair 為 no-op，不會重寫任何檔案；FAIL、snapshot 不符、
+report/range 無效皆拒絕且不寫入，也不會碰 scoped review、repair-state 或 workspace。
+`ssf execution show` 優先使用有效 root；root 缺失或無效 PASS 時才回退有效 scoped receipt，
+無效 FAIL 仍是 blocker。未帶 repair 旗標的 `execution review` 行為不變。
 
 ---
 
