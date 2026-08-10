@@ -1,7 +1,7 @@
 {
   "name": "spec-superflow",
   "description": "Spec-first workflow that bridges OpenSpec-style planning and Superpowers-style execution discipline.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": {
     "name": "MageByte",
     "url": "https://github.com/MageByte-Zero"
