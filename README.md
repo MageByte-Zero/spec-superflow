@@ -169,7 +169,7 @@ npx spec-superflow list          # 或通过 npx 使用
 
 ### 版本
 
-- 当前版本：`v1.0.0`
+- 当前版本：`v1.0.1`
 - v1.0：默认按风险走 Quick、direct Hotfix、Tweak 或 Full；小改动只保留边界与验证，复杂改动才进入完整规划、契约和审查
 - 自包含插件，不需要运行时安装 OpenSpec 或 Superpowers
 - 上游来源：[Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec) 和 [obra/superpowers](https://github.com/obra/superpowers)

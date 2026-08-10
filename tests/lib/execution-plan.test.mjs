@@ -585,9 +585,9 @@ describe('execution plan data contract', () => {
     assert.match(wave.blockers.join('\n'), /content no longer matches/i);
   });
 
-  it('opens an adjudication circuit breaker after five unresolved review failures and blocks dependents', () => {
+  it('opens an adjudication circuit breaker after three unresolved review failures and blocks dependents', () => {
     const plan = createPlan(changeDir, {
-      mode: 'sdd', source: 'default', rationale: 'fifth failed repair requires adjudication',
+      mode: 'sdd', source: 'default', rationale: 'third failed repair requires adjudication',
       waves: [
         { id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] },
         { id: 'wave-2', strategy: 'serial', tasks: ['1.2'], depends_on: ['wave-1'] },
@@ -597,7 +597,7 @@ describe('execution plan data contract', () => {
 
     let base = gitRefs.base;
     const head = gitRefs.head;
-    for (let failure = 1; failure <= 5; failure += 1) {
+    for (let failure = 1; failure <= 3; failure += 1) {
       recordReview(changeDir, 'wave-1', {
         status: 'fail', base, head, report: writeReviewReport(`failure-${failure}.md`),
       });
@@ -606,7 +606,7 @@ describe('execution plan data contract', () => {
 
     const [blocked, dependent] = describeWaves(changeDir, plan);
     assert.equal(blocked.repair.status, 'adjudication-required');
-    assert.equal(blocked.repair.failure_count, 5);
+    assert.equal(blocked.repair.failure_count, 3);
     assert.equal(blocked.retryable, false);
     assert.equal(blocked.eligible, false);
     assert.equal(dependent.eligible, false);

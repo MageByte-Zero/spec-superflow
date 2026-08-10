@@ -32,9 +32,15 @@ Subagent (general-purpose):
     The controller supplies the CLI repair round, previous review report, prior
     review head, and the scoped repair range. Treat those as evidence and fix
     only the documented finding in that scoped diff. Do not edit receipt or
-    repair-state files, choose a new wave, or dispatch dependent work. For an
-    escalated repair round, explain in your report why the earlier recovery
-    rounds did not resolve the finding.
+    repair-state files, choose a new wave, or dispatch dependent work.
+
+    ## Retry Assignment (only when retrying an unresolved implementer task)
+
+    The controller supplies the failed-attempt count, prior failure reason, one
+    objective, and only the necessary file paths. Do not repeat an approach
+    unless it names new evidence, new context, or a specific strategy change.
+    After three unresolved failures, return BLOCKED for human adjudication
+    without editing.
 
     ## Before You Begin
 

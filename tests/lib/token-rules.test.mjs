@@ -129,12 +129,14 @@ describe('SDD focused re-review documentation contract', () => {
 
     assert.match(executor, /execution show <change-dir> --json[\s\S]*repair/i,
       'the controller must read CLI repair state before dispatching a repair');
-    assert.match(executor, /rounds? 1[–-]3[\s\S]*recovery/i,
-      'the first three failed reviews must remain focused recovery rounds');
-    assert.match(executor, /rounds? 4[–-]5[\s\S]*escalat/i,
-      'rounds four and five must be explicitly escalated');
+    assert.match(executor, /rounds? 1[–-]2[\s\S]*recovery/i,
+      'the first two failed reviews must remain focused recovery rounds');
     assert.match(executor, /adjudication-required/i,
-      'a fifth unresolved review must stop automatic dispatch for adjudication');
+      'a third unresolved review must stop automatic dispatch for adjudication');
+    assert.match(executor, /new evidence|new context|specific strategy change/i,
+      'an implementer retry must add concrete information instead of repeating the same attempt');
+    assert.match(executor, /prior failure reason[\s\S]*single objective[\s\S]*necessary file paths/i,
+      'retry context must stay focused instead of repeating the planning pack');
     assert.match(executor, /ssf execution review[\s\S]*--verdict <pass\|fail>/i,
       'every re-review must be persisted through the CLI receipt command');
     assert.doesNotMatch(executor, /(?:write|edit|modify) a repair-state file to (?:continue|resolve|record)/i,
