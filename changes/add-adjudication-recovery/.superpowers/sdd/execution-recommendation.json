@@ -1,0 +1,42 @@
+{
+  "recommendation": {
+    "available_modes": [
+      "inline",
+      "batch-inline",
+      "sdd"
+    ],
+    "recommendation": {
+      "mode": "sdd",
+      "reasons": [
+        "The 4 tasks exceed the configured inline threshold of 3."
+      ]
+    },
+    "facts": {
+      "workflow": "full",
+      "documented_task_count": 4,
+      "planned_task_count": 4,
+      "planned_wave_count": 1,
+      "has_parallel_wave": false,
+      "inline_threshold": 3
+    }
+  },
+  "waves": [
+    {
+      "id": "adjudication-recovery",
+      "strategy": "serial",
+      "tasks": [
+        "1.1",
+        "2.1",
+        "2.2",
+        "3.1"
+      ],
+      "depends_on": []
+    }
+  ],
+  "artifacts_hash": "sha256:6de60171eab018a140f6d391b6a9d51771ea4af870c52982a7094016e3193d80",
+  "contract_hash": "sha256:e096bbe1ab2911c969a3da9db7d121d231287c323e8742ac6546690349ccf2c1",
+  "workflow": "full",
+  "execution_plan_revision_at_recommendation": 2,
+  "created_at": "2026-08-12T15:42:46.257Z",
+  "hash": "sha256:181bf090274abf8e4873bc3f6562ddbb7dfa64c8fe0ea57d1431804338a848c8"
+}

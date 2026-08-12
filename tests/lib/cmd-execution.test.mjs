@@ -674,6 +674,47 @@ describe('ssf execution', () => {
     assert.deepEqual(shown.json.waves[1].blockers, ['wave-1']);
   });
 
+  it('records a confirmed adjudication and exposes one active review authorization', () => {
+    const planned = runSsf(['execution', 'plan', changeDir, '--mode', 'sdd',
+      '--reason', 'adjudication recovery remains auditable', '--wave', 'wave-1:serial:1.1']);
+    assert.equal(planned.exitCode, 0, planned.stderr);
+    let base = gitRefs.base;
+    let head = gitRefs.head;
+    for (let failure = 1; failure <= 3; failure += 1) {
+      const failed = runSsf(['execution', 'review', changeDir, '--wave', 'wave-1',
+        '--base', base, '--head', head, '--report', writeReviewReport(`cli-adjudication-${failure}.md`),
+        '--verdict', 'fail']);
+      assert.equal(failed.exitCode, 0, failed.stderr);
+      base = head;
+      head = createRepairCommit(`cli-adjudication-${failure}`);
+    }
+
+    for (const args of [
+      ['--decision', 'allow-review', '--reason', 'Human reviewed the failure chain.'],
+      ['--decision', 'allow-review', '--confirm'],
+      ['--decision', 'pass', '--confirm', '--reason', 'Invalid decision must not pass.'],
+    ]) {
+      const rejected = runSsf(['execution', 'adjudicate', changeDir, '--wave', 'wave-1', ...args]);
+      assert.notEqual(rejected.exitCode, 0);
+    }
+
+    const result = runSsf(['execution', 'adjudicate', changeDir, '--wave', 'wave-1',
+      '--decision', 'allow-review', '--confirm', '--reason', 'Human reviewed all failures and authorizes one focused review.', '--json']);
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.equal(result.json.adjudication.status, 'authorized');
+    assert.equal(result.json.adjudication.failure_count, 3);
+
+    const shown = runSsf(['execution', 'show', changeDir, '--json']);
+    assert.equal(shown.json.waves[0].adjudication.active, true);
+    assert.equal(shown.json.waves[0].retryable, true);
+    assert.equal(shown.json.waves[0].eligible, true);
+
+    const replay = runSsf(['execution', 'adjudicate', changeDir, '--wave', 'wave-1',
+      '--decision', 'allow-review', '--confirm', '--reason', 'Replay must be rejected.']);
+    assert.notEqual(replay.exitCode, 0);
+    assert.match(replay.stderr, /active.*authorization/i);
+  });
+
   it('keeps the Task 1 state revision aligned through plan, show, revise, and show', () => {
     writeChangeDirectory(changeDir, 'full', 2);
     const initial = runSsf(['execution', 'plan', changeDir, '--mode', 'batch-inline', '--confirm', '--acknowledge-recommendation',

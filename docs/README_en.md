@@ -300,6 +300,8 @@ ssf execution revise changes/my-change --mode sdd --confirm --reason "need paral
   --wave integration:serial:2.1:foundation
 ssf execution review changes/my-change --wave foundation --base <sha> --head <sha> \
   --report .superpowers/sdd/reviews/foundation.md --verdict pass
+ssf execution adjudicate changes/my-change --wave foundation --decision allow-review \
+  --confirm --reason "reviewed the unresolved findings and authorizes one focused review"
 ```
 
 The `--report` path is resolved relative to `<change>` and must remain under
@@ -311,6 +313,8 @@ non-symlink file.
 
 Every planned wave needs a current `pass` review receipt before dependent
 waves or closing may proceed; revising a plan invalidates earlier receipts.
+Adjudication never creates a pass or releases dependents. A failed authorized
+review returns the wave to `adjudication-required` and needs a new human decision.
 Recovery, switching, and manual save form a control-plane overlay, not a ninth
 workflow state; their CLI and CodeBuddy/WorkBuddy Markdown adapters keep the
 same guards.

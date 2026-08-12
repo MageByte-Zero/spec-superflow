@@ -1,0 +1,68 @@
+{
+  "schema_version": 2,
+  "available_modes": [
+    "full",
+    "hotfix",
+    "tweak",
+    "quick",
+    "lightweight"
+  ],
+  "facts": {
+    "task_count": 4,
+    "file_count": 8,
+    "config_doc_only": "no",
+    "schema_api_change": "yes",
+    "new_module": "no",
+    "behavioral_constraint_change": "yes",
+    "cross_module_change": "yes",
+    "uncertainty": "low",
+    "request_kind": "standard",
+    "affected_paths": [
+      "scripts/lib/execution-plan.mjs",
+      "scripts/lib/cmd-execution.mjs",
+      "scripts/spec-superflow.mjs",
+      "tests/lib/execution-plan.test.mjs",
+      "tests/lib/cmd-execution.test.mjs"
+    ],
+    "exclusion_checks": {
+      "production_behavior": "yes",
+      "public_boundary": "yes",
+      "installer": "no",
+      "state_machine": "yes",
+      "external_side_effect": "no",
+      "data_permission_config_semantics": "no",
+      "expected_behavior_clear": "yes",
+      "verification_reproducible": "yes",
+      "impact_paths_complete": "yes"
+    }
+  },
+  "missing_facts": [],
+  "status": "ready",
+  "recommendation": {
+    "mode": "full",
+    "reasons": [
+      "Risk signals require the user to choose Quick or Full."
+    ],
+    "risk_reasons": [
+      "behavioral constraint changed (PRD, spec, design, data, or permission)",
+      "schema or API changes",
+      "cross-module change"
+    ]
+  },
+  "created_at": "2026-08-12T15:11:46.829Z",
+  "selection": {
+    "mode": "full",
+    "reason": "User requested fixing Issue #108 and submitting a PR; state-machine and public CLI changes match the Full recommendation.",
+    "followed_recommendation": true,
+    "acknowledged_non_recommendation": false,
+    "accepted_automatically": false,
+    "risk_override": false,
+    "verification_strategy": null,
+    "scope_confirmation": null,
+    "verification_result": null,
+    "escalation_reason": null,
+    "confirmed_at": "2026-08-12T15:12:26.871Z",
+    "selected_at": "2026-08-12T15:12:26.871Z"
+  },
+  "hash": "sha256:2a4212e4804e56829877e2002d4bcc20ec6248bbef03cd218624ee574d63842c"
+}
