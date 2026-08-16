@@ -3,8 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const CHANGE_DIR = join(process.cwd(), 'changes', 'optimize-test-runtime-guidance');
-const MATRIX_PATH = join(CHANGE_DIR, 'verification-risk-ownership.md');
+const MATRIX_PATH = join(process.cwd(), 'docs', 'examples', 'verification-risk-ownership.md');
 const REQUIRED_COLUMNS = [
   '独立风险',
   '原完整链路',
@@ -15,7 +14,7 @@ const REQUIRED_COLUMNS = [
 
 describe('verification risk ownership matrix', () => {
   it('names one end-to-end owner and a fast contract for every migrated repeated risk', () => {
-    assert.equal(existsSync(MATRIX_PATH), true, 'risk ownership matrix must be recorded with the change');
+    assert.equal(existsSync(MATRIX_PATH), true, 'risk ownership matrix must be available as a curated public example');
     const lines = readFileSync(MATRIX_PATH, 'utf8').split('\n').filter(line => line.startsWith('|'));
     assert.deepEqual(lines[0].split('|').filter(Boolean).map(value => value.trim()), REQUIRED_COLUMNS);
 
@@ -38,7 +37,7 @@ describe('verification risk ownership matrix', () => {
       'Git ancestry',
       '发布回执新鲜度',
       '首次可重试',
-      '第五次熔断',
+      '第三次熔断',
     ];
 
     for (const anchor of anchors) {
