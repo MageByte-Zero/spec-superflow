@@ -145,17 +145,14 @@ use the CLI-provided `waves[].repair` state together with `eligible` and
 `retryable`. The controller does not infer a repair round from filenames or
 history, and must not write, edit, or modify a repair-state file directly.
 
-- **Rounds 1–3 — recovery:** dispatch only the focused repair for the current
+- **Rounds 1–2 — recovery:** dispatch only the focused repair for the current
   wave. Give the implementer the CLI repair round, previous review report, and
   the prior review head. Generate a scoped diff from that head, then dispatch
   the `re-review-prompt.md` reviewer against the prior finding and that scoped
   diff. Do not redispatch dependent waves.
-- **Rounds 4–5 — escalation:** keep the same focused repair and scoped
-  re-review, but explicitly mark the dispatch as escalated and require the
-  report to explain why earlier recovery rounds did not resolve the finding.
-  The fifth unresolved receipt yields CLI status `adjudication-required`; stop
-  automatic dispatch and request a human adjudication rather than attempting a
-  sixth repair.
+- **Third unresolved failure — stop:** the third unresolved receipt yields CLI
+  status `adjudication-required`. Stop automatic dispatch and request a human
+  adjudication rather than attempting a fourth repair.
 - Every focused re-review still writes its separate persisted report and is
   recorded only through `ssf execution review <change-dir> --wave <id> --base
   <sha> --head <sha> --report .superpowers/sdd/reviews/<wave-id>-rereview.md --verdict <pass|fail>`.
@@ -163,7 +160,15 @@ history, and must not write, edit, or modify a repair-state file directly.
 
 ### Per-Task Loop
 1. **Dispatch implementer**: Load the template with `ssf runtime asset read skills/build-executor/implementer-prompt.md`. Extract task brief with `scripts/task-brief PLAN_FILE N`. Include: where task fits, brief path, interfaces from prior tasks, report file path.
-2. **Handle response**: DONE → generate review package + dispatch reviewer. DONE_WITH_CONCERNS → assess. NEEDS_CONTEXT → provide context. BLOCKED → re-dispatch with better model or escalate.
+2. **Handle response**: DONE → generate review package + dispatch reviewer.
+   DONE_WITH_CONCERNS → assess. For NEEDS_CONTEXT, BLOCKED, or another
+   unresolved failure, append `Task N: failed attempt X/3 — <reason>` to the
+   existing progress ledger. Retry only when the controller can name new
+   evidence, new context, or a specific strategy change. The retry brief contains
+   the prior failure reason, the single objective, and the necessary file paths;
+   do not repeat the planning pack or conversation history. After
+   the third unresolved failure, stop automatic dispatch, enter DP-5, and ask
+   the user for a decision.
 3. **Review**: Load `ssf runtime asset read skills/build-executor/task-reviewer-prompt.md`. Reviewer returns spec compliance + code quality verdicts with the wave ID, git range, report path, and `pass`/`fail` receipt command.
 4. **Fix**: If Critical or Important issues, write the `fail` receipt, read the
    CLI repair state, then dispatch only the focused repair and re-review path
@@ -210,7 +215,8 @@ This augments `.superpowers/sdd/progress.md`; it does not replace the progress
 ledger or add a new core workflow state. Do not claim a checkpoint is current
 when `ssf checkpoint list` reports it as stale.
 
-If task hits BLOCKED (3+ fix failures or changes outside declared scope), escalate to SDD.
+If a task reaches three unresolved failures, stop at DP-5 and request a human
+decision. If work moves outside the declared scope, replan instead of retrying.
 
 ## Tweak Mode
 

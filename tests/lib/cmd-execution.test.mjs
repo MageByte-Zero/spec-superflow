@@ -744,16 +744,16 @@ describe('ssf execution', () => {
     assert.equal(shown.json.waves[1].eligible, true);
   });
 
-  it('shows a fifth unresolved repair as adjudication-required rather than dispatching another retry', () => {
+  it('shows a third unresolved repair as adjudication-required rather than dispatching another retry', () => {
     const planned = runSsf(['execution', 'plan', changeDir, '--mode', 'sdd',
-      '--reason', 'five failed repairs require a controller decision',
+      '--reason', 'three failed repairs require a controller decision',
       '--wave', 'wave-1:serial:1.1',
       '--wave', 'wave-2:serial:1.2:wave-1']);
     assert.equal(planned.exitCode, 0, planned.stderr);
 
     let base = gitRefs.base;
     let head = gitRefs.head;
-    for (let failure = 1; failure <= 5; failure += 1) {
+    for (let failure = 1; failure <= 3; failure += 1) {
       const failed = runSsf(['execution', 'review', changeDir, '--wave', 'wave-1',
         '--base', base, '--head', head,
         '--report', writeReviewReport(`adjudication-${failure}.md`), '--verdict', 'fail']);
@@ -765,7 +765,7 @@ describe('ssf execution', () => {
     const shown = runSsf(['execution', 'show', changeDir, '--json']);
     assert.equal(shown.exitCode, 0, shown.stderr);
     assert.equal(shown.json.waves[0].repair.status, 'adjudication-required');
-    assert.equal(shown.json.waves[0].repair.failure_count, 5);
+    assert.equal(shown.json.waves[0].repair.failure_count, 3);
     assert.equal(shown.json.waves[0].retryable, false);
     assert.equal(shown.json.waves[0].eligible, false);
     assert.equal(shown.json.waves[1].eligible, false);

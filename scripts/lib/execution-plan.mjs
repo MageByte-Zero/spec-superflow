@@ -10,7 +10,7 @@ export const EXECUTION_MODES = ['inline', 'batch-inline', 'sdd'];
 
 const WAVE_STRATEGIES = new Set(['parallel', 'serial']);
 const REVIEW_STATUSES = new Set(['pass', 'fail']);
-const MAX_REPAIR_FAILURES = 5;
+const MAX_REPAIR_FAILURES = 3;
 const FULL_COMMIT_SHA = /^[0-9a-f]{40}$/i;
 const defaultGitRangeValidator = createGitRangeValidator();
 
