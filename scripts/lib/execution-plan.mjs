@@ -174,6 +174,57 @@ export function recordReview(changeDir, waveId, receipt) {
   return savedReceipt;
 }
 
+export function repairActiveReviewProjection(changeDir, waveId, receipt) {
+  const plan = readPlan(changeDir);
+  const validation = validatePlan(changeDir, plan);
+  if (!validation.valid) {
+    throw new Error(`Cannot repair the active review projection for an invalid execution plan: ${validation.failures.join('; ')}`);
+  }
+  const wave = Array.isArray(plan?.waves) && plan.waves.find(candidate => candidate?.id === waveId);
+  if (!wave) throw new Error(`Active projection repair references unknown wave '${waveId}'`);
+  if (receipt?.status !== 'pass') throw new Error('Active projection repair request only accepts PASS receipts');
+  for (const field of ['base', 'head']) requireText(receipt?.[field], `receipt.${field}`);
+
+  const reportEvidence = validateReviewReportEvidence(changeDir, receipt?.report);
+  const { base, head } = validateReviewRange(changeDir, receipt.base, receipt.head);
+  const receiptName = `${safeFileName(waveId)}.json`;
+  const scopedPath = join(getPlanScopedPaths(changeDir, plan).reviews, receiptName);
+  const scopedReceipt = readScopedRepairReceipt(scopedPath, plan, waveId);
+  if (scopedReceipt.status !== receipt.status
+    || scopedReceipt.base !== base
+    || scopedReceipt.head !== head
+    || scopedReceipt.report !== reportEvidence.path) {
+    throw new Error(`Current plan-scoped review snapshot for wave '${waveId}' does not match the active projection repair request`);
+  }
+
+  const rootPath = join(getOverlayPaths(changeDir).reviews, receiptName);
+  const rootReceipt = readJsonIfPresent(rootPath);
+  if (rootReceipt?.plan_hash === plan.hash
+    && rootReceipt?.plan_revision === plan.revision
+    && rootReceipt?.status === 'fail') {
+    throw new Error(`Wave '${waveId}' has a current FAIL active receipt and cannot use PASS active projection repair`);
+  }
+  if (sameReviewEvidence(rootReceipt, {
+    ...scopedReceipt,
+    report_sha256: reportEvidence.sha256,
+  })) {
+    return { changed: false, receipt: rootReceipt };
+  }
+
+  const savedReceipt = {
+    status: scopedReceipt.status,
+    base,
+    head,
+    report: reportEvidence.path,
+    report_sha256: reportEvidence.sha256,
+    plan_hash: plan.hash,
+    plan_revision: plan.revision,
+    recorded_at: new Date().toISOString(),
+  };
+  atomicWrite(rootPath, `${JSON.stringify(savedReceipt, null, 2)}\n`);
+  return { changed: true, receipt: savedReceipt };
+}
+
 /**
  * Returns the current plan's receipt for one wave. Receipts from a previous
  * revision/hash are never evidence for the current plan.
@@ -186,15 +237,18 @@ function readCurrentReviewEvidence(changeDir, waveId, plan = readPlan(changeDir)
   if (!plan) return { receipt: null, blocker: null };
   const currentScope = getPlanScopedPaths(changeDir, plan);
   const currentPath = join(currentScope.reviews, `${safeFileName(waveId)}.json`);
-  const legacyPath = join(getOverlayPaths(changeDir).reviews, `${safeFileName(waveId)}.json`);
-  // Newer callers may have written a scoped receipt, but the established
-  // root receipt remains the compatibility source until a future format
-  // migration. In either case the plan identity below is mandatory.
-  const filePath = existsSync(currentPath) ? currentPath : legacyPath;
+  const rootPath = join(getOverlayPaths(changeDir).reviews, `${safeFileName(waveId)}.json`);
+  const rootEvidence = readReviewEvidenceFile(changeDir, rootPath, plan);
+  if (rootEvidence.receipt || rootEvidence.blocker) return rootEvidence;
+  return readReviewEvidenceFile(changeDir, currentPath, plan);
+}
+
+function readReviewEvidenceFile(changeDir, filePath, plan) {
   if (!existsSync(filePath)) return { receipt: null, blocker: null };
   try {
     const receipt = JSON.parse(readFileSync(filePath, 'utf8'));
     if (receipt?.plan_hash !== plan.hash || receipt?.plan_revision !== plan.revision) return { receipt: null, blocker: null };
+    if (!REVIEW_STATUSES.has(receipt?.status)) return { receipt: null, blocker: null };
     const range = validateReviewRange(changeDir, receipt?.base, receipt?.head);
     if (receipt.base !== range.base || receipt.head !== range.head) return { receipt: null, blocker: null };
     // Reports remain evidence only while their safety and content identity can
@@ -219,6 +273,41 @@ function readCurrentReviewEvidence(changeDir, waveId, plan = readPlan(changeDir)
     }
     return { receipt: null, blocker: null };
   }
+}
+
+function readScopedRepairReceipt(filePath, plan, waveId) {
+  if (!existsSync(filePath)) {
+    throw new Error(`Current plan-scoped review receipt is missing for wave '${waveId}'`);
+  }
+  let receipt;
+  try {
+    receipt = JSON.parse(readFileSync(filePath, 'utf8'));
+  } catch (error) {
+    throw new Error(`Current plan-scoped review receipt is invalid or cannot be parsed: ${error.message}`);
+  }
+  if (receipt?.plan_hash !== plan.hash || receipt?.plan_revision !== plan.revision) {
+    throw new Error(`Current plan-scoped review receipt plan identity does not match the current execution plan for wave '${waveId}'`);
+  }
+  if (receipt?.status !== 'pass') {
+    throw new Error(`Current plan-scoped review receipt for wave '${waveId}' must record PASS`);
+  }
+  return receipt;
+}
+
+function readJsonIfPresent(filePath) {
+  if (!existsSync(filePath)) return null;
+  try {
+    return JSON.parse(readFileSync(filePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function sameReviewEvidence(actual, expected) {
+  if (!actual || typeof actual !== 'object') return false;
+  if (typeof actual.recorded_at !== 'string' || actual.recorded_at.trim() === '') return false;
+  return ['status', 'base', 'head', 'report', 'report_sha256', 'plan_hash', 'plan_revision']
+    .every(field => actual[field] === expected[field]);
 }
 
 /**

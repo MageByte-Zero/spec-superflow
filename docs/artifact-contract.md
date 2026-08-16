@@ -80,6 +80,27 @@ retains or upgrades an existing plan as `sdd`, requires fresh confirmation,
 creates a new revision, and
 clears prior review receipts; it never permits a downgrade.
 
+#### Active review projection 與 immutable revision evidence
+
+對 current plan 的每個 wave，root
+`<change>/.superpowers/sdd/reviews/<safe-wave>.json` 是 `ssf execution show` 使用的 current
+active projection；`<change>/.superpowers/sdd/plans/<identity>/reviews/...` 與同 scope 的
+`repair-state` 則是 immutable revision evidence。`ssf execution show` 先採用有效 root；root
+缺失或為無效 PASS 時才回退有效 scoped receipt，而無效 FAIL 仍維持為 blocker。
+
+只可透過下列明確 opt-in 修復 root projection：
+
+```bash
+ssf execution review <dir> --wave <id> --base <sha> --head <sha> --report <path> \
+  --verdict pass --repair-active-projection [--json]
+```
+
+repair 必須通過 current valid plan、known wave、既存且完全相符的 current plan-scoped PASS
+snapshot、有效 Git range 與 current report evidence 驗證。成功時只建立或更新 root，並只更新
+current report hash 與 `recorded_at`；既有相同 evidence 時為 no-op，不重寫。FAIL verdict、
+snapshot 不符或 report/range 無效都會拒絕且不寫入；repair 不會改寫 scoped review、
+repair-state 或 workspace。未帶此旗標的一般 `execution review` 保持原本行為。
+
 ### Recovery control-plane overlay
 
 Recovery commands operate beside the eight-state workflow, without creating a

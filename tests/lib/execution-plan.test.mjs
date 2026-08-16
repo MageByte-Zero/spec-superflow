@@ -1,6 +1,7 @@
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -8,7 +9,7 @@ import {
 } from '../../scripts/lib/execution-plan.mjs';
 import { createRecommendationReceipt, recommendExecutionModes } from '../../scripts/lib/execution-recommendation.mjs';
 import { readState } from '../../scripts/lib/state-loader.mjs';
-import { getPlanScopedPaths } from '../../scripts/lib/sdd-overlay.mjs';
+import { getOverlayPaths, getPlanScopedPaths } from '../../scripts/lib/sdd-overlay.mjs';
 import { createGitSeedFixture } from '../helpers/git-seed-fixture.mjs';
 
 let changeDir;
@@ -83,6 +84,14 @@ function createPlan(directory, input) {
       acknowledged_non_recommendation: !followedRecommendation,
     },
   });
+}
+
+function rootReceiptPath(waveId) {
+  return join(getOverlayPaths(changeDir).reviews, `${Buffer.from(waveId, 'utf8').toString('base64url')}.json`);
+}
+
+function reportHash(path) {
+  return `sha256:${createHash('sha256').update(readFileSync(path)).digest('hex')}`;
 }
 
 describe('execution plan data contract', () => {
@@ -640,6 +649,73 @@ describe('execution plan data contract', () => {
     assert.equal(existsSync(current.workspace), false);
     assert.equal(existsSync(historical.workspace), true);
     assert.equal(existsSync(current.repairState), true);
+  });
+
+  it('prefers a valid root active receipt over the immutable current-plan receipt', () => {
+    // Mutation caught: keep the historical scoped-first read order after adding root receipts.
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'root active projection takes priority',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+    writePlan(changeDir, plan);
+    const reportPath = writeReviewReport('root-first.md', 'Scoped PASS report before review refresh.\n');
+    const scoped = recordReview(changeDir, 'wave-1', {
+      status: 'pass', base: gitRefs.base, head: gitRefs.head, report: reportPath,
+    });
+    writeFileSync(reportPath, 'Current root projection report after review refresh.\n');
+    const root = { ...scoped, report_sha256: reportHash(reportPath) };
+    writeFileSync(rootReceiptPath('wave-1'), `${JSON.stringify(root, null, 2)}\n`);
+
+    const wave = describeWaves(changeDir, plan)[0];
+
+    assert.ok(wave.receipt, 'valid root active receipt must remain readable when scoped evidence is stale');
+    assert.equal(wave.receipt.head, scoped.head);
+    assert.equal(wave.receipt.report, scoped.report);
+    assert.equal(wave.receipt.report_sha256, root.report_sha256);
+    assert.notEqual(wave.receipt.report_sha256, scoped.report_sha256);
+    assert.equal(wave.receipt.recorded_at, root.recorded_at);
+  });
+
+  it('falls back to valid scoped evidence for missing or invalid root PASS receipts', () => {
+    // Mutation caught: make an absent or malformed root receipt suppress valid immutable scoped evidence.
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'scoped evidence remains the valid fallback',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+    writePlan(changeDir, plan);
+    const scoped = recordReview(changeDir, 'wave-1', {
+      status: 'pass', base: gitRefs.base, head: gitRefs.head, report: writeReviewReport('scoped-fallback.md'),
+    });
+    const rootPath = rootReceiptPath('wave-1');
+
+    rmSync(rootPath);
+    assert.equal(describeWaves(changeDir, plan)[0].receipt.head, scoped.head);
+
+    writeFileSync(rootPath, `${JSON.stringify({ ...scoped, report_sha256: `sha256:${'0'.repeat(64)}` }, null, 2)}\n`);
+    assert.equal(describeWaves(changeDir, plan)[0].receipt.head, scoped.head);
+
+    writeFileSync(rootPath, '{ malformed root PASS receipt');
+    assert.equal(describeWaves(changeDir, plan)[0].receipt.head, scoped.head);
+  });
+
+  it('preserves an invalid root FAIL receipt as an active blocker instead of falling back', () => {
+    // Mutation caught: treat invalid FAIL evidence like invalid PASS and reopen the wave from scoped history.
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'failed active evidence remains a blocker',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+    writePlan(changeDir, plan);
+    const scoped = recordReview(changeDir, 'wave-1', {
+      status: 'pass', base: gitRefs.base, head: gitRefs.head, report: writeReviewReport('fail-blocker.md'),
+    });
+    const invalidFail = { ...scoped, status: 'fail', report_sha256: `sha256:${'0'.repeat(64)}` };
+    writeFileSync(rootReceiptPath('wave-1'), `${JSON.stringify(invalidFail, null, 2)}\n`);
+
+    const wave = describeWaves(changeDir, plan)[0];
+
+    assert.equal(wave.receipt, null);
+    assert.equal(wave.eligible, false);
+    assert.match(wave.blockers.join('\n'), /failed review report evidence is invalid|cannot be read/i);
   });
 
   it('returns validation failures instead of throwing for malformed plans', () => {
