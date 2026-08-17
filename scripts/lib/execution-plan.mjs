@@ -150,7 +150,12 @@ export function recordReview(changeDir, waveId, receipt) {
   if (previousReceipt?.status === 'pass') {
     throw new Error(`Wave '${waveId}' already has a passing review receipt`);
   }
-  validateRepairContinuity(previousReceipt, previousRepair, { status: receipt.status, base, head, report: reportEvidence.path });
+  validateRepairContinuity(
+    previousReceipt,
+    previousRepair,
+    { status: receipt.status, base, head, report: reportEvidence.path },
+    { allowRepeatedRange: authorization === null },
+  );
 
   const savedReceipt = {
     status: receipt.status,
@@ -190,6 +195,7 @@ export function adjudicateWave(changeDir, waveId, input) {
   const wave = Array.isArray(plan?.waves) && plan.waves.find(candidate => candidate?.id === waveId);
   if (!wave) throw new Error(`Adjudication references unknown wave '${waveId}'`);
   if (input?.decision !== 'allow-review') throw new Error("Adjudication decision must be 'allow-review'");
+  if (input?.confirmed !== true) throw new Error('Adjudication requires confirmed human review of the failure chain');
   requireText(input?.reason, 'adjudication.reason');
   if (/[\p{Cc}\p{Zl}\p{Zp}]/u.test(input.reason)) {
     throw new Error('Adjudication reason must not contain control characters or line separators');
@@ -218,6 +224,7 @@ export function adjudicateWave(changeDir, waveId, input) {
     id: randomUUID(),
     status: 'authorized',
     decision: input.decision,
+    confirmed: true,
     reason: input.reason.trim(),
     failure_count: repair.failure_count,
     previous_head: repair.previous_head,
@@ -310,15 +317,16 @@ export function describeWaves(changeDir, plan = readPlan(changeDir)) {
   });
 }
 
-function validateRepairContinuity(previousReceipt, previousRepair, nextReceipt) {
+function validateRepairContinuity(previousReceipt, previousRepair, nextReceipt, { allowRepeatedRange = true } = {}) {
   if (previousReceipt?.status !== 'fail') return;
   const previousHead = previousRepair?.previous_head ?? previousReceipt.head;
   if (!previousHead) throw new Error('Repair state is missing the previous review head');
 
   // A failed re-review must examine a repair that starts at the prior review
-  // head. A pass may also certify the exact original range: this preserves the
-  // established fail→pass receipt flow for a corrected review finding.
-  const repeatsPreviousRange = nextReceipt.status === 'pass'
+  // head. Outside adjudication, a pass may also certify the exact original
+  // range to preserve the established fail→pass receipt flow. A human
+  // authorization disables that compatibility exception.
+  const repeatsPreviousRange = allowRepeatedRange && nextReceipt.status === 'pass'
     && nextReceipt.base === previousReceipt.base
     && nextReceipt.head === previousReceipt.head;
   if (nextReceipt.base !== previousHead && !repeatsPreviousRange) {
@@ -448,7 +456,7 @@ function writeAdjudicationLedger(changeDir, plan, waveId, ledger) {
 
 function readActiveAdjudication(changeDir, plan, waveId, repair, receipt) {
   const latest = readAdjudicationLedger(changeDir, plan, waveId)?.adjudications.at(-1);
-  if (!latest || latest.status !== 'authorized' || latest.decision !== 'allow-review') return null;
+  if (!latest || latest.status !== 'authorized' || latest.decision !== 'allow-review' || latest.confirmed !== true) return null;
   if (repair?.status !== 'adjudication-required' || receipt?.status !== 'fail') return null;
   if (latest.failure_count !== repair.failure_count
     || latest.previous_head !== repair.previous_head

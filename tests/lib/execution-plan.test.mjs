@@ -624,19 +624,30 @@ describe('execution plan data contract', () => {
     writePlan(changeDir, plan);
 
     let base = gitRefs.base;
+    let head = gitRefs.head;
+    let failedBase;
+    let failedHead;
     for (let failure = 1; failure <= 3; failure += 1) {
+      failedBase = base;
+      failedHead = head;
       recordReview(changeDir, 'wave-1', {
-        status: 'fail', base, head: gitRefs.head, report: writeReviewReport(`authorize-${failure}.md`),
+        status: 'fail', base, head, report: writeReviewReport(`authorize-${failure}.md`),
       });
-      base = gitRefs.head;
+      base = head;
+      head = createRepairCommit(`authorize-${failure}`);
     }
 
+    assert.throws(() => adjudicateWave(changeDir, 'wave-1', {
+      decision: 'allow-review', reason: 'Unconfirmed direct API calls must be rejected.',
+    }), /confirmed human review/i);
     const authorization = adjudicateWave(changeDir, 'wave-1', {
-      decision: 'allow-review', reason: 'Human confirmed one focused repair after reviewing all findings.',
+      decision: 'allow-review', confirmed: true,
+      reason: 'Human confirmed one focused repair after reviewing all findings.',
     });
     assert.equal(authorization.status, 'authorized');
+    assert.equal(authorization.confirmed, true);
     assert.equal(authorization.failure_count, 3);
-    assert.equal(authorization.previous_head, gitRefs.head);
+    assert.equal(authorization.previous_head, failedHead);
     assert.match(authorization.failed_receipt.report_sha256, /^sha256:/);
 
     let [wave, dependent] = describeWaves(changeDir, plan);
@@ -646,11 +657,17 @@ describe('execution plan data contract', () => {
     assert.equal(wave.eligible, true);
     assert.equal(dependent.eligible, false);
     assert.throws(() => adjudicateWave(changeDir, 'wave-1', {
-      decision: 'allow-review', reason: 'A replay must not mint another active authorization.',
+      decision: 'allow-review', confirmed: true,
+      reason: 'A replay must not mint another active authorization.',
     }), /already.*active.*authorization|active authorization/i);
 
+    assert.throws(() => recordReview(changeDir, 'wave-1', {
+      status: 'pass', base: failedBase, head: failedHead,
+      report: writeReviewReport('authorized-old-range-pass.md'),
+    }), /base must equal the previous review head/i);
+
     recordReview(changeDir, 'wave-1', {
-      status: 'fail', base: gitRefs.head, head: gitRefs.head,
+      status: 'fail', base: failedHead, head,
       report: writeReviewReport('authorized-fail.md'),
     });
     [wave, dependent] = describeWaves(changeDir, plan);
@@ -661,15 +678,17 @@ describe('execution plan data contract', () => {
     assert.equal(wave.retryable, false);
     assert.equal(dependent.eligible, false);
     assert.throws(() => recordReview(changeDir, 'wave-1', {
-      status: 'pass', base: gitRefs.head, head: gitRefs.head,
+      status: 'pass', base: head, head,
       report: writeReviewReport('unauthorized-pass.md'),
     }), /requires adjudication/i);
 
     adjudicateWave(changeDir, 'wave-1', {
-      decision: 'allow-review', reason: 'Human reviewed the fourth failure and authorizes one final focused review.',
+      decision: 'allow-review', confirmed: true,
+      reason: 'Human reviewed the fourth failure and authorizes one final focused review.',
     });
+    const resolvedHead = createRepairCommit('authorized-pass');
     recordReview(changeDir, 'wave-1', {
-      status: 'pass', base: gitRefs.head, head: gitRefs.head,
+      status: 'pass', base: head, head: resolvedHead,
       report: writeReviewReport('authorized-pass.md'),
     });
     [wave, dependent] = describeWaves(changeDir, plan);
@@ -687,7 +706,7 @@ describe('execution plan data contract', () => {
     writePlan(changeDir, plan);
 
     assert.throws(() => adjudicateWave(changeDir, 'wave-1', {
-      decision: 'allow-review', reason: 'There is no blocked repair to adjudicate.',
+      decision: 'allow-review', confirmed: true, reason: 'There is no blocked repair to adjudicate.',
     }), /adjudication-required/i);
 
     for (let failure = 1, base = gitRefs.base; failure <= 3; failure += 1, base = gitRefs.head) {
@@ -697,7 +716,7 @@ describe('execution plan data contract', () => {
     }
     writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 Changed task\n');
     assert.throws(() => adjudicateWave(changeDir, 'wave-1', {
-      decision: 'allow-review', reason: 'A stale plan must not accept adjudication.',
+      decision: 'allow-review', confirmed: true, reason: 'A stale plan must not accept adjudication.',
     }), /invalid execution plan|stale/i);
   });
 
@@ -718,7 +737,7 @@ describe('execution plan data contract', () => {
     writeFileSync(evidencePath, '{invalid json\n');
 
     assert.throws(() => adjudicateWave(changeDir, 'wave-1', {
-      decision: 'allow-review', reason: 'Malformed evidence must block instead of being replaced.',
+      decision: 'allow-review', confirmed: true, reason: 'Malformed evidence must block instead of being replaced.',
     }), /adjudication evidence/i);
     assert.equal(readFileSync(evidencePath, 'utf8'), '{invalid json\n');
   });

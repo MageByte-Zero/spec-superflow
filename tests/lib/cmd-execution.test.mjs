@@ -702,10 +702,12 @@ describe('ssf execution', () => {
       '--decision', 'allow-review', '--confirm', '--reason', 'Human reviewed all failures and authorizes one focused review.', '--json']);
     assert.equal(result.exitCode, 0, result.stderr);
     assert.equal(result.json.adjudication.status, 'authorized');
+    assert.equal(result.json.adjudication.confirmed, true);
     assert.equal(result.json.adjudication.failure_count, 3);
 
     const shown = runSsf(['execution', 'show', changeDir, '--json']);
     assert.equal(shown.json.waves[0].adjudication.active, true);
+    assert.equal(shown.json.waves[0].adjudication.confirmed, true);
     assert.equal(shown.json.waves[0].retryable, true);
     assert.equal(shown.json.waves[0].eligible, true);
 

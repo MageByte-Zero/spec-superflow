@@ -69,6 +69,7 @@ function adjudicateAndPrint(changeDir, values, io) {
   const adjudication = adjudicateWave(changeDir, values.wave[0], {
     decision: values.decision,
     reason: values.reason,
+    confirmed: true,
   });
   print(values.json, { ok: true, wave: values.wave[0], adjudication },
     `Review authorization for ${values.wave[0]} recorded: ${adjudication.id}.`, io);
