@@ -90,6 +90,8 @@ Commands:
                         Upgrade inline/batch to SDD, or replan existing SDD waves, as a new revision
   execution review <change-dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict pass|fail
                         Record one review receipt for a planned wave
+  execution adjudicate <change-dir> --wave <id> --decision allow-review --confirm --reason <text>
+                        Authorize one review for an adjudication-required wave
   resume [change-dir] [--json]
                         Recover the only active change or an explicit change context
   switch <change-dir> [--json]

@@ -45,6 +45,7 @@ export function getPlanScopedPaths(changeDir, plan) {
     handoffs: join(planRoot, 'handoffs'),
     reviews: join(planRoot, 'reviews'),
     repairState: join(planRoot, 'repair-state'),
+    adjudications: join(planRoot, 'adjudications'),
   };
 }
 

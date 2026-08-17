@@ -140,13 +140,22 @@ export function recordReview(changeDir, waveId, receipt) {
   }
   const previousReceipt = currentReview.receipt;
   const previousRepair = readRepairState(changeDir, plan, waveId);
+  let authorization = null;
   if (previousRepair?.status === 'adjudication-required') {
-    throw new Error(`Wave '${waveId}' requires adjudication before another review can be recorded`);
+    authorization = readActiveAdjudication(changeDir, plan, waveId, previousRepair, previousReceipt);
+    if (!authorization) {
+      throw new Error(`Wave '${waveId}' requires adjudication before another review can be recorded`);
+    }
   }
   if (previousReceipt?.status === 'pass') {
     throw new Error(`Wave '${waveId}' already has a passing review receipt`);
   }
-  validateRepairContinuity(previousReceipt, previousRepair, { status: receipt.status, base, head, report: reportEvidence.path });
+  validateRepairContinuity(
+    previousReceipt,
+    previousRepair,
+    { status: receipt.status, base, head, report: reportEvidence.path },
+    { allowRepeatedRange: authorization === null },
+  );
 
   const savedReceipt = {
     status: receipt.status,
@@ -165,6 +174,7 @@ export function recordReview(changeDir, waveId, receipt) {
   atomicWrite(join(paths.reviews, `${safeFileName(waveId)}.json`), serializedReceipt);
   atomicWrite(join(planPaths.reviews, `${safeFileName(waveId)}.json`), serializedReceipt);
   updateRepairState(changeDir, plan, waveId, previousRepair, previousReceipt, savedReceipt);
+  if (authorization) consumeAdjudication(changeDir, plan, waveId, authorization.id, savedReceipt);
   if (savedReceipt.status === 'pass') {
     // Task briefs, diff packages, and progress notes are regenerable for this
     // exact plan. Receipt and repair evidence deliberately live beside, not in,
@@ -172,6 +182,59 @@ export function recordReview(changeDir, waveId, receipt) {
     rmSync(getPlanScopedPaths(changeDir, plan).workspace, { recursive: true, force: true });
   }
   return savedReceipt;
+}
+
+/**
+ * Persists an explicit human decision that authorizes exactly one additional
+ * review for the current adjudication-required repair chain.
+ */
+export function adjudicateWave(changeDir, waveId, input) {
+  const plan = readPlan(changeDir);
+  const validation = validatePlan(changeDir, plan);
+  if (!validation.valid) throw new Error(`Cannot adjudicate an invalid execution plan: ${validation.failures.join('; ')}`);
+  const wave = Array.isArray(plan?.waves) && plan.waves.find(candidate => candidate?.id === waveId);
+  if (!wave) throw new Error(`Adjudication references unknown wave '${waveId}'`);
+  if (input?.decision !== 'allow-review') throw new Error("Adjudication decision must be 'allow-review'");
+  if (input?.confirmed !== true) throw new Error('Adjudication requires confirmed human review of the failure chain');
+  requireText(input?.reason, 'adjudication.reason');
+  if (/[\p{Cc}\p{Zl}\p{Zp}]/u.test(input.reason)) {
+    throw new Error('Adjudication reason must not contain control characters or line separators');
+  }
+
+  const currentReview = readCurrentReviewEvidence(changeDir, waveId, plan);
+  if (currentReview.blocker) {
+    throw new Error(`Wave '${waveId}' cannot be adjudicated while its failed report evidence is invalid: ${currentReview.blocker}`);
+  }
+  const receipt = currentReview.receipt;
+  const repair = readRepairState(changeDir, plan, waveId);
+  if (receipt?.status !== 'fail' || repair?.status !== 'adjudication-required') {
+    throw new Error(`Wave '${waveId}' is not adjudication-required`);
+  }
+  if (readActiveAdjudication(changeDir, plan, waveId, repair, receipt)) {
+    throw new Error(`Wave '${waveId}' already has an active review authorization`);
+  }
+
+  const ledger = readAdjudicationLedger(changeDir, plan, waveId) ?? {
+    plan_hash: plan.hash,
+    plan_revision: plan.revision,
+    wave_id: waveId,
+    adjudications: [],
+  };
+  const authorization = {
+    id: randomUUID(),
+    status: 'authorized',
+    decision: input.decision,
+    confirmed: true,
+    reason: input.reason.trim(),
+    failure_count: repair.failure_count,
+    previous_head: repair.previous_head,
+    previous_report: repair.previous_report,
+    failed_receipt: adjudicationReceiptEvidence(receipt),
+    authorized_at: new Date().toISOString(),
+  };
+  ledger.adjudications.push(authorization);
+  writeAdjudicationLedger(changeDir, plan, waveId, ledger);
+  return { ...authorization, active: true };
 }
 
 /**
@@ -236,7 +299,9 @@ export function describeWaves(changeDir, plan = readPlan(changeDir)) {
       ...(review.blocker ? [review.blocker] : []),
     ];
     const repair = describeRepairState(changeDir, plan, wave.id, receipt);
-    const retryable = receipt?.status === 'fail' && repair.status !== 'adjudication-required';
+    const adjudication = describeAdjudication(changeDir, plan, wave.id, repair, receipt);
+    const retryable = receipt?.status === 'fail'
+      && (repair.status !== 'adjudication-required' || adjudication?.active === true);
     return {
       id: wave.id,
       strategy: wave.strategy,
@@ -247,19 +312,21 @@ export function describeWaves(changeDir, plan = readPlan(changeDir)) {
       receipt,
       blockers,
       repair,
+      ...(adjudication ? { adjudication } : {}),
     };
   });
 }
 
-function validateRepairContinuity(previousReceipt, previousRepair, nextReceipt) {
+function validateRepairContinuity(previousReceipt, previousRepair, nextReceipt, { allowRepeatedRange = true } = {}) {
   if (previousReceipt?.status !== 'fail') return;
   const previousHead = previousRepair?.previous_head ?? previousReceipt.head;
   if (!previousHead) throw new Error('Repair state is missing the previous review head');
 
   // A failed re-review must examine a repair that starts at the prior review
-  // head. A pass may also certify the exact original range: this preserves the
-  // established fail→pass receipt flow for a corrected review finding.
-  const repeatsPreviousRange = nextReceipt.status === 'pass'
+  // head. Outside adjudication, a pass may also certify the exact original
+  // range to preserve the established fail→pass receipt flow. A human
+  // authorization disables that compatibility exception.
+  const repeatsPreviousRange = allowRepeatedRange && nextReceipt.status === 'pass'
     && nextReceipt.base === previousReceipt.base
     && nextReceipt.head === previousReceipt.head;
   if (nextReceipt.base !== previousHead && !repeatsPreviousRange) {
@@ -320,6 +387,13 @@ function reviewEvidence(receipt) {
   };
 }
 
+function adjudicationReceiptEvidence(receipt) {
+  return {
+    ...reviewEvidence(receipt),
+    report_sha256: receipt.report_sha256,
+  };
+}
+
 function readRepairState(changeDir, plan, waveId) {
   if (!plan) return null;
   const statePath = join(getPlanScopedPaths(changeDir, plan).repairState, `${safeFileName(waveId)}.json`);
@@ -352,6 +426,63 @@ function describeRepairState(changeDir, plan, waveId, receipt) {
     status: 'not-needed', failure_count: 0, previous_head: null,
     previous_report: null, failures: [],
   };
+}
+
+function adjudicationPath(changeDir, plan, waveId) {
+  return join(getPlanScopedPaths(changeDir, plan).adjudications, `${safeFileName(waveId)}.json`);
+}
+
+function readAdjudicationLedger(changeDir, plan, waveId) {
+  if (!plan) return null;
+  const filePath = adjudicationPath(changeDir, plan, waveId);
+  if (!existsSync(filePath)) return null;
+  try {
+    const ledger = JSON.parse(readFileSync(filePath, 'utf8'));
+    if (ledger?.plan_hash !== plan.hash || ledger?.plan_revision !== plan.revision
+      || ledger?.wave_id !== waveId || !Array.isArray(ledger.adjudications)) {
+      throw new Error('adjudication ledger identity or entries are invalid');
+    }
+    return ledger;
+  } catch (error) {
+    throw new Error(`Unable to read adjudication evidence: ${error.message}`);
+  }
+}
+
+function writeAdjudicationLedger(changeDir, plan, waveId, ledger) {
+  const directory = getPlanScopedPaths(changeDir, plan).adjudications;
+  mkdirSync(directory, { recursive: true });
+  atomicWrite(adjudicationPath(changeDir, plan, waveId), `${JSON.stringify(ledger, null, 2)}\n`);
+}
+
+function readActiveAdjudication(changeDir, plan, waveId, repair, receipt) {
+  const latest = readAdjudicationLedger(changeDir, plan, waveId)?.adjudications.at(-1);
+  if (!latest || latest.status !== 'authorized' || latest.decision !== 'allow-review' || latest.confirmed !== true) return null;
+  if (repair?.status !== 'adjudication-required' || receipt?.status !== 'fail') return null;
+  if (latest.failure_count !== repair.failure_count
+    || latest.previous_head !== repair.previous_head
+    || latest.previous_report !== repair.previous_report
+    || latest.failed_receipt?.base !== receipt.base
+    || latest.failed_receipt?.head !== receipt.head
+    || latest.failed_receipt?.report !== receipt.report
+    || latest.failed_receipt?.report_sha256 !== receipt.report_sha256
+    || latest.failed_receipt?.recorded_at !== receipt.recorded_at) return null;
+  return latest;
+}
+
+function describeAdjudication(changeDir, plan, waveId, repair, receipt) {
+  const latest = readAdjudicationLedger(changeDir, plan, waveId)?.adjudications.at(-1);
+  if (!latest) return null;
+  return { ...latest, active: readActiveAdjudication(changeDir, plan, waveId, repair, receipt)?.id === latest.id };
+}
+
+function consumeAdjudication(changeDir, plan, waveId, authorizationId, receipt) {
+  const ledger = readAdjudicationLedger(changeDir, plan, waveId);
+  const authorization = ledger?.adjudications.find(candidate => candidate.id === authorizationId);
+  if (!authorization || authorization.status !== 'authorized') return;
+  authorization.status = 'consumed';
+  authorization.consumed_at = new Date().toISOString();
+  authorization.review = reviewEvidence(receipt);
+  writeAdjudicationLedger(changeDir, plan, waveId, ledger);
 }
 
 function validateReviewReportEvidence(changeDir, report) {
