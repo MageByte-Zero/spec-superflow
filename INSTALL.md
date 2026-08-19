@@ -408,6 +408,17 @@ CodeBuddy Code CLI 直接从 `~/.codebuddy/skills/` 读取 skill，从 `~/.codeb
 npx spec-superflow@latest install-codebuddy
 ```
 
+安装完成后，安装器会：
+
+- 在 `~/.codebuddy/spec-superflow/bin/` 生成 `ssf`（POSIX）、`ssf.cmd` / `ssf.ps1`（Windows）命令 shim，指向已部署的 `scripts/spec-superflow.mjs`；
+- 默认把 `bin/` 目录加入用户 PATH（幂等，重复安装不会产生重复条目），**新开终端**后即可像 `npm install -g spec-superflow` 一样直接使用 `ssf` 命令。
+
+如果不想修改用户 PATH，用 `--no-path` 跳过（shim 仍会生成，可手动把 `bin/` 加入 PATH）：
+
+```bash
+ssf install-codebuddy --no-path
+```
+
 本地仓库调试：
 
 ```bash
@@ -433,6 +444,7 @@ ssf install-codebuddy --config-dir /path/to/.codebuddy
 ├── spec-superflow/              ← pluginRoot（运行时依赖；${CLAUDE_PLUGIN_ROOT} 目标）
 │   ├── scripts/  docs/  templates/  dist/  hooks/
 │   │   └── session-start        ← 输出 hookSpecificOutput（CodeBuddy 分支）
+│   ├── bin/                     ← ssf 命令 shim（ssf / ssf.cmd / ssf.ps1，已加入用户 PATH）
 │   └── package.json
 ├── skills/                      ← 部署的 skill（路径已重写；其他 skill 保留）
 │   ├── workflow-start/
@@ -458,7 +470,7 @@ npx spec-superflow@latest install-codebuddy
 
 ### 卸载
 
-推荐使用专用卸载命令——它会从 `settings.json` 精确移除 spec-superflow 的 `SessionStart` 条目（保留其他 hook 与所有设置字段），并删除运行时目录、commands、phase-guard 规则与 9 个 skill 目录：
+推荐使用专用卸载命令——它会从 `settings.json` 精确移除 spec-superflow 的 `SessionStart` 条目（保留其他 hook 与所有设置字段），删除运行时目录（含 `bin/` 下的 ssf shim）、commands、phase-guard 规则与 9 个 skill 目录，并从用户 PATH 中移除 `~/.codebuddy/spec-superflow/bin` 条目（Windows 用户环境变量 / POSIX shell 配置文件；其他 PATH 条目保持不变）：
 
 ```bash
 ssf uninstall-codebuddy
@@ -481,7 +493,9 @@ ssf uninstall-codebuddy --config-dir /path/to/.codebuddy
 ### 验证
 
 ```bash
+ssf --version                                               # 新终端中应可执行（若已注册 PATH）
 ls ~/.codebuddy/skills/                                       # 应包含 9 个 spec-superflow skill
+ls ~/.codebuddy/spec-superflow/bin/                           # 应含 ssf / ssf.cmd / ssf.ps1
 ls ~/.codebuddy/spec-superflow/hooks/session-start            # hook 脚本存在
 cat ~/.codebuddy/settings.json | grep -A4 SessionStart        # SessionStart 指向 spec-superflow/hooks/session-start
 grep allowed-tools ~/.codebuddy/commands/ssf/resume.md        # 应为 Bash(node:*)（非 npx）

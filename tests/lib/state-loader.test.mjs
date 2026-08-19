@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 
 let tempDir;
 
@@ -14,7 +15,9 @@ describe('state-loader: readState()', () => {
   before(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-state-test-'));
     const modulePath = join(process.cwd(), 'scripts/lib/state-loader.mjs');
-    stateLoader = await import(modulePath);
+    // Windows-safe dynamic import: bare Windows paths (D:\...) are not valid
+    // ESM import specifiers, so convert to a file:// URL.
+    stateLoader = await import(pathToFileURL(modulePath).href);
   });
 
   after(() => {
@@ -118,7 +121,9 @@ describe('state-loader: writeState()', () => {
   before(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-state-write-'));
     const modulePath = join(process.cwd(), 'scripts/lib/state-loader.mjs');
-    stateLoader = await import(modulePath);
+    // Windows-safe dynamic import: bare Windows paths (D:\...) are not valid
+    // ESM import specifiers, so convert to a file:// URL.
+    stateLoader = await import(pathToFileURL(modulePath).href);
   });
 
   after(() => {
@@ -224,7 +229,9 @@ describe('state-loader: updateField()', () => {
   before(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-state-update-'));
     const modulePath = join(process.cwd(), 'scripts/lib/state-loader.mjs');
-    stateLoader = await import(modulePath);
+    // Windows-safe dynamic import: bare Windows paths (D:\...) are not valid
+    // ESM import specifiers, so convert to a file:// URL.
+    stateLoader = await import(pathToFileURL(modulePath).href);
   });
 
   after(() => {
