@@ -223,6 +223,86 @@ describe('state-loader: writeState()', () => {
   });
 });
 
+describe('state-loader: rebuildState()', () => {
+  let stateLoader;
+
+  before(async () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'ssf-state-rebuild-'));
+    const modulePath = join(process.cwd(), 'scripts/lib/state-loader.mjs');
+    stateLoader = await import(pathToFileURL(modulePath).href);
+  });
+
+  after(() => {
+    if (tempDir) rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('clears execution_plan_hash when artifacts hash changes', async () => {
+    const changeDir = join(tempDir, 'rebuild-hash-change');
+    const { mkdirSync } = await import('node:fs');
+    mkdirSync(changeDir, { recursive: true });
+    mkdirSync(join(changeDir, 'specs'), { recursive: true });
+
+    // Create initial artifacts
+    writeFileSync(join(changeDir, 'proposal.md'), '## Why\nInitial context for rebuild.\n## What Changes\n- Initial.\n');
+    writeFileSync(join(changeDir, 'design.md'), '# Design\n');
+    writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 Task\n');
+    writeFileSync(join(changeDir, 'execution-contract.md'), '# Contract\n');
+
+    const { computeArtifactsHash, computeContractHash } = await import(pathToFileURL(join(process.cwd(), 'scripts/lib/hash.mjs')).href);
+
+    // Set up state with execution_plan_hash
+    const initialState = {
+      state: 'executing',
+      artifacts_hash: 'sha256:old_hash',
+      contract_hash: 'sha256:old_contract',
+      execution_plan_hash: 'sha256:plan_hash',
+      execution_plan_revision: 1,
+    };
+    stateLoader.writeState(changeDir, initialState);
+
+    // Rebuild state
+    const rebuilt = stateLoader.rebuildState(changeDir, { computeArtifactsHash, computeContractHash });
+
+    // artifacts_hash should be updated
+    assert.notEqual(rebuilt.artifacts_hash, 'sha256:old_hash');
+    // execution_plan_hash should be cleared because artifacts changed
+    assert.equal(rebuilt.execution_plan_hash, null);
+    assert.equal(rebuilt.execution_plan_revision, null);
+  });
+
+  it('preserves execution_plan_hash when artifacts hash is unchanged', async () => {
+    const changeDir = join(tempDir, 'rebuild-hash-same');
+    const { mkdirSync } = await import('node:fs');
+    mkdirSync(changeDir, { recursive: true });
+    mkdirSync(join(changeDir, 'specs'), { recursive: true });
+
+    writeFileSync(join(changeDir, 'proposal.md'), '## Why\nContext for same hash.\n## What Changes\n- Same.\n');
+    writeFileSync(join(changeDir, 'design.md'), '# Design\n');
+    writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 Task\n');
+    writeFileSync(join(changeDir, 'execution-contract.md'), '# Contract\n');
+
+    const { computeArtifactsHash, computeContractHash } = await import(pathToFileURL(join(process.cwd(), 'scripts/lib/hash.mjs')).href);
+    const currentArtifactsHash = computeArtifactsHash(changeDir);
+
+    // Set up state with matching artifacts hash
+    const initialState = {
+      state: 'executing',
+      artifacts_hash: currentArtifactsHash,
+      contract_hash: 'sha256:contract',
+      execution_plan_hash: 'sha256:plan_hash',
+      execution_plan_revision: 1,
+    };
+    stateLoader.writeState(changeDir, initialState);
+
+    // Rebuild state
+    const rebuilt = stateLoader.rebuildState(changeDir, { computeArtifactsHash, computeContractHash });
+
+    // execution_plan_hash should be preserved
+    assert.equal(rebuilt.execution_plan_hash, 'sha256:plan_hash');
+    assert.equal(rebuilt.execution_plan_revision, 1);
+  });
+});
+
 describe('state-loader: updateField()', () => {
   let stateLoader;
 

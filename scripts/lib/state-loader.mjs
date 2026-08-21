@@ -131,8 +131,16 @@ export function updateField(changeDir, field, value) {
  */
 export function rebuildState(changeDir, { computeArtifactsHash, computeContractHash }) {
   const state = readState(changeDir);
+  const oldArtifactsHash = state.artifacts_hash;
   state.artifacts_hash = computeArtifactsHash(changeDir);
   state.contract_hash = computeContractHash(changeDir);
+
+  // artifacts hash 变化时，清空依赖旧 hash 的 plan 字段
+  if (oldArtifactsHash !== state.artifacts_hash) {
+    state.execution_plan_hash = null;
+    state.execution_plan_revision = null;
+  }
+
   writeState(changeDir, state);
   return state;
 }

@@ -726,4 +726,34 @@ describe('ssf execution', () => {
     assert.notEqual(invalidRevision.exitCode, 0);
     assert.match(invalidRevision.stderr, /sdd|downgrade|upgrade/i);
   });
+
+  it('allows upgrade from batch-inline to sdd without acknowledge-recommendation (Bug 1)', () => {
+    // First create a batch-inline plan
+    const initial = runSsf(['execution', 'plan', changeDir, '--mode', 'batch-inline', '--confirm', '--acknowledge-recommendation',
+      '--reason', 'operator requested a batch', '--wave', 'wave-1:serial:1.1']);
+    assert.equal(initial.exitCode, 0, initial.stderr);
+
+    // Revise to sdd should work without --acknowledge-recommendation
+    const revised = runSsf(['execution', 'revise', changeDir, '--mode', 'sdd',
+      '--reason', 'risk requires independent review', '--wave', 'wave-1:parallel:1.1,1.2', '--json'], process.cwd(), {
+      acknowledgePlan: false, // Do NOT auto-add --acknowledge-recommendation
+    });
+
+    assert.equal(revised.exitCode, 0, revised.stderr);
+    assert.equal(revised.json.plan.mode, 'sdd');
+    assert.equal(revised.json.plan.revision, 2);
+  });
+
+  it('includes Hint in error messages for non-recommended mode selection (Bug 4)', () => {
+    // Try to select non-recommended mode without acknowledge
+    const result = runSsf(['execution', 'plan', changeDir, '--mode', 'inline', '--confirm',
+      '--reason', 'operator wants inline', '--wave', 'wave-1:parallel:1.1,1.2', '--json'], process.cwd(), {
+      acknowledgePlan: false,
+    });
+
+    assert.notEqual(result.exitCode, 0);
+    assert.match(result.stderr, /acknowledge/i);
+    // Bug 4: error message should include Hint
+    assert.match(result.stderr, /hint|Hint/i);
+  });
 });

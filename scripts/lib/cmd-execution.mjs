@@ -80,10 +80,10 @@ function createAndPrintPlan(changeDir, values, revise, io) {
   }
   const followedRecommendation = values.mode === recommendation.recommendation.mode;
   if (!followedRecommendation && !values['acknowledge-recommendation']) {
-    throw new Error(`${values.mode} differs from the ${recommendation.recommendation.mode} recommendation; pass --acknowledge-recommendation to record the informed choice`);
+    throw new Error(`${values.mode} differs from the ${recommendation.recommendation.mode} recommendation; pass --acknowledge-recommendation to record the informed choice. Hint: Upgrades are auto-allowed`);
   }
   if (followedRecommendation && values['acknowledge-recommendation']) {
-    throw new Error('--acknowledge-recommendation is only valid when selecting a non-recommended mode');
+    throw new Error('--acknowledge-recommendation is only valid when selecting a non-recommended mode. Hint: Omit --acknowledge-recommendation when following the recommendation');
   }
 
   const plan = createPlan(changeDir, {
