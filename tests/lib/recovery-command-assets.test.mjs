@@ -13,7 +13,9 @@ const CHECKOUT_ABSOLUTE_PATHS = [
 ];
 
 function read(path) {
-  return readFileSync(join(process.cwd(), path), 'utf8');
+  // Normalize CRLF so line-oriented assertions behave identically on Windows
+  // checkouts (where git autocrlf may convert the committed LF to CRLF).
+  return readFileSync(join(process.cwd(), path), 'utf8').replace(/\r\n/g, '\n');
 }
 
 const VERSION = JSON.parse(read('package.json')).version;

@@ -11,15 +11,43 @@ const CLI_PATH = join(process.cwd(), 'scripts/spec-superflow.mjs');
 let tempDir;
 
 function ssf(args, options = {}) {
-  try {
-    const result = execSync(
-      `${shellQuote(process.execPath)} ${shellQuote(CLI_PATH)} ${args}`,
-      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], ...options }
-    );
-    return { exitCode: 0, stdout: result.trim(), stderr: '' };
-  } catch (err) {
-    return { exitCode: err.status || 1, stdout: err.stdout?.trim() || '', stderr: err.stderr?.trim() || err.message };
+  const argv = parseShellArgs(args);
+  const result = spawnSync(process.execPath, [CLI_PATH, ...argv], { encoding: 'utf8', ...options });
+  return {
+    exitCode: result.status ?? 1,
+    stdout: (result.stdout || '').trim(),
+    stderr: (result.stderr || '').trim(),
+  };
+}
+
+// Split a command string into argv, honoring single/double quotes so quoted
+// values containing spaces stay intact (mirrors POSIX shell word splitting).
+function parseShellArgs(str) {
+  const argv = [];
+  let current = '';
+  let inSingle = false;
+  let inDouble = false;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (inSingle) {
+      if (ch === "'") inSingle = false;
+      else current += ch;
+    } else if (inDouble) {
+      if (ch === '"') inDouble = false;
+      else if (ch === '\\' && i + 1 < str.length) current += str[++i];
+      else current += ch;
+    } else if (ch === "'") {
+      inSingle = true;
+    } else if (ch === '"') {
+      inDouble = true;
+    } else if (ch === ' ' || ch === '\t') {
+      if (current) { argv.push(current); current = ''; }
+    } else {
+      current += ch;
+    }
   }
+  if (current) argv.push(current);
+  return argv;
 }
 
 function shellQuote(value) {
@@ -260,7 +288,7 @@ describe('cmd-state: transition', () => {
     assert.equal(check.stdout.trim(), 'exploring');
   });
 
-  it('rejects transition when guard pass is a truthy non-boolean value', () => {
+  it('rejects transition when guard pass is a truthy non-boolean value', { skip: process.platform === 'win32' && 'POSIX-only guard shim' }, () => {
     rmSync(join(tempDir, '.spec-superflow.yaml'), { force: true });
     ssf(`state init ${tempDir}`);
 

@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 
 // We need to import from the scripts directory. Since config-loader uses
 // relative imports only (no path manipulation), we can test its pure logic
@@ -20,7 +21,7 @@ describe('config-loader: getDefaults()', () => {
   before(async () => {
     // Dynamic import to get fresh module
     const modulePath = join(process.cwd(), 'scripts/lib/config-loader.mjs');
-    configLoader = await import(modulePath);
+    configLoader = await import(pathToFileURL(modulePath).href);
   });
 
   it('returns DEFAULTS object with expected shape', () => {
@@ -49,7 +50,7 @@ describe('config-loader: resolveModelProfile()', () => {
 
   before(async () => {
     const modulePath = join(process.cwd(), 'scripts/lib/config-loader.mjs');
-    configLoader = await import(modulePath);
+    configLoader = await import(pathToFileURL(modulePath).href);
   });
 
   it('exposes the supported model profiles in order', () => {
@@ -108,7 +109,7 @@ describe('config-loader: loadConfig()', () => {
   before(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-config-test-'));
     const modulePath = join(process.cwd(), 'scripts/lib/config-loader.mjs');
-    configLoader = await import(modulePath);
+    configLoader = await import(pathToFileURL(modulePath).href);
   });
 
   after(() => {

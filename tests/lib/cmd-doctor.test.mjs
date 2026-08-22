@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 
 let tempDir;
 
@@ -14,7 +15,7 @@ describe('cmd-doctor: checkVersionConsistency()', () => {
   before(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-doctor-ver-'));
     const modulePath = join(process.cwd(), 'scripts/lib/cmd-doctor.mjs');
-    const mod = await import(modulePath);
+    const mod = await import(pathToFileURL(modulePath).href);
     checkVersionConsistency = mod.checkVersionConsistency;
   });
 
@@ -74,7 +75,7 @@ describe('cmd-doctor: checkHooks()', () => {
   before(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-doctor-hooks-'));
     const modulePath = join(process.cwd(), 'scripts/lib/cmd-doctor.mjs');
-    const mod = await import(modulePath);
+    const mod = await import(pathToFileURL(modulePath).href);
     checkHooks = mod.checkHooks;
   });
 
@@ -123,7 +124,7 @@ describe('cmd-doctor: checkCodexManifest()', () => {
   before(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-doctor-codex-'));
     const modulePath = join(process.cwd(), 'scripts/lib/cmd-doctor.mjs');
-    const mod = await import(modulePath);
+    const mod = await import(pathToFileURL(modulePath).href);
     checkCodexManifest = mod.checkCodexManifest;
   });
 
@@ -176,7 +177,7 @@ describe('cmd-doctor: checkSkills()', () => {
   before(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-doctor-skills-'));
     const modulePath = join(process.cwd(), 'scripts/lib/cmd-doctor.mjs');
-    const mod = await import(modulePath);
+    const mod = await import(pathToFileURL(modulePath).href);
     checkSkills = mod.checkSkills;
   });
 
@@ -222,7 +223,7 @@ describe('cmd-doctor: checkDist()', () => {
   before(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-doctor-dist-'));
     const modulePath = join(process.cwd(), 'scripts/lib/cmd-doctor.mjs');
-    const mod = await import(modulePath);
+    const mod = await import(pathToFileURL(modulePath).href);
     checkDist = mod.checkDist;
   });
 
@@ -255,7 +256,7 @@ describe('cmd-doctor: checkRootPluginAuthor()', () => {
   before(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-doctor-author-'));
     const modulePath = join(process.cwd(), 'scripts/lib/cmd-doctor.mjs');
-    const mod = await import(modulePath);
+    const mod = await import(pathToFileURL(modulePath).href);
     checkRootPluginAuthor = mod.checkRootPluginAuthor;
   });
 
@@ -303,7 +304,7 @@ describe('cmd-doctor: checkNodeVersion()', () => {
 
   before(async () => {
     const modulePath = join(process.cwd(), 'scripts/lib/cmd-doctor.mjs');
-    const mod = await import(modulePath);
+    const mod = await import(pathToFileURL(modulePath).href);
     checkNodeVersion = mod.checkNodeVersion;
   });
 
@@ -331,7 +332,7 @@ describe('cmd-doctor: checkDocs()', () => {
   before(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-doctor-docs-'));
     const modulePath = join(process.cwd(), 'scripts/lib/cmd-doctor.mjs');
-    const mod = await import(modulePath);
+    const mod = await import(pathToFileURL(modulePath).href);
     checkDocs = mod.checkDocs;
   });
 
@@ -368,7 +369,7 @@ describe('cmd-doctor: checkRuntimeDistribution()', () => {
 
   before(async () => {
     const modulePath = join(process.cwd(), 'scripts/lib/cmd-doctor.mjs');
-    const mod = await import(modulePath);
+    const mod = await import(pathToFileURL(modulePath).href);
     checkRuntimeDistribution = mod.checkRuntimeDistribution;
   });
 
@@ -429,7 +430,7 @@ describe('cmd-doctor: checkRuntimeDistribution()', () => {
     }
   });
 
-  it('accepts a POSIX-escaped local runtime path containing a single quote', () => {
+  it('accepts a POSIX-escaped local runtime path containing a single quote', { skip: process.platform === 'win32' && 'POSIX-only shell quoting' }, () => {
     const root = mkdtempSync(join(tmpdir(), "ssf-doctor-quote-'"));
     try {
       const localCli = join(root, 'scripts', 'spec-superflow.mjs');
