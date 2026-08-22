@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = process.cwd();
-const read = file => readFileSync(join(ROOT, file), 'utf8');
+const read = file => readFileSync(join(ROOT, file), 'utf8').replace(/\r\n/g, '\n');
 const ciJob = (ci, name, nextName) => {
   const start = ci.indexOf(`  ${name}:`);
   const end = nextName ? ci.indexOf(`  ${nextName}:`, start) : ci.length;

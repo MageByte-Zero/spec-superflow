@@ -79,11 +79,13 @@ function createAndPrintPlan(changeDir, values, revise, io) {
     throw new Error('Execution mode selection requires --confirm after reviewing "ssf execution recommend" output');
   }
   const followedRecommendation = values.mode === recommendation.recommendation.mode;
-  if (!followedRecommendation && !values['acknowledge-recommendation']) {
-    throw new Error(`${values.mode} differs from the ${recommendation.recommendation.mode} recommendation; pass --acknowledge-recommendation to record the informed choice`);
-  }
-  if (followedRecommendation && values['acknowledge-recommendation']) {
-    throw new Error('--acknowledge-recommendation is only valid when selecting a non-recommended mode');
+  if (!revise) {
+    if (!followedRecommendation && !values['acknowledge-recommendation']) {
+      throw new Error(`${values.mode} differs from the ${recommendation.recommendation.mode} recommendation; pass --acknowledge-recommendation to record the informed choice`);
+    }
+    if (followedRecommendation && values['acknowledge-recommendation']) {
+      throw new Error('--acknowledge-recommendation is only valid when selecting a non-recommended mode');
+    }
   }
 
   const plan = createPlan(changeDir, {
@@ -96,6 +98,9 @@ function createAndPrintPlan(changeDir, values, revise, io) {
     selection: {
       confirmed: true,
       followed_recommendation: followedRecommendation,
+      // Records an *informed* departure from the recommendation, not merely the
+      // --acknowledge-recommendation flag. On the plan path the flag guarantees
+      // it; on the revise path --confirm plus the forced sdd upgrade guarantees it.
       acknowledged_non_recommendation: !followedRecommendation,
     },
     revision: revise ? existing.revision + 1 : undefined,

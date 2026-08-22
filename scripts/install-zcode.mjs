@@ -13,7 +13,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
-import { shellQuote } from './lib/shell-quote.mjs';
+import { rewriteRuntime } from './lib/runtime-rewrite.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const defaultPluginRoot = dirname(__dirname); // repository root when running from clone
@@ -104,10 +104,7 @@ async function copySkillsWithRoot(sourceSkills, targetSkills, pluginRootAbs) {
       if (content.includes('${CLAUDE_PLUGIN_ROOT}')) {
         content = content.replace(/\$\{CLAUDE_PLUGIN_ROOT\}/g, pluginRootAbs);
       }
-      content = content.replace(
-        /(?:npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf|node scripts\/spec-superflow\.mjs|\bssf(?=\s+(?:audit|checkpoint|config|execution|handoff|inject|isolate|resume|runtime|save|state|switch|sync|validate|workflow)\b))/g,
-        `node ${shellQuote(join(pluginRootAbs, 'scripts', 'spec-superflow.mjs'))}`,
-      );
+      content = rewriteRuntime(content, pluginRootAbs);
       writeFileSync(skillMd, content, 'utf-8');
     }
     // Also fix sub-prompt files (implementer-prompt.md, etc.)
@@ -118,10 +115,7 @@ async function copySkillsWithRoot(sourceSkills, targetSkills, pluginRootAbs) {
       if (content.includes('${CLAUDE_PLUGIN_ROOT}')) {
         content = content.replace(/\$\{CLAUDE_PLUGIN_ROOT\}/g, pluginRootAbs);
       }
-      content = content.replace(
-        /(?:npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf|node scripts\/spec-superflow\.mjs|\bssf(?=\s+(?:audit|checkpoint|config|execution|handoff|inject|isolate|resume|runtime|save|state|switch|sync|validate|workflow)\b))/g,
-        `node ${shellQuote(join(pluginRootAbs, 'scripts', 'spec-superflow.mjs'))}`,
-      );
+      content = rewriteRuntime(content, pluginRootAbs);
       writeFileSync(subPath, content, 'utf-8');
     }
   }

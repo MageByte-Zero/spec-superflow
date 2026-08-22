@@ -10,7 +10,8 @@ import { tmpdir } from 'node:os';
 const ROOT = process.cwd();
 
 function run(command, args, options) {
-  const result = spawnSync(command, args, { encoding: 'utf8', ...options });
+  // On Windows, npm/npx are .cmd shims that spawnSync cannot exec without a shell.
+  const result = spawnSync(command, args, { encoding: 'utf8', shell: process.platform === 'win32', ...options });
   assert.equal(result.status, 0, `${command} ${args.join(' ')}\n${result.stderr}`);
   return result.stdout;
 }

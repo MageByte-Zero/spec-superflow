@@ -6,6 +6,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 
 let tempDir;
 let planInstall, installWorkBuddy;
@@ -13,7 +14,7 @@ let planInstall, installWorkBuddy;
 describe('cmd-install-workbuddy', () => {
   beforeEach(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-workbuddy-'));
-    const mod = await import(join(process.cwd(), 'scripts/lib/cmd-install-workbuddy.mjs'));
+    const mod = await import(pathToFileURL(join(process.cwd(), 'scripts/lib/cmd-install-workbuddy.mjs')).href);
     planInstall = mod.planInstall;
     installWorkBuddy = mod.installWorkBuddy;
   });
@@ -148,7 +149,7 @@ describe('cmd-install-workbuddy', () => {
 
     const installed = readFileSync(join(homeDir, '.workbuddy', 'plugins', 'marketplaces', 'test', 'plugins', 'spec-superflow', 'commands', 'ssf', 'resume.md'), 'utf8');
     assert.match(installed, /allowed-tools: Bash\(node:\*\)/);
-    assert.match(installed, /node ['"]?.*scripts\/spec-superflow\.mjs['"]? resume --json/);
+    assert.match(installed, /node ['"]?.*scripts[\\/]spec-superflow\.mjs['"]? resume --json/);
     assert.doesNotMatch(installed, /\bssf resume --json/);
   });
 
@@ -296,7 +297,7 @@ describe('cmd-install-workbuddy', () => {
     for (const name of ['resume', 'save', 'switch']) {
       const installed = readFileSync(join(result.targetCommands, 'ssf', `${name}.md`), 'utf-8');
       assert.match(installed, /allowed-tools: Bash\(node:\*\)/);
-      assert.match(installed, /node .*scripts\/spec-superflow\.mjs/);
+      assert.match(installed, /node .*scripts[\\/]spec-superflow\.mjs/);
       assert.doesNotMatch(installed, /\bssf (?:resume|save|switch)\b/);
     }
 

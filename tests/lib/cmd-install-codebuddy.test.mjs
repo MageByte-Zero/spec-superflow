@@ -17,6 +17,10 @@ async function loadModule(relPath) {
 let tempDir;
 let planInstall, installCodeBuddy, planUninstall, uninstallCodeBuddy;
 
+// The install/uninstall flow may call applyPathEntry to mutate the real user
+// PATH; tests must inject a no-op so the host environment is never touched.
+const noopApplyPath = async ({ action }) => ({ applied: false, detail: `${action}: no-op (test)` });
+
 describe('cmd-install-codebuddy', () => {
   beforeEach(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-codebuddy-'));
@@ -70,7 +74,7 @@ describe('cmd-install-codebuddy', () => {
   it('deploys skills, runtime, rules, and merges SessionStart into settings.json', async () => {
     const pluginRoot = makePluginRoot();
     const configDir = join(tempDir, 'cb');
-    await installCodeBuddy({ pluginRoot, configDir });
+    await installCodeBuddy({ pluginRoot, configDir, applyPath: noopApplyPath });
 
     // skills
     assert.ok(existsSync(join(configDir, 'skills', 'workflow-start', 'SKILL.md')));
@@ -95,10 +99,60 @@ describe('cmd-install-codebuddy', () => {
     assert.ok(!existsSync(join(configDir, 'hooks', 'hooks.json')));
   });
 
+  it('generates ssf command shims in the bin dir on install', async () => {
+    const pluginRoot = makePluginRoot();
+    const configDir = join(tempDir, 'cb');
+    await installCodeBuddy({ pluginRoot, configDir, applyPath: noopApplyPath });
+
+    const binDir = join(configDir, 'spec-superflow', 'bin');
+    const posixShim = readFileSync(join(binDir, 'ssf'), 'utf-8');
+    assert.ok(posixShim.startsWith('#!/bin/sh'));
+    assert.match(posixShim, /exec node .+spec-superflow\.mjs/);
+    assert.match(posixShim, /\$@/);
+
+    const cmdShim = readFileSync(join(binDir, 'ssf.cmd'), 'utf-8');
+    assert.ok(cmdShim.startsWith('@ECHO off'));
+    assert.match(cmdShim, /node .+spec-superflow\.mjs/);
+    assert.match(cmdShim, /%*/);
+
+    const psShim = readFileSync(join(binDir, 'ssf.ps1'), 'utf-8');
+    assert.match(psShim, /node .+spec-superflow\.mjs/);
+    assert.match(psShim, /\$args/);
+  });
+
+  it('registers the bin dir on PATH by default and skips with --no-path', async () => {
+    const pluginRoot = makePluginRoot();
+    const calls = [];
+    const recordingApplyPath = async (opts) => {
+      calls.push(opts);
+      return { applied: true, detail: 'recorded' };
+    };
+
+    const configDir = join(tempDir, 'cb');
+    await installCodeBuddy({ pluginRoot, configDir, applyPath: recordingApplyPath });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].action, 'add');
+    assert.equal(calls[0].binDir, join(configDir, 'spec-superflow', 'bin'));
+
+    // --no-path: shims are written but applyPath is never invoked.
+    const configDir2 = join(tempDir, 'cb2');
+    await installCodeBuddy({ pluginRoot, configDir: configDir2, noPath: true, applyPath: recordingApplyPath });
+    assert.equal(calls.length, 1, '--no-path must not call applyPath');
+    assert.ok(existsSync(join(configDir2, 'spec-superflow', 'bin', 'ssf.cmd')), 'shims still written with --no-path');
+  });
+
+  it('run --dry-run writes nothing to disk', async () => {
+    const pluginRoot = makePluginRoot();
+    const configDir = join(tempDir, 'cb-dry');
+    const mod = await loadModule('scripts/lib/cmd-install-codebuddy.mjs');
+    await mod.run(['--dry-run', '--local', pluginRoot, '--config-dir', configDir]);
+    assert.ok(!existsSync(configDir), 'dry-run must not create the config dir');
+  });
+
   it('rewrites --local recovery commands to use the deployed local runtime', async () => {
     const pluginRoot = makePluginRoot();
     const configDir = join(tempDir, 'cb');
-    await installCodeBuddy({ pluginRoot, configDir });
+    await installCodeBuddy({ pluginRoot, configDir, applyPath: noopApplyPath });
 
     for (const name of ['resume', 'save', 'switch']) {
       const content = readFileSync(join(configDir, 'commands', 'ssf', `${name}.md`), 'utf-8');
@@ -116,11 +170,25 @@ describe('cmd-install-codebuddy', () => {
   it('rewrites npx invocations in deployed skills to use the local runtime', async () => {
     const pluginRoot = makePluginRoot();
     const configDir = join(tempDir, 'cb');
-    await installCodeBuddy({ pluginRoot, configDir });
+    await installCodeBuddy({ pluginRoot, configDir, applyPath: noopApplyPath });
     const skillMd = readFileSync(join(configDir, 'skills', 'workflow-start', 'SKILL.md'), 'utf-8');
     // Source SKILL.md used npx --yes --package spec-superflow@0.12.1 ssf; deployed must use node <pluginRoot>/scripts/spec-superflow.mjs
     assert.doesNotMatch(skillMd, /npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf/);
     assert.match(skillMd, /node .+spec-superflow[\\/]+scripts[\\/]+spec-superflow\.mjs/);
+  });
+
+  it('rewrites bare ssf subcommand invocations in deployed skills to the local runtime', async () => {
+    const pluginRoot = makePluginRoot();
+    // Real skill sources use a bare `ssf <subcommand>` (no npx); the deployed
+    // skill must not depend on a globally linked `ssf` (e.g. under --no-path).
+    writeFileSync(join(pluginRoot, 'skills', 'workflow-start', 'SKILL.md'),
+      '---\nname: workflow-start\n---\nRun `ssf state init <change-dir>`.\n');
+    const configDir = join(tempDir, 'cb');
+    await installCodeBuddy({ pluginRoot, configDir, applyPath: noopApplyPath });
+    const skillMd = readFileSync(join(configDir, 'skills', 'workflow-start', 'SKILL.md'), 'utf-8');
+    assert.doesNotMatch(skillMd, /\bssf state init\b/);
+    assert.match(skillMd, /node .+spec-superflow[\\/]+scripts[\\/]+spec-superflow\.mjs/);
+    assert.match(skillMd, /state init/);
   });
 
   it('preserves existing settings.json fields and non-ssf SessionStart hooks', async () => {
@@ -137,7 +205,7 @@ describe('cmd-install-codebuddy', () => {
     };
     writeFileSync(join(configDir, 'settings.json'), JSON.stringify(existing, null, 2));
 
-    await installCodeBuddy({ pluginRoot, configDir });
+    await installCodeBuddy({ pluginRoot, configDir, applyPath: noopApplyPath });
 
     const settings = JSON.parse(readFileSync(join(configDir, 'settings.json'), 'utf-8'));
     // other top-level fields preserved
@@ -164,7 +232,7 @@ describe('cmd-install-codebuddy', () => {
     mkdirSync(join(skillsDir, 'other-skill'), { recursive: true });
     writeFileSync(join(skillsDir, 'other-skill', 'SKILL.md'), '---\nname: other-skill\n---\n');
 
-    await installCodeBuddy({ pluginRoot, configDir });
+    await installCodeBuddy({ pluginRoot, configDir, applyPath: noopApplyPath });
 
     assert.ok(existsSync(join(skillsDir, 'other-skill', 'SKILL.md')), 'other skill preserved');
     assert.ok(existsSync(join(skillsDir, 'workflow-start', 'SKILL.md')), 'ssf skill deployed');
@@ -173,8 +241,8 @@ describe('cmd-install-codebuddy', () => {
   it('re-running install upgrades in place without duplicating SessionStart', async () => {
     const pluginRoot = makePluginRoot();
     const configDir = join(tempDir, 'cb');
-    await installCodeBuddy({ pluginRoot, configDir });
-    await installCodeBuddy({ pluginRoot, configDir });
+    await installCodeBuddy({ pluginRoot, configDir, applyPath: noopApplyPath });
+    await installCodeBuddy({ pluginRoot, configDir, applyPath: noopApplyPath });
 
     const settings = JSON.parse(readFileSync(join(configDir, 'settings.json'), 'utf-8'));
     const ssfEntries = settings.hooks.SessionStart.filter(e =>
@@ -256,7 +324,7 @@ describe('cmd-uninstall-codebuddy', () => {
   it('removes only spec-superflow artifacts and preserves other settings/hooks/skills', async () => {
     const pluginRoot = makePluginRoot();
     const configDir = join(tempDir, 'cb');
-    await installCodeBuddy({ pluginRoot, configDir });
+    await installCodeBuddy({ pluginRoot, configDir, applyPath: noopApplyPath });
 
     // Seed unrelated skill, rule, and SessionStart hook + settings field.
     const skillsDir = join(configDir, 'skills');
@@ -270,7 +338,7 @@ describe('cmd-uninstall-codebuddy', () => {
     settings.enabledPlugins = { 'other@market': true };
     writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
 
-    const { removed } = await uninstallCodeBuddy({ configDir });
+    const { removed } = await uninstallCodeBuddy({ configDir, applyPath: noopApplyPath });
     assert.ok(removed.length > 0);
 
     // spec-superflow artifacts gone
@@ -299,14 +367,14 @@ describe('cmd-uninstall-codebuddy', () => {
   it('preserves user-created commands/ssf/custom.md and only removes managed files', async () => {
     const pluginRoot = makePluginRoot();
     const configDir = join(tempDir, 'cb');
-    await installCodeBuddy({ pluginRoot, configDir });
+    await installCodeBuddy({ pluginRoot, configDir, applyPath: noopApplyPath });
 
     // Seed a user-created command in the shared commands/ssf/ directory.
     const ssfCommandsDir = join(configDir, 'commands', 'ssf');
     mkdirSync(ssfCommandsDir, { recursive: true });
     writeFileSync(join(ssfCommandsDir, 'custom.md'), '---\ndescription: user command\n---\nbody\n');
 
-    await uninstallCodeBuddy({ configDir });
+    await uninstallCodeBuddy({ configDir, applyPath: noopApplyPath });
 
     // Managed files removed
     assert.ok(!existsSync(join(ssfCommandsDir, 'resume.md')), 'resume.md removed');
@@ -322,8 +390,8 @@ describe('cmd-uninstall-codebuddy', () => {
     const allSkills = ['workflow-start','build-executor','code-reviewer','contract-builder','need-explorer','release-archivist','spec-merger','spec-writer','bug-investigator'];
     const pluginRoot = makePluginRoot({ skills: allSkills });
     const configDir = join(tempDir, 'cb');
-    await installCodeBuddy({ pluginRoot, configDir });
-    await uninstallCodeBuddy({ configDir });
+    await installCodeBuddy({ pluginRoot, configDir, applyPath: noopApplyPath });
+    await uninstallCodeBuddy({ configDir, applyPath: noopApplyPath });
     for (const name of allSkills) {
       assert.ok(!existsSync(join(configDir, 'skills', name)), `${name} skill removed`);
     }
@@ -331,14 +399,33 @@ describe('cmd-uninstall-codebuddy', () => {
 
   it('is safe when nothing is installed', async () => {
     const configDir = join(tempDir, 'empty-cb');
-    const { removed } = await uninstallCodeBuddy({ configDir });
+    const { removed } = await uninstallCodeBuddy({ configDir, applyPath: noopApplyPath });
     assert.equal(removed.length, 0);
+  });
+
+  it('removes the PATH entry on uninstall', async () => {
+    const pluginRoot = makePluginRoot();
+    const configDir = join(tempDir, 'cb');
+    await installCodeBuddy({ pluginRoot, configDir, applyPath: noopApplyPath });
+
+    const calls = [];
+    const recordingApplyPath = async (opts) => {
+      calls.push(opts);
+      return { applied: true, detail: 'recorded' };
+    };
+    await uninstallCodeBuddy({ configDir, applyPath: recordingApplyPath });
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].action, 'remove');
+    assert.equal(calls[0].binDir, join(configDir, 'spec-superflow', 'bin'));
+    // runtime dir (incl. bin/ shims) gone
+    assert.ok(!existsSync(join(configDir, 'spec-superflow')));
   });
 
   it('run --dry-run writes nothing', async () => {
     const pluginRoot = makePluginRoot();
     const configDir = join(tempDir, 'cb');
-    await installCodeBuddy({ pluginRoot, configDir });
+    await installCodeBuddy({ pluginRoot, configDir, applyPath: noopApplyPath });
     const mod = await loadModule('scripts/lib/cmd-uninstall-codebuddy.mjs');
     await mod.run(['--dry-run', '--config-dir', configDir]);
     assert.ok(existsSync(join(configDir, 'spec-superflow')), 'dry-run must not delete artifacts');

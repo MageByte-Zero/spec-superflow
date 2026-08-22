@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { acceptWorkflowRecommendation, saveWorkflowRecommendation } from '../../scripts/lib/workflow-recommendation.mjs';
 
 let generatePhaseGuard, toCursorMdc, toCopilotInstructions;
@@ -13,7 +14,7 @@ let generatePhaseGuard, toCursorMdc, toCopilotInstructions;
 describe('cmd-inject: generatePhaseGuard()', () => {
   before(async () => {
     const modulePath = join(process.cwd(), 'scripts/lib/cmd-inject.mjs');
-    const mod = await import(modulePath);
+    const mod = await import(pathToFileURL(modulePath).href);
     generatePhaseGuard = mod.generatePhaseGuard;
     toCursorMdc = mod.toCursorMdc;
     toCopilotInstructions = mod.toCopilotInstructions;
@@ -149,7 +150,7 @@ describe('cmd-inject: platform resolution', () => {
 
   before(async () => {
     const modulePath = join(process.cwd(), 'scripts/lib/cmd-inject.mjs');
-    const mod = await import(modulePath);
+    const mod = await import(pathToFileURL(modulePath).href);
     resolvePlatforms = mod.resolvePlatforms;
     detectProjectPlatforms = mod.detectProjectPlatforms;
   });

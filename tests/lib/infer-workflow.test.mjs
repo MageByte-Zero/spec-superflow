@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 
 let tempDir;
 
@@ -14,7 +15,7 @@ describe('infer-workflow: inferMode()', () => {
   before(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-infer-'));
     const modulePath = join(process.cwd(), 'scripts/infer-workflow.mjs');
-    const mod = await import(modulePath);
+    const mod = await import(pathToFileURL(modulePath).href);
     inferMode = mod.inferMode;
   });
 
