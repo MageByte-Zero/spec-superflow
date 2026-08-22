@@ -413,6 +413,8 @@ npx spec-superflow@latest install-codebuddy
 - 在 `~/.codebuddy/spec-superflow/bin/` 生成 `ssf`（POSIX）、`ssf.cmd` / `ssf.ps1`（Windows）命令 shim，指向已部署的 `scripts/spec-superflow.mjs`；
 - 默认把 `bin/` 目录加入用户 PATH（幂等，重复安装不会产生重复条目），**新开终端**后即可像 `npm install -g spec-superflow` 一样直接使用 `ssf` 命令。
 
+> **Windows 前置依赖**：SessionStart hook 通过 `bash "<path>"` 执行（`hooks/session-start` 是 bash 脚本），因此 Windows 上需要 `bash` 在 PATH 中——请先安装 **Git for Windows**（自带 Git Bash）或启用 **WSL**，否则 session-start hook 无法运行，`workflow-start` skill 不会被注入。
+
 如果不想修改用户 PATH，用 `--no-path` 跳过（shim 仍会生成，可手动把 `bin/` 加入 PATH）：
 
 ```bash

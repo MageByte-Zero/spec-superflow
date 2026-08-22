@@ -38,7 +38,7 @@ import { dirname, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { shellQuote } from './shell-quote.mjs';
+import { rewriteRuntime } from './runtime-rewrite.mjs';
 import { writeShims, applyPathEntry } from './path-shim.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -174,21 +174,13 @@ function assertCanonicalCommands(commandNames) {
 }
 
 async function copyValidatedCommands(commandAssets, targetCommands, pluginRootAbs) {
-  const scriptPath = join(pluginRootAbs, 'scripts', 'spec-superflow.mjs');
-  const nodeCmd = `node ${shellQuote(scriptPath)}`;
   for (const asset of commandAssets) {
     const targetPath = join(targetCommands, ...asset.relativePath.split('/'));
     ensureDir(dirname(targetPath));
-    let content = asset.content;
     // Rewrite either supported source command to the deployed local runtime,
     // so --local installs neither fetch a pinned package nor depend on a
     // caller's globally linked `ssf` executable.
-    content = content.replace(
-      /(?:npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf|\bssf(?=\s+(?:resume|save|switch)\b))/g,
-      nodeCmd,
-    );
-    // The command adapters no longer shell out to npx; allow node instead.
-    content = content.replace(
+    const content = rewriteRuntime(asset.content, pluginRootAbs).replace(
       /^allowed-tools:\s*Bash\((?:npx|ssf):\*\)\s*$/m,
       'allowed-tools: Bash(node:*)',
     );
@@ -245,10 +237,7 @@ async function copySkillsWithRoot(sourceSkills, targetSkills, pluginRootAbs, sou
     if (content.includes('${CLAUDE_PLUGIN_ROOT}')) {
       content = content.replace(/\$\{CLAUDE_PLUGIN_ROOT\}/g, pluginRootAbs);
     }
-    content = content.replace(
-      /(?:npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf|node scripts\/spec-superflow\.mjs|\bssf(?=\s+(?:audit|checkpoint|config|execution|handoff|inject|isolate|resume|runtime|save|state|switch|sync|validate|workflow)\b))/g,
-      `node ${shellQuote(join(pluginRootAbs, 'scripts', 'spec-superflow.mjs'))}`,
-    );
+    content = rewriteRuntime(content, pluginRootAbs);
     writeFileSync(filePath, content, 'utf-8');
   }
 

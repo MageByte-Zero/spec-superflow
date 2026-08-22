@@ -123,19 +123,21 @@ export async function uninstallCodeBuddy({ configDir, applyPath = applyPathEntry
     }
   }
 
-  // 2. Remove runtime dir (includes bin/ shims).
+  // 2. Remove the registered PATH entry for the bin dir first. This must
+  //    happen even if the runtime dir no longer exists, so the stale PATH
+  //    entry is cleaned up. Removing the PATH entry before deleting the bin
+  //    dir also avoids Windows file-lock failures if a shell still references
+  //    the shims. Other PATH entries are preserved.
+  const { applied } = await applyPath({ binDir: plan.targetBinDir, action: 'remove' });
+  if (applied) removed.push(`PATH entry (${plan.targetBinDir})`);
+
+  // 3. Remove runtime dir (includes bin/ shims).
   if (existsSync(plan.targetPluginDir)) {
     rmSync(plan.targetPluginDir, { recursive: true, force: true });
     removed.push(plan.targetPluginDir);
   }
 
-  // 2b. Remove the registered PATH entry for the bin dir. This must happen
-  //     even if the runtime dir no longer exists, so the stale PATH entry is
-  //     cleaned up. Other PATH entries are preserved.
-  const { applied } = await applyPath({ binDir: plan.targetBinDir, action: 'remove' });
-  if (applied) removed.push(`PATH entry (${plan.targetBinDir})`);
-
-  // 3. Remove only the managed recovery command files (resume/save/switch.md).
+  // 4. Remove only the managed recovery command files (resume/save/switch.md).
   //    The shared ~/.codebuddy/commands/ssf/ directory may hold user-created
   //    commands (e.g. custom.md); those must NOT be deleted. Only remove the
   //    directory when it is empty after dropping the managed files.
@@ -155,13 +157,13 @@ export async function uninstallCodeBuddy({ configDir, applyPath = applyPathEntry
     }
   }
 
-  // 4. Remove phase-guard rule (other rules untouched).
+  // 5. Remove phase-guard rule (other rules untouched).
   if (existsSync(plan.targetPhaseGuard)) {
     rmSync(plan.targetPhaseGuard, { force: true });
     removed.push(plan.targetPhaseGuard);
   }
 
-  // 5. Remove the 9 spec-superflow skill directories (other skills untouched).
+  // 6. Remove the 9 spec-superflow skill directories (other skills untouched).
   if (existsSync(plan.targetSkills)) {
     for (const name of SPEC_SUPERFLOW_SKILLS) {
       const dir = join(plan.targetSkills, name);

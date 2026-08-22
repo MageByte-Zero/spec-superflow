@@ -1,0 +1,4 @@
+# Force LF line endings for the bash hook script. A CRLF checkout would break
+# `bash hooks/session-start` on Windows (the `\r` before `then`/`fi`/`elif` can
+# cause syntax errors), and the installer copies it verbatim without normalizing.
+hooks/session-start text eol=lf
