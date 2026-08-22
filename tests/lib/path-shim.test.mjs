@@ -279,6 +279,59 @@ describe('path-shim PATH pure functions', () => {
         'export PATH="/home/tester/bin:$PATH"',
       );
     });
+
+    it('expands ~ using the caller-provided platform', () => {
+      const rc = join(tempDir, '.bashrc');
+      const added = pathShim.addPosixExportLine(rc, '~/bin', { home: '/home/tester', shell: '/bin/bash', platform: 'darwin' });
+      assert.equal(added, true);
+      assert.match(readFileSync(rc, 'utf-8'), /export PATH="\/home\/tester\/bin:\$PATH"/);
+      const removed = pathShim.removePosixExportLine(rc, '~/bin', { home: '/home/tester', shell: '/bin/bash', platform: 'darwin' });
+      assert.equal(removed, true);
+      assert.equal(readFileSync(rc, 'utf-8'), '');
+    });
+
+    it('escapes bash/zsh double-quoted binDir metacharacters', () => {
+      assert.equal(
+        pathShim.posixExportLine('/home/Jo"hn/bin', '/bin/bash'),
+        'export PATH="/home/Jo\\"hn/bin:$PATH"',
+      );
+      assert.equal(
+        pathShim.posixExportLine('/home/$USER/bin', '/bin/bash'),
+        'export PATH="/home/\\$USER/bin:$PATH"',
+      );
+      assert.equal(
+        pathShim.posixExportLine('/home/Jo\\hn/bin', '/bin/bash'),
+        'export PATH="/home/Jo\\\\hn/bin:$PATH"',
+      );
+    });
+
+    it('removes a bash/zsh managed line written with escaped metacharacters', () => {
+      const rc = join(tempDir, '.bashrc');
+      const binDir = '/home/Jo"hn/bin';
+      const added = pathShim.addPosixExportLine(rc, binDir, { home: '/home/tester', shell: '/bin/bash' });
+      assert.equal(added, true);
+      const removed = pathShim.removePosixExportLine(rc, binDir, { home: '/home/tester', shell: '/bin/bash' });
+      assert.equal(removed, true);
+      assert.equal(readFileSync(rc, 'utf-8'), '');
+    });
+
+    it('removes a user-written postfix export line ($PATH:<norm>)', () => {
+      const rc = join(tempDir, '.bashrc');
+      const binDir = '/home/tester/.codebuddy/spec-superflow/bin';
+      writeFileSync(rc, 'export PATH="$PATH:/home/tester/.codebuddy/spec-superflow/bin"\n');
+      const removed = pathShim.removePosixExportLine(rc, binDir, { home: '/home/tester', shell: '/bin/bash' });
+      assert.equal(removed, true);
+      assert.equal(readFileSync(rc, 'utf-8'), '');
+    });
+
+    it('does not remove a mixed-form export line containing other entries', () => {
+      const rc = join(tempDir, '.bashrc');
+      const line = 'export PATH="/usr/local/bin:$PATH:/home/tester/.codebuddy/spec-superflow/bin"\n';
+      writeFileSync(rc, line);
+      const removed = pathShim.removePosixExportLine(rc, '/home/tester/.codebuddy/spec-superflow/bin', { home: '/home/tester', shell: '/bin/bash' });
+      assert.equal(removed, false);
+      assert.equal(readFileSync(rc, 'utf-8'), line);
+    });
   });
 
   describe('applyPathEntry', () => {
@@ -320,6 +373,45 @@ describe('path-shim PATH pure functions', () => {
       });
       assert.equal(result.applied, false, 'dryRun must not write');
       assert.ok(!existsSync(join(home, '.zshrc')), 'dryRun must not create the rc file');
+    });
+
+    it('dryRun reports "would add" instead of "added"', async () => {
+      const home = tempDir;
+      const result = await pathShim.applyPathEntry({
+        binDir: join(home, '.codebuddy', 'spec-superflow', 'bin'),
+        action: 'add',
+        home,
+        shell: '/bin/bash',
+        platform: 'linux',
+        dryRun: true,
+      });
+      assert.equal(result.applied, false);
+      assert.match(result.detail, /would add/);
+      assert.doesNotMatch(result.detail, /\badded\b/);
+    });
+
+    it('reports "unchanged" on a no-op re-add', async () => {
+      const home = tempDir;
+      const binDir = join(home, '.codebuddy', 'spec-superflow', 'bin');
+      await pathShim.applyPathEntry({ binDir, action: 'add', home, shell: '/bin/bash', platform: 'linux' });
+      const result = await pathShim.applyPathEntry({ binDir, action: 'add', home, shell: '/bin/bash', platform: 'linux' });
+      assert.equal(result.applied, false);
+      assert.match(result.detail, /unchanged/);
+      assert.doesNotMatch(result.detail, /\badded\b/);
+    });
+
+    it('returns applied=false and "would add" on Windows dryRun', async () => {
+      const result = await pathShim.applyPathEntry({
+        binDir: 'C:\\Users\\tester\\bin',
+        action: 'add',
+        home: 'C:\\Users\\tester',
+        platform: 'win32',
+        dryRun: true,
+        readWindowsUserPath: async () => 'C:\\Windows',
+        writeWindowsUserPath: async () => {},
+      });
+      assert.equal(result.applied, false);
+      assert.match(result.detail, /would add/);
     });
 
     it('adds a fish set -gx line and removes it again', async () => {
@@ -388,6 +480,28 @@ describe('path-shim PATH pure functions', () => {
       });
       assert.equal(removed.applied, true);
       assert.equal(writtenValue, 'C:\\Windows;C:\\tools');
+    });
+  });
+
+  describe('writeWindowsUserPath (PowerShell escaping)', () => {
+    it('emits a single-quoted literal so backslashes stay single', async () => {
+      let captured;
+      const executor = (script) => { captured = script; return ''; };
+      await pathShim.writeWindowsUserPath('C:\\Users\\test\\bin', executor);
+      assert.equal(
+        captured,
+        "[Environment]::SetEnvironmentVariable('Path', 'C:\\Users\\test\\bin', 'User')",
+      );
+    });
+
+    it('escapes embedded single quotes by doubling them', async () => {
+      let captured;
+      const executor = (script) => { captured = script; return ''; };
+      await pathShim.writeWindowsUserPath("C:\\Users\\O'Brien\\bin", executor);
+      assert.equal(
+        captured,
+        "[Environment]::SetEnvironmentVariable('Path', 'C:\\Users\\O''Brien\\bin', 'User')",
+      );
     });
   });
 });

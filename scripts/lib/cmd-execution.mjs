@@ -98,6 +98,9 @@ function createAndPrintPlan(changeDir, values, revise, io) {
     selection: {
       confirmed: true,
       followed_recommendation: followedRecommendation,
+      // Records an *informed* departure from the recommendation, not merely the
+      // --acknowledge-recommendation flag. On the plan path the flag guarantees
+      // it; on the revise path --confirm plus the forced sdd upgrade guarantees it.
       acknowledged_non_recommendation: !followedRecommendation,
     },
     revision: revise ? existing.revision + 1 : undefined,

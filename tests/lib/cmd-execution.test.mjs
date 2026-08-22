@@ -740,6 +740,12 @@ describe('ssf execution', () => {
     assert.equal(revised.exitCode, 0, revised.stderr);
     assert.equal(revised.json.plan.mode, 'sdd');
     assert.equal(revised.json.plan.revision, 2);
+    // The selection records an informed departure: --confirm plus the forced
+    // sdd upgrade counts as the acknowledgement, not the (absent) flag.
+    assert.equal(revised.json.plan.source, 'user-confirmed-revision');
+    assert.equal(revised.json.plan.selection.confirmed, true);
+    assert.equal(revised.json.plan.selection.followed_recommendation, false);
+    assert.equal(revised.json.plan.selection.acknowledged_non_recommendation, true);
   });
 
   it('requires acknowledge-recommendation for non-recommended mode selection on plan', () => {

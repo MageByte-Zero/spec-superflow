@@ -169,6 +169,20 @@ function escapeFishDoubleQuoted(value) {
 }
 
 /**
+ * Escape a path for embedding inside a bash/zsh double-quoted string. Within
+ * double quotes, `\`, `"`, `` ` `` (command substitution), and `$` (parameter
+ * expansion) must be backslash-escaped. `$PATH` in the managed line is written
+ * after the path and is intentionally not escaped by this helper.
+ */
+function escapeBashDoubleQuoted(value) {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/`/g, '\\`')
+    .replace(/\$/g, '\\$');
+}
+
+/**
  * The exact PATH-management line this module manages for a bin dir.
  * Fish uses `set -gx PATH "<binDir>" $PATH`; bash/zsh use `export PATH="<binDir>:$PATH"`.
  *
@@ -180,7 +194,7 @@ export function posixExportLine(binDir, shell = process.env.SHELL) {
   if (isFishShell(shell)) {
     return `set -gx PATH "${escapeFishDoubleQuoted(binDir)}" $PATH`;
   }
-  return `export PATH="${binDir}:$PATH"`;
+  return `export PATH="${escapeBashDoubleQuoted(binDir)}:$PATH"`;
 }
 
 /**
@@ -189,9 +203,11 @@ export function posixExportLine(binDir, shell = process.env.SHELL) {
  */
 function managedLineMatcher(norm, shell) {
   if (isFishShell(shell)) {
-    return new RegExp(`^set\\s+-gx\\s+PATH\\s+["']?${escapeRegExp(escapeFishDoubleQuoted(norm))}["']?\\s+\\$PATH\\s*$`);
+    const escaped = escapeRegExp(escapeFishDoubleQuoted(norm));
+    return new RegExp(`^set\\s+-gx\\s+PATH\\s+(?:["']?${escaped}["']?\\s+\\$PATH|\\$PATH\\s+["']?${escaped}["']?)\\s*$`);
   }
-  return new RegExp(`^\\s*export\\s+PATH\\s*=\\s*["']${escapeRegExp(norm)}:\\$PATH["']\\s*$`);
+  const escaped = escapeRegExp(escapeBashDoubleQuoted(norm));
+  return new RegExp(`^\\s*export\\s+PATH\\s*=\\s*["'](?:${escaped}:\\$PATH|\\$PATH:${escaped})["']\\s*$`);
 }
 
 /**
@@ -199,8 +215,8 @@ function managedLineMatcher(norm, shell) {
  * file. Idempotent: returns false (and writes nothing) when the exact line
  * already exists in any quoting variant. Creates the file when missing.
  */
-export function addPosixExportLine(rcPath, binDir, { home = homedir(), shell = process.env.SHELL } = {}) {
-  const norm = normalizePathEntry(binDir, home, 'linux');
+export function addPosixExportLine(rcPath, binDir, { home = homedir(), shell = process.env.SHELL, platform = process.platform } = {}) {
+  const norm = normalizePathEntry(binDir, home, platform);
   const existing = existsSync(rcPath) ? readFileSync(rcPath, 'utf-8') : '';
   const matcher = managedLineMatcher(norm, shell);
   if (existing.split('\n').some(line => matcher.test(line))) return false;
@@ -216,9 +232,9 @@ export function addPosixExportLine(rcPath, binDir, { home = homedir(), shell = p
  * exact managed line (any quoting variant) is removed; every other line is
  * preserved. Returns true when something was removed.
  */
-export function removePosixExportLine(rcPath, binDir, { home = homedir(), shell = process.env.SHELL } = {}) {
+export function removePosixExportLine(rcPath, binDir, { home = homedir(), shell = process.env.SHELL, platform = process.platform } = {}) {
   if (!existsSync(rcPath)) return false;
-  const norm = normalizePathEntry(binDir, home, 'linux');
+  const norm = normalizePathEntry(binDir, home, platform);
   const lines = readFileSync(rcPath, 'utf-8').split('\n');
   const matcher = managedLineMatcher(norm, shell);
   const kept = lines.filter(line => !matcher.test(line));
@@ -245,7 +261,10 @@ export async function readWindowsUserPath(executor = powershellExec) {
 
 /** Write the user-level PATH (HKCU\Environment). */
 export async function writeWindowsUserPath(value, executor = powershellExec) {
-  const quoted = JSON.stringify(value);
+  // PowerShell single-quoted strings are literal (only '' escapes a quote),
+  // so backslashes in Windows paths are preserved verbatim. JSON.stringify
+  // would double them because PowerShell treats backslash as an ordinary char.
+  const quoted = `'${String(value).replace(/'/g, "''")}'`;
   executor(`[Environment]::SetEnvironmentVariable('Path', ${quoted}, 'User')`);
 }
 
@@ -286,9 +305,12 @@ export async function applyPathEntry({
     if (!dryRun && (result.added || result.removed)) {
       await writeWin(result.path);
     }
+    const verb = dryRun
+      ? `would ${action === 'add' ? 'add' : 'remove'}`
+      : (result.added ? 'added' : result.removed ? 'removed' : 'unchanged');
     return {
-      applied: Boolean(result.added || result.removed),
-      detail: `user PATH (Windows): ${result.added ? 'added' : result.removed ? 'removed' : 'unchanged'} ${norm}`,
+      applied: dryRun ? false : Boolean(result.added || result.removed),
+      detail: `user PATH (Windows): ${verb} ${norm}${dryRun ? ' (dry-run)' : ''}`,
     };
   }
 
@@ -296,11 +318,20 @@ export async function applyPathEntry({
   if (!rcPath) {
     return { applied: false, detail: `no PATH target for platform ${platform}` };
   }
-  const applied = action === 'add'
-    ? (!dryRun && addPosixExportLine(rcPath, norm, { home, shell }))
-    : (!dryRun && removePosixExportLine(rcPath, norm, { home, shell }));
+  if (dryRun) {
+    return {
+      applied: false,
+      detail: `would ${action === 'add' ? 'add' : 'remove'} PATH entry for ${norm} in ${rcPath} (dry-run)`,
+    };
+  }
+  const changed = action === 'add'
+    ? addPosixExportLine(rcPath, norm, { home, shell, platform })
+    : removePosixExportLine(rcPath, norm, { home, shell, platform });
+  const verb = action === 'add'
+    ? (changed ? 'added' : 'unchanged')
+    : (changed ? 'removed' : 'unchanged');
   return {
-    applied,
-    detail: `${action === 'add' ? 'added' : 'removed'} PATH entry for ${norm} in ${rcPath}`,
+    applied: changed,
+    detail: `${verb} PATH entry for ${norm} in ${rcPath}`,
   };
 }
