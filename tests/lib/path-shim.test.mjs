@@ -290,6 +290,14 @@ describe('path-shim PATH pure functions', () => {
       assert.equal(readFileSync(rc, 'utf-8'), '');
     });
 
+    it('uses POSIX normalization even when platform is win32', () => {
+      const rc = join(tempDir, '.bashrc');
+      const added = pathShim.addPosixExportLine(rc, '~/bin', { home: '/home/tester', shell: '/bin/bash', platform: 'win32' });
+      assert.equal(added, true);
+      // `~` must expand with a forward slash, never a Windows backslash.
+      assert.match(readFileSync(rc, 'utf-8'), /export PATH="\/home\/tester\/bin:\$PATH"/);
+    });
+
     it('escapes bash/zsh double-quoted binDir metacharacters', () => {
       assert.equal(
         pathShim.posixExportLine('/home/Jo"hn/bin', '/bin/bash'),
@@ -502,6 +510,28 @@ describe('path-shim PATH pure functions', () => {
         captured,
         "[Environment]::SetEnvironmentVariable('Path', 'C:\\Users\\O''Brien\\bin', 'User')",
       );
+    });
+  });
+
+  describe('resolvePowershellExecutable', () => {
+    it('prefers pwsh.exe when it is available', () => {
+      const probe = (bin) => { if (bin === 'powershell.exe') throw new Error('not found'); };
+      assert.equal(pathShim.resolvePowershellExecutable(probe), 'pwsh.exe');
+    });
+
+    it('falls back to powershell.exe when pwsh.exe is missing', () => {
+      const probe = (bin) => { if (bin === 'pwsh.exe') throw new Error('not found'); };
+      assert.equal(pathShim.resolvePowershellExecutable(probe), 'powershell.exe');
+    });
+  });
+
+  describe('escapePowerShellDoubleQuoted', () => {
+    it('escapes dollar signs so they are not expanded', () => {
+      assert.equal(pathShim.escapePowerShellDoubleQuoted('a$b'), 'a`$b');
+    });
+
+    it('escapes backticks so they are treated literally', () => {
+      assert.equal(pathShim.escapePowerShellDoubleQuoted('a`b'), 'a``b');
     });
   });
 });

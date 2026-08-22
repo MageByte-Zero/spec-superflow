@@ -177,6 +177,20 @@ describe('cmd-install-codebuddy', () => {
     assert.match(skillMd, /node .+spec-superflow[\\/]+scripts[\\/]+spec-superflow\.mjs/);
   });
 
+  it('rewrites bare ssf subcommand invocations in deployed skills to the local runtime', async () => {
+    const pluginRoot = makePluginRoot();
+    // Real skill sources use a bare `ssf <subcommand>` (no npx); the deployed
+    // skill must not depend on a globally linked `ssf` (e.g. under --no-path).
+    writeFileSync(join(pluginRoot, 'skills', 'workflow-start', 'SKILL.md'),
+      '---\nname: workflow-start\n---\nRun `ssf state init <change-dir>`.\n');
+    const configDir = join(tempDir, 'cb');
+    await installCodeBuddy({ pluginRoot, configDir, applyPath: noopApplyPath });
+    const skillMd = readFileSync(join(configDir, 'skills', 'workflow-start', 'SKILL.md'), 'utf-8');
+    assert.doesNotMatch(skillMd, /\bssf state init\b/);
+    assert.match(skillMd, /node .+spec-superflow[\\/]+scripts[\\/]+spec-superflow\.mjs/);
+    assert.match(skillMd, /state init/);
+  });
+
   it('preserves existing settings.json fields and non-ssf SessionStart hooks', async () => {
     const pluginRoot = makePluginRoot();
     const configDir = join(tempDir, 'cb');
