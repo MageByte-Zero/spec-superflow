@@ -79,11 +79,13 @@ function createAndPrintPlan(changeDir, values, revise, io) {
     throw new Error('Execution mode selection requires --confirm after reviewing "ssf execution recommend" output');
   }
   const followedRecommendation = values.mode === recommendation.recommendation.mode;
-  if (!followedRecommendation && !values['acknowledge-recommendation']) {
-    throw new Error(`${values.mode} differs from the ${recommendation.recommendation.mode} recommendation; pass --acknowledge-recommendation to record the informed choice. Hint: Upgrades are auto-allowed`);
-  }
-  if (followedRecommendation && values['acknowledge-recommendation']) {
-    throw new Error('--acknowledge-recommendation is only valid when selecting a non-recommended mode. Hint: Omit --acknowledge-recommendation when following the recommendation');
+  if (!revise) {
+    if (!followedRecommendation && !values['acknowledge-recommendation']) {
+      throw new Error(`${values.mode} differs from the ${recommendation.recommendation.mode} recommendation; pass --acknowledge-recommendation to record the informed choice`);
+    }
+    if (followedRecommendation && values['acknowledge-recommendation']) {
+      throw new Error('--acknowledge-recommendation is only valid when selecting a non-recommended mode');
+    }
   }
 
   const plan = createPlan(changeDir, {

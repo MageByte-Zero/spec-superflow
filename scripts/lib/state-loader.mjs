@@ -137,6 +137,7 @@ export function rebuildState(changeDir, { computeArtifactsHash, computeContractH
 
   // artifacts hash 变化时，清空依赖旧 hash 的 plan 字段
   if (oldArtifactsHash !== state.artifacts_hash) {
+    state.revision = null;
     state.execution_plan_hash = null;
     state.execution_plan_revision = null;
   }

@@ -78,6 +78,7 @@ function runStateInProcess(args) {
 }
 
 function requiresAcknowledgement(args) {
+  if (args[1] === 'revise') return false;
   const mode = args[args.indexOf('--mode') + 1];
   const waves = args.flatMap((value, index) => value === '--wave' ? [args[index + 1]] : []).filter(Boolean);
   const hasParallelWave = waves.some(wave => wave.split(':')[1] === 'parallel');
@@ -501,7 +502,7 @@ describe('ssf execution', () => {
     assert.equal(runSsf(['state', 'get', changeDir, 'execution_plan_revision', '--json']).json.value, 2);
   });
 
-  it('requires confirmation and acknowledgement when a revision differs from its recommendation', () => {
+  it('requires confirmation but not acknowledgement when revising to sdd', () => {
     const initial = runSsf(['execution', 'plan', changeDir, '--mode', 'sdd',
       '--reason', 'parallel work needs review', '--wave', 'wave-1:parallel:1.1,1.2']);
     assert.equal(initial.exitCode, 0, initial.stderr);
@@ -518,17 +519,13 @@ describe('ssf execution', () => {
     assert.notEqual(missingConfirm.exitCode, 0);
     assert.match(missingConfirm.stderr, /confirm/i);
 
-    const missingAcknowledgement = runSsf(['execution', 'revise', changeDir, '--mode', 'sdd', '--confirm',
-      '--reason', 'retain SDD for the revised work', '--wave', 'wave-1:serial:1.1'], process.cwd(), {
+    // The revise path only permits sdd (a controlled upgrade), so it no longer
+    // requires --acknowledge-recommendation even when the recommendation differs.
+    const revised = runSsf(['execution', 'revise', changeDir, '--mode', 'sdd', '--confirm',
+      '--reason', 'retain SDD for the revised work', '--wave', 'wave-1:serial:1.1', '--json'], process.cwd(), {
       acknowledgePlan: false,
       prepareRecommendation: false,
     });
-    assert.notEqual(missingAcknowledgement.exitCode, 0);
-    assert.match(missingAcknowledgement.stderr, /acknowledge/i);
-
-    const revised = runSsf(['execution', 'revise', changeDir, '--mode', 'sdd', '--confirm',
-      '--acknowledge-recommendation', '--reason', 'retain SDD for the revised work',
-      '--wave', 'wave-1:serial:1.1', '--json'], process.cwd(), { prepareRecommendation: false });
     assert.equal(revised.exitCode, 0, revised.stderr);
     assert.equal(revised.json.plan.selection.confirmed, true);
     assert.equal(revised.json.plan.selection.followed_recommendation, false);
@@ -727,15 +724,16 @@ describe('ssf execution', () => {
     assert.match(invalidRevision.stderr, /sdd|downgrade|upgrade/i);
   });
 
-  it('allows upgrade from batch-inline to sdd without acknowledge-recommendation (Bug 1)', () => {
+  it('allows revise to sdd without acknowledge-recommendation even when recommendation differs', () => {
     // First create a batch-inline plan
     const initial = runSsf(['execution', 'plan', changeDir, '--mode', 'batch-inline', '--confirm', '--acknowledge-recommendation',
       '--reason', 'operator requested a batch', '--wave', 'wave-1:serial:1.1']);
     assert.equal(initial.exitCode, 0, initial.stderr);
 
-    // Revise to sdd should work without --acknowledge-recommendation
+    // Revise to sdd: the single serial task recommends inline (differs from sdd),
+    // but the revise path no longer requires --acknowledge-recommendation.
     const revised = runSsf(['execution', 'revise', changeDir, '--mode', 'sdd',
-      '--reason', 'risk requires independent review', '--wave', 'wave-1:parallel:1.1,1.2', '--json'], process.cwd(), {
+      '--reason', 'risk requires independent review', '--wave', 'wave-1:serial:1.1', '--json'], process.cwd(), {
       acknowledgePlan: false, // Do NOT auto-add --acknowledge-recommendation
     });
 
@@ -744,7 +742,7 @@ describe('ssf execution', () => {
     assert.equal(revised.json.plan.revision, 2);
   });
 
-  it('includes Hint in error messages for non-recommended mode selection (Bug 4)', () => {
+  it('requires acknowledge-recommendation for non-recommended mode selection on plan', () => {
     // Try to select non-recommended mode without acknowledge
     const result = runSsf(['execution', 'plan', changeDir, '--mode', 'inline', '--confirm',
       '--reason', 'operator wants inline', '--wave', 'wave-1:parallel:1.1,1.2', '--json'], process.cwd(), {
@@ -753,7 +751,5 @@ describe('ssf execution', () => {
 
     assert.notEqual(result.exitCode, 0);
     assert.match(result.stderr, /acknowledge/i);
-    // Bug 4: error message should include Hint
-    assert.match(result.stderr, /hint|Hint/i);
   });
 });

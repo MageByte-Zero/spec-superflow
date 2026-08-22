@@ -253,6 +253,7 @@ describe('state-loader: rebuildState()', () => {
     // Set up state with execution_plan_hash
     const initialState = {
       state: 'executing',
+      revision: 1,
       artifacts_hash: 'sha256:old_hash',
       contract_hash: 'sha256:old_contract',
       execution_plan_hash: 'sha256:plan_hash',
@@ -265,7 +266,8 @@ describe('state-loader: rebuildState()', () => {
 
     // artifacts_hash should be updated
     assert.notEqual(rebuilt.artifacts_hash, 'sha256:old_hash');
-    // execution_plan_hash should be cleared because artifacts changed
+    // plan summary fields should be cleared because artifacts changed
+    assert.equal(rebuilt.revision, null);
     assert.equal(rebuilt.execution_plan_hash, null);
     assert.equal(rebuilt.execution_plan_revision, null);
   });
@@ -287,6 +289,7 @@ describe('state-loader: rebuildState()', () => {
     // Set up state with matching artifacts hash
     const initialState = {
       state: 'executing',
+      revision: 1,
       artifacts_hash: currentArtifactsHash,
       contract_hash: 'sha256:contract',
       execution_plan_hash: 'sha256:plan_hash',
@@ -297,7 +300,8 @@ describe('state-loader: rebuildState()', () => {
     // Rebuild state
     const rebuilt = stateLoader.rebuildState(changeDir, { computeArtifactsHash, computeContractHash });
 
-    // execution_plan_hash should be preserved
+    // plan summary fields should be preserved
+    assert.equal(rebuilt.revision, 1);
     assert.equal(rebuilt.execution_plan_hash, 'sha256:plan_hash');
     assert.equal(rebuilt.execution_plan_revision, 1);
   });
