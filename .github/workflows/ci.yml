@@ -10,11 +10,13 @@ on:
 jobs:
   build-and-test:
     name: Build & Test
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     if: "!startsWith(github.ref, 'refs/tags/')"
     strategy:
+      fail-fast: false
       matrix:
         node-version: [20, 22]
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -83,6 +85,45 @@ jobs:
           rm -rf "$cb_tmp"
           echo "OK codebuddy — 9 skills, settings.json SessionStart, commands rewritten, phase-guard scoped"
           echo "All 9 platform installers passed smoke test."
+
+  codebuddy-install-smoke:
+    name: CodeBuddy Install Smoke (Windows shims)
+    runs-on: windows-latest
+    if: "!startsWith(github.ref, 'refs/tags/')"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: CodeBuddy install + Windows shim smoke
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $cb_tmp = Join-Path $env:TEMP ("cb-smoke-" + [guid]::NewGuid().ToString('N'))
+          # --no-path keeps the CI runner's real user PATH untouched; shims are
+          # still generated, which is exactly what this smoke verifies.
+          node "$env:GITHUB_WORKSPACE/scripts/install-codebuddy.mjs" --local "$env:GITHUB_WORKSPACE" --config-dir $cb_tmp --no-path | Out-Null
+          $binDir = Join-Path $cb_tmp "spec-superflow/bin"
+          if (!(Test-Path (Join-Path $cb_tmp "skills"))) { throw "FAIL: skills dir missing" }
+          if (!(Test-Path (Join-Path $cb_tmp "commands/ssf"))) { throw "FAIL: commands/ssf missing" }
+          if (!(Test-Path (Join-Path $cb_tmp "rules/phase-guard.md"))) { throw "FAIL: phase-guard missing" }
+          if (!(Test-Path (Join-Path $cb_tmp "settings.json"))) { throw "FAIL: settings.json missing" }
+          # Windows SHALL ship only ssf.cmd + ssf.ps1 (per codebuddy-ssf-path spec).
+          if (!(Test-Path (Join-Path $binDir "ssf.cmd"))) { throw "FAIL: ssf.cmd missing" }
+          if (!(Test-Path (Join-Path $binDir "ssf.ps1"))) { throw "FAIL: ssf.ps1 missing" }
+          if (Test-Path (Join-Path $binDir "ssf")) { throw "FAIL: POSIX ssf must not exist on Windows" }
+          $settings = Get-Content (Join-Path $cb_tmp "settings.json") -Raw
+          if (!$settings.Contains('"SessionStart"')) { throw "FAIL: no SessionStart in settings.json" }
+          $resume = Get-Content (Join-Path $cb_tmp "commands/ssf/resume.md") -Raw
+          if ($resume -match 'npx --yes --package spec-superflow@') { throw "FAIL: resume.md still uses npx" }
+          if (!($resume -match 'Bash\(node:\*\)')) { throw "FAIL: resume.md allowed-tools not rewritten to node" }
+          # Run the CMD shim against the deployed runtime.
+          & (Join-Path $binDir "ssf.cmd") --version | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "FAIL: ssf.cmd --version failed" }
+          Remove-Item -Recurse -Force $cb_tmp
+          Write-Host "OK codebuddy (windows) — Windows shims generated and executable"
 
   release:
     name: Release

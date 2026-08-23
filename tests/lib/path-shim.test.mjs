@@ -159,6 +159,14 @@ describe('path-shim PATH pure functions', () => {
       const { ssfCmd } = pathShim.shimContents('C:\\Users\\John Doe\\.codebuddy\\spec-superflow');
       assert.match(ssfCmd, /"[^"]*John Doe[^"]*"/);
     });
+
+    it('escapes percent signs in the CMD shim path', () => {
+      const { ssfCmd } = pathShim.shimContents('C:\\Users\\100%\\spec-superflow');
+      // CMD expands %VAR% even inside double quotes; a .cmd batch file must
+      // double the % (%% → literal %) so the shim still targets the real path.
+      assert.ok(ssfCmd.includes('C:\\Users\\100%%\\spec-superflow'));
+      assert.doesNotMatch(ssfCmd, /100%\\(?!%)/, 'no single unescaped % may remain');
+    });
   });
 
   describe('detectShellConfigPath', () => {
@@ -532,6 +540,34 @@ describe('path-shim PATH pure functions', () => {
 
     it('escapes backticks so they are treated literally', () => {
       assert.equal(pathShim.escapePowerShellDoubleQuoted('a`b'), 'a``b');
+    });
+  });
+
+  describe('escapeCmdDoubleQuoted', () => {
+    it('doubles percent signs for CMD batch semantics', () => {
+      assert.equal(pathShim.escapeCmdDoubleQuoted('C:\\Users\\100%\\app'), 'C:\\Users\\100%%\\app');
+    });
+
+    it('leaves paths without percent signs unchanged', () => {
+      assert.equal(pathShim.escapeCmdDoubleQuoted('C:\\Users\\test\\app'), 'C:\\Users\\test\\app');
+    });
+  });
+
+  describe('writeShims (platform-specific)', () => {
+    it('writes only the POSIX ssf shim on linux', async () => {
+      const root = join(tempDir, 'posix-root');
+      await pathShim.writeShims(root, { platform: 'linux' });
+      assert.ok(existsSync(join(root, 'bin', 'ssf')), 'ssf written on POSIX');
+      assert.ok(!existsSync(join(root, 'bin', 'ssf.cmd')), 'no ssf.cmd on POSIX');
+      assert.ok(!existsSync(join(root, 'bin', 'ssf.ps1')), 'no ssf.ps1 on POSIX');
+    });
+
+    it('writes only ssf.cmd and ssf.ps1 on win32', async () => {
+      const root = join(tempDir, 'win-root');
+      await pathShim.writeShims(root, { platform: 'win32' });
+      assert.ok(existsSync(join(root, 'bin', 'ssf.cmd')), 'ssf.cmd written on Windows');
+      assert.ok(existsSync(join(root, 'bin', 'ssf.ps1')), 'ssf.ps1 written on Windows');
+      assert.ok(!existsSync(join(root, 'bin', 'ssf')), 'no POSIX ssf on Windows');
     });
   });
 });

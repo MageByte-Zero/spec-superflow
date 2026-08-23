@@ -11,11 +11,12 @@
 //   - Idempotent: re-running the installer never duplicates PATH entries;
 //     the uninstaller removes exactly the entries it added.
 //
-// Deploy layout produced by this module:
+// Deploy layout produced by this module (the file set depends on the target
+// platform; see writeShims):
 //   <codebuddyRoot>/spec-superflow/bin/
-//     ├── ssf        (POSIX shell shim)
-//     ├── ssf.cmd    (Windows CMD shim)
-//     └── ssf.ps1    (Windows PowerShell shim)
+//     ├── ssf        (POSIX shell shim — Linux/macOS)
+//     ├── ssf.cmd    (Windows CMD shim — win32)
+//     └── ssf.ps1    (Windows PowerShell shim — win32)
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
@@ -104,6 +105,16 @@ export function removePathEntry(pathString, target, { platform = process.platfor
 // ─── shim generation ──────────────────────────────────────
 
 /**
+ * Escape a path for embedding inside a Windows CMD batch file double-quoted
+ * string. cmd.exe expands %VAR% even inside double quotes, so a literal `%`
+ * must be written as `%%` (batch-file semantics) — otherwise a user or install
+ * directory containing `%` would resolve to the wrong target.
+ */
+export function escapeCmdDoubleQuoted(value) {
+  return value.replace(/%/g, '%%');
+}
+
+/**
  * Build the three `ssf` shim contents, each forwarding arguments to
  * `node <pluginRoot>/scripts/spec-superflow.mjs`.
  *
@@ -114,8 +125,9 @@ export function shimContents(pluginRootAbs) {
   const scriptPath = join(pluginRootAbs, 'scripts', 'spec-superflow.mjs');
   // POSIX: single-quoted path (shellQuote escapes embedded quotes).
   const posix = `exec node ${shellQuote(scriptPath)} "$@"`;
-  // Windows CMD: double-quoted path survives cmd.exe (no `$`/backtick expansion).
-  const cmdPath = `"${scriptPath}"`;
+  // Windows CMD: double-quoted path survives cmd.exe (no `$`/backtick
+  // expansion); `%` is doubled for batch semantics.
+  const cmdPath = `"${escapeCmdDoubleQuoted(scriptPath)}"`;
   // Windows PowerShell: `$` and backtick must be escaped inside double quotes.
   const ps1Path = `"${escapePowerShellDoubleQuoted(scriptPath)}"`;
   return {
@@ -126,15 +138,23 @@ export function shimContents(pluginRootAbs) {
 }
 
 /**
- * Write the three shims into `<pluginRootAbs>/bin/`. Returns the bin dir.
+ * Write the platform-appropriate shims into `<pluginRootAbs>/bin/`. POSIX
+ * (Linux/macOS) generates only the extensionless `ssf`; Windows generates
+ * `ssf.cmd` and `ssf.ps1`. Returns the bin dir.
+ *
+ * @param {string} pluginRootAbs
+ * @param {{platform?: NodeJS.Platform}} [opts]
  */
-export async function writeShims(pluginRootAbs) {
+export async function writeShims(pluginRootAbs, { platform = process.platform } = {}) {
   const binDir = join(pluginRootAbs, 'bin');
   mkdirSync(binDir, { recursive: true });
   const contents = shimContents(pluginRootAbs);
-  await writeFile(join(binDir, 'ssf'), contents.ssf, { encoding: 'utf-8', mode: 0o755 });
-  await writeFile(join(binDir, 'ssf.cmd'), contents.ssfCmd, 'utf-8');
-  await writeFile(join(binDir, 'ssf.ps1'), contents.ssfPs1, 'utf-8');
+  if (platform === 'win32') {
+    await writeFile(join(binDir, 'ssf.cmd'), contents.ssfCmd, 'utf-8');
+    await writeFile(join(binDir, 'ssf.ps1'), contents.ssfPs1, 'utf-8');
+  } else {
+    await writeFile(join(binDir, 'ssf'), contents.ssf, { encoding: 'utf-8', mode: 0o755 });
+  }
   return binDir;
 }
 

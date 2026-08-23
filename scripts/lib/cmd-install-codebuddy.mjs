@@ -71,6 +71,11 @@ function getCodebuddyRoot(configDir) {
   return join(homedir(), '.codebuddy');
 }
 
+/** The shim file set generated for a platform (see codebuddy-ssf-path spec). */
+function shimNamesForPlatform(platform = process.platform) {
+  return platform === 'win32' ? ['ssf.cmd', 'ssf.ps1'] : ['ssf'];
+}
+
 function listSkillNames(skillsDir) {
   if (!existsSync(skillsDir)) {
     throw new Error(`skills/ directory not found at ${skillsDir}`);
@@ -425,6 +430,7 @@ function planInstall({ pluginRoot = defaultPluginRoot, configDir } = {}) {
     pluginRootAbs,
     sessionStartScript,
     targetBinDir,
+    shimNames: shimNamesForPlatform(),
   };
 }
 
@@ -505,7 +511,7 @@ async function installCodeBuddy({ pluginRoot, configDir, noPath = false, applyPa
   //    `ssf` is available in any new shell. `--no-path` skips the PATH change
   //    but still writes the shims so the command works with a manual PATH.
   const binDir = await writeShims(pluginRootAbs);
-  console.log(`   bin/ → ${binDir} (ssf, ssf.cmd, ssf.ps1)`);
+  console.log(`   bin/ → ${binDir} (${installPlan.shimNames.join(', ')})`);
   if (!noPath) {
     const { applied, detail } = await applyPath({ binDir, action: 'add' });
     console.log(`   PATH → ${detail}${applied ? '' : ' (already registered)'}`);
@@ -547,7 +553,7 @@ export async function run(args) {
     console.log(`  Rules:       ${plan.targetRules}/phase-guard.md`);
     console.log(`  Commands:    ${plan.targetCommands}`);
     console.log(`  Settings:    ${plan.settingsPath} (SessionStart hook, merged)`);
-    console.log(`  Bin dir:     ${plan.targetBinDir} (ssf, ssf.cmd, ssf.ps1)`);
+    console.log(`  Bin dir:     ${plan.targetBinDir} (${plan.shimNames.join(', ')})`);
     console.log(`  PATH:        ${values['no-path'] ? 'skip (--no-path)' : 'register bin dir on user PATH'}`);
     return;
   }
@@ -583,7 +589,7 @@ export async function run(args) {
     console.log(`   Skills dir:  ${plan.targetSkills}`);
     console.log(`   Rules:       ${plan.targetRules}/phase-guard.md`);
     console.log(`   Settings:    ${plan.settingsPath} (SessionStart hook merged)`);
-    console.log(`   Bin dir:     ${plan.targetBinDir} (ssf, ssf.cmd, ssf.ps1)`);
+    console.log(`   Bin dir:     ${plan.targetBinDir} (${plan.shimNames.join(', ')})`);
     console.log(`   PATH:        ${values['no-path'] ? 'skipped (--no-path)' : 'registered on user PATH'}`);
     if (installedTag) {
       console.log(`   Version:     ${installedTag}`);

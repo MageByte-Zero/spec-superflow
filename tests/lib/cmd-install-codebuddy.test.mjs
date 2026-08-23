@@ -99,25 +99,31 @@ describe('cmd-install-codebuddy', () => {
     assert.ok(!existsSync(join(configDir, 'hooks', 'hooks.json')));
   });
 
-  it('generates ssf command shims in the bin dir on install', async () => {
+  it('generates platform-appropriate ssf command shims in the bin dir on install', async () => {
     const pluginRoot = makePluginRoot();
     const configDir = join(tempDir, 'cb');
     await installCodeBuddy({ pluginRoot, configDir, applyPath: noopApplyPath });
 
     const binDir = join(configDir, 'spec-superflow', 'bin');
-    const posixShim = readFileSync(join(binDir, 'ssf'), 'utf-8');
-    assert.ok(posixShim.startsWith('#!/bin/sh'));
-    assert.match(posixShim, /exec node .+spec-superflow\.mjs/);
-    assert.match(posixShim, /\$@/);
-
-    const cmdShim = readFileSync(join(binDir, 'ssf.cmd'), 'utf-8');
-    assert.ok(cmdShim.startsWith('@ECHO off'));
-    assert.match(cmdShim, /node .+spec-superflow\.mjs/);
-    assert.match(cmdShim, /%*/);
-
-    const psShim = readFileSync(join(binDir, 'ssf.ps1'), 'utf-8');
-    assert.match(psShim, /node .+spec-superflow\.mjs/);
-    assert.match(psShim, /\$args/);
+    if (process.platform === 'win32') {
+      // Windows SHALL generate only ssf.cmd and ssf.ps1 (per codebuddy-ssf-path spec).
+      assert.ok(!existsSync(join(binDir, 'ssf')), 'no POSIX ssf shim on Windows');
+      const cmdShim = readFileSync(join(binDir, 'ssf.cmd'), 'utf-8');
+      assert.ok(cmdShim.startsWith('@ECHO off'));
+      assert.match(cmdShim, /node .+spec-superflow\.mjs/);
+      assert.match(cmdShim, /%*/);
+      const psShim = readFileSync(join(binDir, 'ssf.ps1'), 'utf-8');
+      assert.match(psShim, /node .+spec-superflow\.mjs/);
+      assert.match(psShim, /\$args/);
+    } else {
+      // POSIX SHALL generate only the extensionless executable ssf shim.
+      assert.ok(!existsSync(join(binDir, 'ssf.cmd')), 'no ssf.cmd on POSIX');
+      assert.ok(!existsSync(join(binDir, 'ssf.ps1')), 'no ssf.ps1 on POSIX');
+      const posixShim = readFileSync(join(binDir, 'ssf'), 'utf-8');
+      assert.ok(posixShim.startsWith('#!/bin/sh'));
+      assert.match(posixShim, /exec node .+spec-superflow\.mjs/);
+      assert.match(posixShim, /\$@/);
+    }
   });
 
   it('registers the bin dir on PATH by default and skips with --no-path', async () => {
@@ -138,7 +144,7 @@ describe('cmd-install-codebuddy', () => {
     const configDir2 = join(tempDir, 'cb2');
     await installCodeBuddy({ pluginRoot, configDir: configDir2, noPath: true, applyPath: recordingApplyPath });
     assert.equal(calls.length, 1, '--no-path must not call applyPath');
-    assert.ok(existsSync(join(configDir2, 'spec-superflow', 'bin', 'ssf.cmd')), 'shims still written with --no-path');
+    assert.ok(existsSync(join(configDir2, 'spec-superflow', 'bin')), 'shims still written with --no-path');
   });
 
   it('run --dry-run writes nothing to disk', async () => {
