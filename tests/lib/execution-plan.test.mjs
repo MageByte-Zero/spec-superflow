@@ -666,7 +666,7 @@ describe('execution plan data contract', () => {
     const root = { ...scoped, report_sha256: reportHash(reportPath) };
     writeFileSync(rootReceiptPath('wave-1'), `${JSON.stringify(root, null, 2)}\n`);
 
-    const wave = describeWaves(changeDir, plan)[0];
+    const wave = describeWaves(changeDir, plan, { preferActiveProjection: true })[0];
 
     assert.ok(wave.receipt, 'valid root active receipt must remain readable when scoped evidence is stale');
     assert.equal(wave.receipt.head, scoped.head);
@@ -674,6 +674,35 @@ describe('execution plan data contract', () => {
     assert.equal(wave.receipt.report_sha256, root.report_sha256);
     assert.notEqual(wave.receipt.report_sha256, scoped.report_sha256);
     assert.equal(wave.receipt.recorded_at, root.recorded_at);
+  });
+
+  it('keeps ordinary review scoped-first when the root projection diverges', () => {
+    // Mutation caught: let execution show's root-first projection change ordinary review continuity.
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'ordinary review retains scoped continuity',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+    writePlan(changeDir, plan);
+    const scopedFailure = recordReview(changeDir, 'wave-1', {
+      status: 'fail', base: gitRefs.base, head: gitRefs.head, report: writeReviewReport('scoped-failure.md'),
+    });
+    const rootReport = writeReviewReport('divergent-root-pass.md', 'Root projection differs from scoped failure.\n');
+    const rootPass = {
+      ...scopedFailure,
+      status: 'pass',
+      report: join('.superpowers', 'sdd', 'reviews', 'divergent-root-pass.md'),
+      report_sha256: reportHash(rootReport),
+    };
+    writeFileSync(rootReceiptPath('wave-1'), `${JSON.stringify(rootPass, null, 2)}\n`);
+    const repairedHead = createRepairCommit('ordinary-scoped-first');
+
+    const receipt = recordReview(changeDir, 'wave-1', {
+      status: 'fail', base: gitRefs.head, head: repairedHead, report: writeReviewReport('scoped-retry.md'),
+    });
+
+    assert.equal(receipt.status, 'fail');
+    assert.equal(receipt.base, gitRefs.head);
+    assert.equal(receipt.head, repairedHead);
   });
 
   it('falls back to valid scoped evidence for missing or invalid root PASS receipts', () => {
@@ -689,13 +718,13 @@ describe('execution plan data contract', () => {
     const rootPath = rootReceiptPath('wave-1');
 
     rmSync(rootPath);
-    assert.equal(describeWaves(changeDir, plan)[0].receipt.head, scoped.head);
+    assert.equal(describeWaves(changeDir, plan, { preferActiveProjection: true })[0].receipt.head, scoped.head);
 
     writeFileSync(rootPath, `${JSON.stringify({ ...scoped, report_sha256: `sha256:${'0'.repeat(64)}` }, null, 2)}\n`);
-    assert.equal(describeWaves(changeDir, plan)[0].receipt.head, scoped.head);
+    assert.equal(describeWaves(changeDir, plan, { preferActiveProjection: true })[0].receipt.head, scoped.head);
 
     writeFileSync(rootPath, '{ malformed root PASS receipt');
-    assert.equal(describeWaves(changeDir, plan)[0].receipt.head, scoped.head);
+    assert.equal(describeWaves(changeDir, plan, { preferActiveProjection: true })[0].receipt.head, scoped.head);
   });
 
   it('preserves an invalid root FAIL receipt as an active blocker instead of falling back', () => {
@@ -711,7 +740,7 @@ describe('execution plan data contract', () => {
     const invalidFail = { ...scoped, status: 'fail', report_sha256: `sha256:${'0'.repeat(64)}` };
     writeFileSync(rootReceiptPath('wave-1'), `${JSON.stringify(invalidFail, null, 2)}\n`);
 
-    const wave = describeWaves(changeDir, plan)[0];
+    const wave = describeWaves(changeDir, plan, { preferActiveProjection: true })[0];
 
     assert.equal(wave.receipt, null);
     assert.equal(wave.eligible, false);

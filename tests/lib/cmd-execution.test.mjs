@@ -173,7 +173,7 @@ function assertRootMatchesCurrentProjection(root, scopedReceipt, currentReportHa
     assert.equal(root[field], scopedReceipt[field], `root ${field} must retain the current scoped identity`);
   }
   assert.equal(root.report_sha256, currentReportHash);
-  assert.notEqual(root.report_sha256, scopedReceipt.report_sha256);
+  assert.equal(root.report_sha256, scopedReceipt.report_sha256);
 }
 
 function prepareActiveProjectionRepairFixture() {
@@ -188,7 +188,6 @@ function prepareActiveProjectionRepairFixture() {
   const plan = JSON.parse(readFileSync(join(changeDir, '.superpowers', 'sdd', 'execution-plan.json'), 'utf8'));
   const paths = getPlanScopedPaths(changeDir, plan);
   const scopedReceipt = JSON.parse(readFileSync(currentReceiptPath('wave-1'), 'utf8'));
-  writeFileSync(reportPath, 'Current report content used to repair the root projection.\n');
   const currentReportHash = reportHash(reportPath);
   mkdirSync(paths.workspace, { recursive: true });
   writeFileSync(join(paths.workspace, 'task-brief.md'), 'immutable workspace evidence\n');
@@ -849,6 +848,8 @@ describe('ssf execution', () => {
   it('replaces a stale root projection but changes no plan-scoped evidence', () => {
     // Mutation caught: accept a stale root receipt as current or overwrite the current scoped snapshot while repairing it.
     const { plan, reportPath, scopedReceipt, currentReportHash } = prepareActiveProjectionRepairFixture();
+    const staleRootReceipt = { ...scopedReceipt, report_sha256: `sha256:${'0'.repeat(64)}` };
+    writeFileSync(rootReceiptPath('wave-1'), `${JSON.stringify(staleRootReceipt, null, 2)}\n`);
     const before = immutableEvidenceSnapshots(plan);
     assert.notEqual(JSON.parse(readFileSync(rootReceiptPath('wave-1'), 'utf8')).report_sha256, currentReportHash);
 
@@ -965,6 +966,15 @@ describe('ssf execution', () => {
         writeFileSync(path, `${JSON.stringify({ ...JSON.parse(readFileSync(path, 'utf8')), head: gitRefs.base }, null, 2)}\n`);
       },
       expected: /scoped.*(match|range|snapshot)|current.*pass/i,
+    });
+  });
+
+  it('rejects changed report bytes without successful JSON or writes', () => {
+    // Mutation caught: promote report bytes that no longer match the immutable scoped PASS receipt.
+    rejectActiveProjectionRepair({
+      name: 'changed report bytes',
+      mutate: ({ reportPath }) => writeFileSync(reportPath, 'Changed report bytes need a new review event.\n'),
+      expected: /scoped.*(hash|report|snapshot|match)|report.*(content|hash|match)/i,
     });
   });
 

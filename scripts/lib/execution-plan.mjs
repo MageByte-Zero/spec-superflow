@@ -196,6 +196,9 @@ export function repairActiveReviewProjection(changeDir, waveId, receipt) {
     || scopedReceipt.report !== reportEvidence.path) {
     throw new Error(`Current plan-scoped review snapshot for wave '${waveId}' does not match the active projection repair request`);
   }
+  if (scopedReceipt.report_sha256 !== reportEvidence.sha256) {
+    throw new Error(`Current report content does not match the plan-scoped review snapshot for wave '${waveId}'`);
+  }
 
   const rootPath = join(getOverlayPaths(changeDir).reviews, receiptName);
   const rootReceipt = readJsonIfPresent(rootPath);
@@ -233,14 +236,18 @@ export function readCurrentReview(changeDir, waveId, plan = readPlan(changeDir))
   return readCurrentReviewEvidence(changeDir, waveId, plan).receipt;
 }
 
-function readCurrentReviewEvidence(changeDir, waveId, plan = readPlan(changeDir)) {
+function readCurrentReviewEvidence(changeDir, waveId, plan = readPlan(changeDir), { preferActiveProjection = false } = {}) {
   if (!plan) return { receipt: null, blocker: null };
   const currentScope = getPlanScopedPaths(changeDir, plan);
   const currentPath = join(currentScope.reviews, `${safeFileName(waveId)}.json`);
   const rootPath = join(getOverlayPaths(changeDir).reviews, `${safeFileName(waveId)}.json`);
-  const rootEvidence = readReviewEvidenceFile(changeDir, rootPath, plan);
-  if (rootEvidence.receipt || rootEvidence.blocker) return rootEvidence;
-  return readReviewEvidenceFile(changeDir, currentPath, plan);
+  if (preferActiveProjection) {
+    const rootEvidence = readReviewEvidenceFile(changeDir, rootPath, plan);
+    if (rootEvidence.receipt || rootEvidence.blocker) return rootEvidence;
+    return readReviewEvidenceFile(changeDir, currentPath, plan);
+  }
+  const filePath = existsSync(currentPath) ? currentPath : rootPath;
+  return readReviewEvidenceFile(changeDir, filePath, plan);
 }
 
 function readReviewEvidenceFile(changeDir, filePath, plan) {
@@ -315,13 +322,13 @@ function sameReviewEvidence(actual, expected) {
  * eligible when it has no current receipt, or its current receipt failed and
  * is therefore retryable, and all declared dependencies have passing receipts.
  */
-export function describeWaves(changeDir, plan = readPlan(changeDir)) {
+export function describeWaves(changeDir, plan = readPlan(changeDir), { preferActiveProjection = false } = {}) {
   if (!plan || !Array.isArray(plan.waves)) return [];
   return plan.waves.map(wave => {
-    const review = readCurrentReviewEvidence(changeDir, wave.id, plan);
+    const review = readCurrentReviewEvidence(changeDir, wave.id, plan, { preferActiveProjection });
     const receipt = review.receipt;
     const blockers = [
-      ...blockedDependencies(changeDir, plan, wave),
+      ...blockedDependencies(changeDir, plan, wave, { preferActiveProjection }),
       ...(review.blocker ? [review.blocker] : []),
     ];
     const repair = describeRepairState(changeDir, plan, wave.id, receipt);
@@ -572,9 +579,11 @@ function defaultRunGit(args, options) {
   return execFileSync('git', args, options);
 }
 
-function blockedDependencies(changeDir, plan, wave) {
+function blockedDependencies(changeDir, plan, wave, { preferActiveProjection = false } = {}) {
   if (!Array.isArray(wave?.depends_on)) return [];
-  return wave.depends_on.filter(dependency => readCurrentReview(changeDir, dependency, plan)?.status !== 'pass');
+  return wave.depends_on.filter(dependency => (
+    readCurrentReviewEvidence(changeDir, dependency, plan, { preferActiveProjection }).receipt?.status !== 'pass'
+  ));
 }
 
 function validateStructure(plan) {

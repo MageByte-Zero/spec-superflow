@@ -96,10 +96,12 @@ ssf execution review <dir> --wave <id> --base <sha> --head <sha> --report <path>
 ```
 
 repair 必須通過 current valid plan、known wave、既存且完全相符的 current plan-scoped PASS
-snapshot、有效 Git range 與 current report evidence 驗證。成功時只建立或更新 root，並只更新
-current report hash 與 `recorded_at`；既有相同 evidence 時為 no-op，不重寫。FAIL verdict、
-snapshot 不符或 report/range 無效都會拒絕且不寫入；repair 不會改寫 scoped review、
-repair-state 或 workspace。未帶此旗標的一般 `execution review` 保持原本行為。
+snapshot、有效 Git range 與 current report evidence 驗證；scoped `report_sha256` 必須與 current
+report bytes 完全一致。成功時只建立或更新 root，複製 scoped evidence identity，並產生新的
+`recorded_at`；既有相同 evidence 時為 no-op，不重寫。FAIL verdict、snapshot/hash 不符或
+report/range 無效都會拒絕且不寫入；repair 不會改寫 scoped review、repair-state 或 workspace。
+root-first 只用於 `execution show`；未帶此旗標的一般 `execution review` 與其他 guard 維持
+scoped-first。
 
 ### Recovery control-plane overlay
 

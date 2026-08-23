@@ -265,11 +265,12 @@ Repair 旗標僅接受 `pass`：root
 `<change>/.superpowers/sdd/reviews/<safe-wave>.json` 是 current active projection；
 `plans/<identity>/reviews/...` 與 `repair-state` 是 immutable revision evidence。它只會在
 current valid plan、known wave、既存且相符的 current scoped PASS snapshot、有效 Git range 與
-current report evidence 都通過時建立或更新 root，且只更新 current report hash 與
-`recorded_at`。同一 evidence 的 repair 為 no-op，不會重寫任何檔案；FAIL、snapshot 不符、
-report/range 無效皆拒絕且不寫入，也不會碰 scoped review、repair-state 或 workspace。
+current report evidence 都通過時建立或更新 root；scoped `report_sha256` 必須與 current report
+bytes 完全一致，root 會複製 scoped evidence identity，只產生新的 `recorded_at`。同一 evidence
+的 repair 為 no-op，不會重寫任何檔案；FAIL、snapshot/hash 不符、report/range 無效皆拒絕且
+不寫入，也不會碰 scoped review、repair-state 或 workspace。
 `ssf execution show` 優先使用有效 root；root 缺失或無效 PASS 時才回退有效 scoped receipt，
-無效 FAIL 仍是 blocker。未帶 repair 旗標的 `execution review` 行為不變。
+無效 FAIL 仍是 blocker。未帶 repair 旗標的 `execution review` 與其他 guard 維持 scoped-first。
 
 ---
 

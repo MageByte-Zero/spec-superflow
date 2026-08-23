@@ -133,7 +133,7 @@ function showPlan(changeDir, json, io) {
   if (!plan) throw new Error('No execution plan has been recorded');
   const validation = validatePlan(changeDir, plan);
   const current = validation.valid;
-  const waves = describeWaves(changeDir, plan);
+  const waves = describeWaves(changeDir, plan, { preferActiveProjection: true });
   print(json, { ok: current, current, plan, valid: current, failures: validation.failures, waves },
     validation.valid ? `Execution plan revision ${plan.revision} is current.` : validation.failures.join('\n'), io);
   return { exitCode: validation.valid ? 0 : 1 };

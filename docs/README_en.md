@@ -325,13 +325,17 @@ The repair flag accepts only `pass`. The root
 projection, while `plans/<identity>/reviews/...` and `repair-state` remain
 immutable revision evidence. Repair creates or updates only the root receipt,
 and only after the current plan, known wave, matching current scoped PASS
-snapshot, Git range, and current report evidence all validate. Matching root
-evidence is a no-op that preserves the file bytes, mtime, and `recorded_at`.
-Invalid FAIL, snapshot, report, or range evidence is rejected without writing;
-scoped reviews, repair-state, and workspace are never changed. `ssf execution
-show` prefers a valid root receipt, falls back to a valid scoped receipt only
-when the root is missing or an invalid PASS, and keeps an invalid FAIL as a
-blocker. Without the repair flag, `execution review` behaves as before.
+snapshot, Git range, and current report evidence all validate. The scoped
+`report_sha256` must exactly match the current report bytes; the root copies
+the scoped evidence identity and receives only a new `recorded_at`. Matching
+root evidence is a no-op that preserves the file bytes, mtime, and
+`recorded_at`. Invalid FAIL, snapshot/hash, report, or range evidence is
+rejected without writing; scoped reviews, repair-state, and workspace are never
+changed. `ssf execution show` prefers a valid root receipt, falls back to a
+valid scoped receipt only when the root is missing or an invalid PASS, and
+keeps an invalid FAIL as a blocker. Root-first reading is limited to
+`execution show`; ordinary `execution review` and other guards remain
+scoped-first.
 
 ### Fast Paths (Quick / Hotfix / Tweak)
 
