@@ -8,6 +8,8 @@ Example changes and artifact sets live here.
   - A net-new UI capability example that shows feature delivery from proposal to execution contract.
 - `refactor-auth-boundary`
   - A brownfield backend refactor example that shows how to stabilize a scattered auth flow without expanding into a full auth redesign.
+- `verification-risk-ownership.md`
+  - A curated evidence matrix showing the end-to-end owner and fast contract for each retained verification risk.
 
 ## Reading Order
 
