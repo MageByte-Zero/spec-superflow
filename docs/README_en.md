@@ -300,6 +300,11 @@ ssf execution revise changes/my-change --mode sdd --confirm --reason "need paral
   --wave integration:serial:2.1:foundation
 ssf execution review changes/my-change --wave foundation --base <sha> --head <sha> \
   --report .superpowers/sdd/reviews/foundation.md --verdict pass
+# Repair only the current root active projection; a matching current scoped
+# PASS snapshot must already exist.
+ssf execution review changes/my-change --wave foundation --base <sha> --head <sha> \
+  --report .superpowers/sdd/reviews/foundation.md --verdict pass \
+  --repair-active-projection --json
 ```
 
 The `--report` path is resolved relative to `<change>` and must remain under
@@ -314,6 +319,23 @@ waves or closing may proceed; revising a plan invalidates earlier receipts.
 Recovery, switching, and manual save form a control-plane overlay, not a ninth
 workflow state; their CLI and CodeBuddy/WorkBuddy Markdown adapters keep the
 same guards.
+
+The repair flag accepts only `pass`. The root
+`<change>/.superpowers/sdd/reviews/<safe-wave>.json` is the current active
+projection, while `plans/<identity>/reviews/...` and `repair-state` remain
+immutable revision evidence. Repair creates or updates only the root receipt,
+and only after the current plan, known wave, matching current scoped PASS
+snapshot, Git range, and current report evidence all validate. The scoped
+`report_sha256` must exactly match the current report bytes; the root copies
+the scoped evidence identity and receives only a new `recorded_at`. Matching
+root evidence is a no-op that preserves the file bytes, mtime, and
+`recorded_at`. Invalid FAIL, snapshot/hash, report, or range evidence is
+rejected without writing; scoped reviews, repair-state, and workspace are never
+changed. `ssf execution show` prefers a valid root receipt, falls back to a
+valid scoped receipt only when the root is missing or an invalid PASS, and
+keeps an invalid FAIL as a blocker. Root-first reading is limited to
+`execution show`; ordinary `execution review` and other guards remain
+scoped-first.
 
 ### Fast Paths (Quick / Hotfix / Tweak)
 

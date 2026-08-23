@@ -1,5 +1,14 @@
 import { parseArgs } from 'node:util';
-import { createPlan, describeWaves, EXECUTION_MODES, readPlan, recordReview, validatePlan, writePlan } from './execution-plan.mjs';
+import {
+  createPlan,
+  describeWaves,
+  EXECUTION_MODES,
+  readPlan,
+  recordReview,
+  repairActiveReviewProjection,
+  validatePlan,
+  writePlan,
+} from './execution-plan.mjs';
 import {
   createRecommendationReceipt,
   readCurrentRecommendationReceipt,
@@ -22,6 +31,7 @@ export function run(args, io = { stdout: process.stdout, stderr: process.stderr 
       head: { type: 'string' },
       report: { type: 'string' },
       verdict: { type: 'string' },
+      'repair-active-projection': { type: 'boolean', default: false },
       json: { type: 'boolean', default: false },
       help: { type: 'boolean', default: false },
     },
@@ -123,7 +133,7 @@ function showPlan(changeDir, json, io) {
   if (!plan) throw new Error('No execution plan has been recorded');
   const validation = validatePlan(changeDir, plan);
   const current = validation.valid;
-  const waves = describeWaves(changeDir, plan);
+  const waves = describeWaves(changeDir, plan, { preferActiveProjection: true });
   print(json, { ok: current, current, plan, valid: current, failures: validation.failures, waves },
     validation.valid ? `Execution plan revision ${plan.revision} is current.` : validation.failures.join('\n'), io);
   return { exitCode: validation.valid ? 0 : 1 };
@@ -136,6 +146,23 @@ function recordAndPrintReview(changeDir, values, io) {
   requireOption(values.head, '--head');
   requireOption(values.report, '--report');
   if (!['pass', 'fail'].includes(values.verdict)) throw new Error("--verdict must be 'pass' or 'fail'");
+  if (values['repair-active-projection']) {
+    if (values.verdict !== 'pass') throw new Error('Active projection repair request only accepts PASS verdict');
+    const result = repairActiveReviewProjection(changeDir, values.wave[0], {
+      status: values.verdict,
+      base: values.base,
+      head: values.head,
+      report: values.report,
+    });
+    print(values.json, {
+      ok: true,
+      wave: values.wave[0],
+      mode: 'active-projection-repair',
+      changed: result.changed,
+      receipt: result.receipt,
+    }, `Active review projection for ${values.wave[0]} ${result.changed ? 'repaired' : 'is already current'}.`, io);
+    return;
+  }
   const receipt = recordReview(changeDir, values.wave[0], {
     status: values.verdict,
     base: values.base,
@@ -206,5 +233,5 @@ function printHelp(io) {
   ssf execution plan <dir> --mode <mode> --confirm --reason <text> --wave <id>:<strategy>:<task,...>[:<depends-on,...>] [--acknowledge-recommendation]
   ssf execution show <dir> [--json]
   ssf execution revise <dir> --mode sdd --confirm --reason <text> --wave <id>:<strategy>:<task,...>[:<depends-on,...>] [--acknowledge-recommendation]
-  ssf execution review <dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict pass|fail\n`);
+  ssf execution review <dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict pass|fail [--repair-active-projection] [--json]\n`);
 }

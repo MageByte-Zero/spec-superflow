@@ -88,7 +88,7 @@ Commands:
                         Show and validate the current execution plan
   execution revise <change-dir> --mode sdd --confirm --reason <text> --wave <id>:<strategy>:<task,...> [--acknowledge-recommendation]
                         Upgrade inline/batch to SDD, or replan existing SDD waves, as a new revision
-  execution review <change-dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict pass|fail
+  execution review <change-dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict pass|fail [--repair-active-projection] [--json]
                         Record one review receipt for a planned wave
   resume [change-dir] [--json]
                         Recover the only active change or an explicit change context
