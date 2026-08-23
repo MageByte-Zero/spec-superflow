@@ -6,6 +6,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { canCreateSymlink } from '../helpers/symlink-support.mjs';
 import { computeArtifactsHash, computeContractHash } from '../../scripts/lib/hash.mjs';
 import { readState, rebuildState, writeState } from '../../scripts/lib/state-loader.mjs';
 
@@ -155,7 +156,7 @@ describe('ssf debug', () => {
     assert.match(duplicate.stderr, /duplicate evidence/i);
   });
 
-  it('rejects a ledger path redirected outside the change directory by a symlink', () => {
+  it('rejects a ledger path redirected outside the change directory by a symlink', { skip: !canCreateSymlink() }, () => {
     prepareCurrentPlan();
     renameSync(join(changeDir, '.superpowers'), join(outsideDir, 'overlay'));
     symlinkSync(join(outsideDir, 'overlay'), join(changeDir, '.superpowers'), 'dir');

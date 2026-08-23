@@ -10,6 +10,7 @@ import { createRecommendationReceipt, recommendExecutionModes } from '../../scri
 import { readState } from '../../scripts/lib/state-loader.mjs';
 import { getPlanScopedPaths } from '../../scripts/lib/sdd-overlay.mjs';
 import { createGitSeedFixture } from '../helpers/git-seed-fixture.mjs';
+import { canCreateSymlink } from '../helpers/symlink-support.mjs';
 
 let changeDir;
 let gitRefs;
@@ -492,7 +493,7 @@ describe('execution plan data contract', () => {
     assert.ok(receipts.some(receipt => receipt.report === join('.superpowers', 'sdd', 'reviews', 'underscore.md')));
   });
 
-  it('rejects missing, non-file, empty, and symbolic-link report evidence before writing a receipt', () => {
+  it('rejects missing, non-file, empty, and symbolic-link report evidence before writing a receipt', { skip: !canCreateSymlink() }, () => {
     const plan = createPlan(changeDir, {
       mode: 'sdd', source: 'default', rationale: 'review evidence must be durable',
       waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],

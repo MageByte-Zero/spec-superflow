@@ -9,6 +9,7 @@ import { run as runExecution } from '../../scripts/lib/cmd-execution.mjs';
 import { readState, writeState, rebuildState } from '../../scripts/lib/state-loader.mjs';
 import { computeArtifactsHash, computeContractHash } from '../../scripts/lib/hash.mjs';
 import { createGitSeedFixture } from '../helpers/git-seed-fixture.mjs';
+import { canCreateSymlink } from '../helpers/symlink-support.mjs';
 
 let changeDir;
 let gitRefs;
@@ -331,7 +332,7 @@ describe('ssf execution', () => {
     assert.match(reviewed.stderr, /overlay|review/i);
   });
 
-  it('rejects a report reached through a nested review-directory symlink', () => {
+  it('rejects a report reached through a nested review-directory symlink', { skip: !canCreateSymlink() }, () => {
     const planned = runSsf(['execution', 'plan', changeDir, '--mode', 'sdd', '--reason', 'full workflow default',
       '--wave', 'wave-1:serial:1.1']);
     assert.equal(planned.exitCode, 0, planned.stderr);
@@ -350,7 +351,7 @@ describe('ssf execution', () => {
     assert.match(reviewed.stderr, /overlay|review/i);
   });
 
-  it('rejects a report when the reviews overlay root is a symlink', () => {
+  it('rejects a report when the reviews overlay root is a symlink', { skip: !canCreateSymlink() }, () => {
     const planned = runSsf(['execution', 'plan', changeDir, '--mode', 'sdd', '--reason', 'full workflow default',
       '--wave', 'wave-1:serial:1.1']);
     assert.equal(planned.exitCode, 0, planned.stderr);

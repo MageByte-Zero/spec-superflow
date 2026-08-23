@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
+import { canCreateSymlink } from '../helpers/symlink-support.mjs';
 
 let tempDir;
 let planInstall, installWorkBuddy;
@@ -153,7 +154,7 @@ describe('cmd-install-workbuddy', () => {
     assert.doesNotMatch(installed, /\bssf resume --json/);
   });
 
-  it('rejects symbolic links in the canonical command tree before writing WorkBuddy home', async () => {
+  it('rejects symbolic links in the canonical command tree before writing WorkBuddy home', { skip: !canCreateSymlink() }, async () => {
     const pluginRoot = makePluginRoot();
     const homeDir = join(tempDir, 'symlink-home');
     const source = join(pluginRoot, 'commands', 'ssf', 'resume.md');
