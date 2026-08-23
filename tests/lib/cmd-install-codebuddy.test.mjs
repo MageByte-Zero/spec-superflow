@@ -26,7 +26,11 @@ describe('cmd-install-codebuddy', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-codebuddy-'));
     const installMod = await loadModule('scripts/lib/cmd-install-codebuddy.mjs');
     planInstall = installMod.planInstall;
-    installCodeBuddy = installMod.installCodeBuddy;
+    // Installer library functions write progress to stdout via an injected
+    // logger; tests silence it so their stdout stays clean for the test runner
+    // IPC channel (stray emoji bytes corrupt the v8-serialized frames).
+    const silentLogger = { log() {} };
+    installCodeBuddy = (opts) => installMod.installCodeBuddy({ ...opts, logger: silentLogger });
     const uninstallMod = await loadModule('scripts/lib/cmd-uninstall-codebuddy.mjs');
     planUninstall = uninstallMod.planUninstall;
     uninstallCodeBuddy = uninstallMod.uninstallCodeBuddy;
@@ -302,7 +306,11 @@ describe('cmd-uninstall-codebuddy', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-cb-uninstall-'));
     const installMod = await loadModule('scripts/lib/cmd-install-codebuddy.mjs');
     planInstall = installMod.planInstall;
-    installCodeBuddy = installMod.installCodeBuddy;
+    // Installer library functions write progress to stdout via an injected
+    // logger; tests silence it so their stdout stays clean for the test runner
+    // IPC channel (stray emoji bytes corrupt the v8-serialized frames).
+    const silentLogger = { log() {} };
+    installCodeBuddy = (opts) => installMod.installCodeBuddy({ ...opts, logger: silentLogger });
     const uninstallMod = await loadModule('scripts/lib/cmd-uninstall-codebuddy.mjs');
     planUninstall = uninstallMod.planUninstall;
     uninstallCodeBuddy = uninstallMod.uninstallCodeBuddy;

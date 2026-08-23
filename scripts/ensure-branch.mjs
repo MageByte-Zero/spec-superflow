@@ -11,8 +11,8 @@
 // the same form proven safe by install-cursor.mjs / install.mjs. There is no
 // string-form shell command, no variable command, and no dynamic args array.
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, realpathSync } from 'node:fs';
-import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { cpSync, existsSync, mkdirSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 const changeDir = process.argv[2];
 const changeName = process.argv[3];
@@ -27,7 +27,14 @@ const PROTECTED = ['main', 'master'];
 const GIT_OPTS = { encoding: 'utf-8', cwd: changeDir, stdio: ['ignore', 'pipe', 'pipe'] };
 
 function insideRepository(repoRoot, candidate) {
-  const relativePath = relative(repoRoot, candidate);
+  // Windows path comparison is case-insensitive, so normalize before computing
+  // the relative path; otherwise a case-only mismatch (e.g. `D:\a\_temp` vs
+  // `d:\a\_temp`) makes `relative()` treat the two as unrelated trees.
+  const norm = p => (process.platform === 'win32' ? p.toLowerCase() : p);
+  const relativePath = relative(norm(repoRoot), norm(candidate));
+  // On Windows, `relative()` returns an absolute path when the two paths are
+  // on different drives/volumes; that can never be "inside".
+  if (isAbsolute(relativePath)) return false;
   return relativePath !== '' && relativePath !== '..' && !relativePath.startsWith(`..${sep}`);
 }
 
@@ -57,13 +64,13 @@ console.error(`ensure-branch: on protected branch '${branch}'. Creating an isola
 
 let repoRoot;
 try {
-  repoRoot = realpathSync((execFileSync('git', ['rev-parse', '--show-toplevel'], GIT_OPTS) || '').trim());
+  repoRoot = resolve((execFileSync('git', ['rev-parse', '--show-toplevel'], GIT_OPTS) || '').trim());
 } catch {
   console.error('ensure-branch: could not determine the Git repository root.');
   process.exit(1);
 }
 
-const sourceChangeDir = realpathSync(resolve(changeDir));
+const sourceChangeDir = resolve(changeDir);
 if (!insideRepository(repoRoot, sourceChangeDir)) {
   console.error('ensure-branch: change directory must be inside the Git repository.');
   process.exit(1);

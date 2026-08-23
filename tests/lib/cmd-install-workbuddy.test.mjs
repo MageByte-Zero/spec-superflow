@@ -17,7 +17,11 @@ describe('cmd-install-workbuddy', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-workbuddy-'));
     const mod = await import(pathToFileURL(join(process.cwd(), 'scripts/lib/cmd-install-workbuddy.mjs')).href);
     planInstall = mod.planInstall;
-    installWorkBuddy = mod.installWorkBuddy;
+    // Installer library functions write progress to stdout via an injected
+    // logger; tests silence it so their stdout stays clean for the test runner
+    // IPC channel (stray emoji bytes corrupt the v8-serialized frames).
+    const silentLogger = { log() {} };
+    installWorkBuddy = (opts) => mod.installWorkBuddy({ ...opts, logger: silentLogger });
   });
 
   afterEach(() => {

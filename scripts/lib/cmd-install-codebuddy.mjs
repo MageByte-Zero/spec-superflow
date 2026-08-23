@@ -436,7 +436,7 @@ function planInstall({ pluginRoot = defaultPluginRoot, configDir } = {}) {
 
 // ─── install ──────────────────────────────────────────────
 
-async function installCodeBuddy({ pluginRoot, configDir, noPath = false, applyPath = applyPathEntry, plan: providedPlan } = {}) {
+async function installCodeBuddy({ pluginRoot, configDir, noPath = false, applyPath = applyPathEntry, plan: providedPlan, logger = console } = {}) {
   const installPlan = providedPlan || planInstall({ pluginRoot, configDir });
   const {
     skillNames,
@@ -462,15 +462,15 @@ async function installCodeBuddy({ pluginRoot, configDir, noPath = false, applyPa
   ensureDir(targetPluginDir);
 
   // 1. Copy runtime dependencies (scripts/docs/templates/dist/hooks).
-  console.log('📋 Copying runtime dependencies...');
+  logger.log('📋 Copying runtime dependencies...');
   for (const dir of RUNTIME_DIRS) {
     const src = join(installPlan.pluginRoot, dir);
     const dst = join(targetPluginDir, dir);
     if (existsSync(src)) {
       const count = await copyDir(src, dst);
-      console.log(`   ${dir}/ → ${dst} (${count} files)`);
+      logger.log(`   ${dir}/ → ${dst} (${count} files)`);
     } else {
-      console.log(`   ${dir}/ — skipped (not found)`);
+      logger.log(`   ${dir}/ — skipped (not found)`);
     }
   }
 
@@ -485,16 +485,16 @@ async function installCodeBuddy({ pluginRoot, configDir, noPath = false, applyPa
   //    fixed npm package version (P1: --local recovery commands must use the
   //    deployed runtime).
   const commandCount = await copyValidatedCommands(commandAssets, targetCommands, pluginRootAbs);
-  console.log(`   commands/ → ${targetCommands} (${commandCount} files, ${commandNames.length} commands, npx→node rewritten)`);
+  logger.log(`   commands/ → ${targetCommands} (${commandCount} files, ${commandNames.length} commands, npx→node rewritten)`);
 
   // 3. Copy skills with ${CLAUDE_PLUGIN_ROOT} rewriting (preserves unrelated skills).
   const count = await copySkillsWithRoot(installPlan.skillsDir, targetSkills, pluginRootAbs, skillNames);
-  console.log(`   skills/ → ${targetSkills} (${count} skills, paths rewritten, unrelated skills preserved)`);
+  logger.log(`   skills/ → ${targetSkills} (${count} skills, paths rewritten, unrelated skills preserved)`);
 
   // 4. Write phase-guard rule (other rules in the directory are left untouched).
   ensureDir(targetRules);
   await writeFile(join(targetRules, 'phase-guard.md'), phaseGuardContent(), 'utf-8');
-  console.log(`   phase-guard → ${join(targetRules, 'phase-guard.md')}`);
+  logger.log(`   phase-guard → ${join(targetRules, 'phase-guard.md')}`);
 
   // 5. Write/merge SessionStart hook into ~/.codebuddy/settings.json.
   //    CodeBuddy loads hooks from settings.json; user-level hooks.json is not
@@ -504,20 +504,20 @@ async function installCodeBuddy({ pluginRoot, configDir, noPath = false, applyPa
   const settingsHooks = buildSettingsHooks(sessionStartScript);
   const mergedSettings = mergeSettingsJson(settingsPath, settingsHooks);
   await writeFile(settingsPath, JSON.stringify(mergedSettings, null, 2) + '\n', 'utf-8');
-  console.log(`   settings.json → ${settingsPath} (SessionStart hook merged)`);
+  logger.log(`   settings.json → ${settingsPath} (SessionStart hook merged)`);
 
   // 6. Generate the `ssf` command shims and register the bin dir on the user
   //    PATH. This mirrors the npm global-install experience: after install,
   //    `ssf` is available in any new shell. `--no-path` skips the PATH change
   //    but still writes the shims so the command works with a manual PATH.
   const binDir = await writeShims(pluginRootAbs);
-  console.log(`   bin/ → ${binDir} (${installPlan.shimNames.join(', ')})`);
+  logger.log(`   bin/ → ${binDir} (${installPlan.shimNames.join(', ')})`);
   if (!noPath) {
     const { applied, detail } = await applyPath({ binDir, action: 'add' });
-    console.log(`   PATH → ${detail}${applied ? '' : ' (already registered)'}`);
-    console.log(`   Next: open a new terminal for the PATH change to take effect; use --no-path to skip.`);
+    logger.log(`   PATH → ${detail}${applied ? '' : ' (already registered)'}`);
+    logger.log(`   Next: open a new terminal for the PATH change to take effect; use --no-path to skip.`);
   } else {
-    console.log(`   PATH → skipped (--no-path); shims remain at ${targetBinDir}`);
+    logger.log(`   PATH → skipped (--no-path); shims remain at ${targetBinDir}`);
   }
 
   return installPlan;
