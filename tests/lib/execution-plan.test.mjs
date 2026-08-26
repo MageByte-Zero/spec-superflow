@@ -663,6 +663,15 @@ describe('execution plan data contract', () => {
     }), /already.*active.*authorization|active authorization/i);
 
     assert.throws(() => recordReview(changeDir, 'wave-1', {
+      status: 'pass', base: failedHead, head: failedHead,
+      report: writeReviewReport('authorized-zero-range-pass.md'),
+    }), /authorized repair review.*non-empty|base and head must differ/i);
+    [wave, dependent] = describeWaves(changeDir, plan);
+    assert.equal(wave.repair.status, 'adjudication-required');
+    assert.equal(wave.adjudication.active, true);
+    assert.equal(dependent.eligible, false);
+
+    assert.throws(() => recordReview(changeDir, 'wave-1', {
       status: 'pass', base: failedBase, head: failedHead,
       report: writeReviewReport('authorized-old-range-pass.md'),
     }), /base must equal the previous review head/i);
@@ -719,6 +728,96 @@ describe('execution plan data contract', () => {
     assert.throws(() => adjudicateWave(changeDir, 'wave-1', {
       decision: 'allow-review', confirmed: true, reason: 'A stale plan must not accept adjudication.',
     }), /invalid execution plan|stale/i);
+  });
+
+  it('rejects well-shaped repair history tampering before adjudication', () => {
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'adjudication revalidates the complete failure chain',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+    writePlan(changeDir, plan);
+
+    let base = gitRefs.base;
+    let head = gitRefs.head;
+    for (let failure = 1; failure <= 3; failure += 1) {
+      recordReview(changeDir, 'wave-1', {
+        status: 'fail', base, head, report: writeReviewReport(`tampered-history-${failure}.md`),
+      });
+      base = head;
+      head = createRepairCommit(`tampered-history-${failure}`);
+    }
+
+    const statePath = join(
+      getPlanScopedPaths(changeDir, plan).repairState,
+      `${Buffer.from('wave-1').toString('base64url')}.json`,
+    );
+    const original = JSON.parse(readFileSync(statePath, 'utf8'));
+    assert.match(original.failures[0].report_sha256, /^sha256:[0-9a-f]{64}$/);
+    assert.equal(original.failures[0].plan_hash, plan.hash);
+    assert.equal(original.failures[0].plan_revision, plan.revision);
+    assert.equal(original.failures[0].wave_id, 'wave-1');
+
+    const firstReport = join(changeDir, original.failures[0].report);
+    const firstReportBody = readFileSync(firstReport, 'utf8');
+    writeFileSync(firstReport, `${firstReportBody}tampered\n`);
+    assert.throws(() => adjudicateWave(changeDir, 'wave-1', {
+      decision: 'allow-review', confirmed: true,
+      reason: 'Historical report content must still match its recorded digest.',
+    }), /repair state.*report.*content|report.*hash/i);
+    writeFileSync(firstReport, firstReportBody);
+
+    const discontinuous = structuredClone(original);
+    discontinuous.failures[1].base = gitRefs.base;
+    writeFileSync(statePath, `${JSON.stringify(discontinuous, null, 2)}\n`);
+    assert.throws(() => adjudicateWave(changeDir, 'wave-1', {
+      decision: 'allow-review', confirmed: true,
+      reason: 'Each historical repair range must start at the prior failed head.',
+    }), /repair state.*continuous|failure.*base.*previous.*head/i);
+
+    const mismatchedCurrent = structuredClone(original);
+    const firstFailure = mismatchedCurrent.failures[0];
+    const lastFailure = mismatchedCurrent.failures.at(-1);
+    lastFailure.report = firstFailure.report;
+    lastFailure.report_sha256 = firstFailure.report_sha256;
+    mismatchedCurrent.previous_report = firstFailure.report;
+    writeFileSync(statePath, `${JSON.stringify(mismatchedCurrent, null, 2)}\n`);
+    assert.throws(() => adjudicateWave(changeDir, 'wave-1', {
+      decision: 'allow-review', confirmed: true,
+      reason: 'The final failure must match the authoritative current receipt.',
+    }), /repair state.*current failed receipt|final failure.*current/i);
+  });
+
+  it('rejects a well-shaped forged repair head before the adjudication threshold', () => {
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'every replacement review binds to the current failed receipt',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+    writePlan(changeDir, plan);
+    recordReview(changeDir, 'wave-1', {
+      status: 'fail', base: gitRefs.base, head: gitRefs.head,
+      report: writeReviewReport('pre-threshold-original.md'),
+    });
+
+    const forgedHead = createRepairCommit('pre-threshold-forged-head');
+    const replacementHead = createRepairCommit('pre-threshold-replacement');
+    const statePath = join(
+      getPlanScopedPaths(changeDir, plan).repairState,
+      `${Buffer.from('wave-1').toString('base64url')}.json`,
+    );
+    const forged = JSON.parse(readFileSync(statePath, 'utf8'));
+    forged.previous_head = forgedHead;
+    forged.failures[0].head = forgedHead;
+    writeFileSync(statePath, `${JSON.stringify(forged, null, 2)}\n`);
+
+    assert.throws(() => recordReview(changeDir, 'wave-1', {
+      status: 'fail', base: forgedHead, head: replacementHead,
+      report: writeReviewReport('pre-threshold-replacement.md'),
+    }), /repair state.*current failed receipt|final failure.*current/i);
+
+    const wave = describeWaves(changeDir, plan)[0];
+    assert.equal(wave.retryable, false);
+    assert.equal(wave.eligible, false);
+    assert.match(wave.blockers.join('\n'), /repair state.*current failed receipt|final failure.*current/i);
   });
 
   it('does not overwrite malformed adjudication evidence', () => {

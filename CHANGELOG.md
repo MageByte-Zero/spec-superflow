@@ -8,6 +8,7 @@ The format loosely follows Keep a Changelog.
 
 ### Added
 
+- **SDD adjudication recovery (#108)**: add `ssf execution adjudicate` to persist a confirmed, plan-scoped human decision after the repair circuit breaker opens. One authorization permits exactly one non-empty continuous follow-up review, preserves and revalidates the complete failure evidence chain, and never synthesizes PASS or releases dependent waves before a real passing receipt.
 - **`ssf` command on CodeBuddy installs**: `ssf install-codebuddy` now generates `ssf` / `ssf.cmd` / `ssf.ps1` command shims under `~/.codebuddy/spec-superflow/bin/` and registers that `bin/` directory on the user PATH (idempotent, Windows user environment / POSIX shell rc files). After install, `ssf` is available in a new terminal just like a global npm install. `--no-path` skips the PATH change while still writing the shims. `ssf uninstall-codebuddy` removes the shims and the PATH entry.
 
 ### Fixed
