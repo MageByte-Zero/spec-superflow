@@ -57,7 +57,7 @@ describe('checkpoint storage', () => {
   });
 
   it('computes the save task hash once without rereading the saved checkpoint', () => {
-    const source = readFileSync(new URL('../../scripts/lib/sdd-overlay.mjs', import.meta.url), 'utf8');
+    const source = readFileSync(new URL('../../scripts/lib/sdd-overlay.mjs', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
     const saveBody = source.match(/export function saveCheckpoint[\s\S]*?\n}\n\nexport function listCheckpoints/)[0];
 
     assert.equal((saveBody.match(/computeTaskHash/g) ?? []).length, 1);

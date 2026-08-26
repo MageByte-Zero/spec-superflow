@@ -13,6 +13,7 @@ import { run as runExecution } from '../../scripts/lib/cmd-execution.mjs';
 import { readState, writeState, rebuildState } from '../../scripts/lib/state-loader.mjs';
 import { computeArtifactsHash, computeContractHash } from '../../scripts/lib/hash.mjs';
 import { createGitSeedFixture } from '../helpers/git-seed-fixture.mjs';
+import { canCreateSymlink } from '../helpers/symlink-support.mjs';
 
 let tempDir;
 let gitRefs;
@@ -687,7 +688,7 @@ describe('guard: execution control records', () => {
     assert.equal(result.output.checks.find(check => check.dimension === 'execution-reviews-passed').pass, true);
   });
 
-  it('blocks closing when a persisted passing review report is no longer safe evidence', async () => {
+  it('blocks closing when a persisted passing review report is no longer safe evidence', { skip: !canCreateSymlink() }, async () => {
     const replacements = [
       {
         name: 'deleted',

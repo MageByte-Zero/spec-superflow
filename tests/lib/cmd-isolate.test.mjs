@@ -45,21 +45,22 @@ function runIsolate(args) {
 }
 
 describe('cmd-isolate optional change name (#52)', () => {
-  it('omits the optional name from ensure-branch argv when the caller omits it', () => {
+  const skip = process.platform === 'win32' && 'POSIX-only node shim';
+  it('omits the optional name from ensure-branch argv when the caller omits it', { skip }, () => {
     const { result, argv } = runIsolate(['/tmp/changes/demo']);
 
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(argv, [ENSURE, '/tmp/changes/demo']);
   });
 
-  it('forwards an explicitly supplied name unchanged', () => {
+  it('forwards an explicitly supplied name unchanged', { skip }, () => {
     const { result, argv } = runIsolate(['/tmp/changes/demo', 'runtime-fix']);
 
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(argv, [ENSURE, '/tmp/changes/demo', 'runtime-fix']);
   });
 
-  it('forwards force without manufacturing an optional name', () => {
+  it('forwards force without manufacturing an optional name', { skip }, () => {
     const { result, argv } = runIsolate(['/tmp/changes/demo', '--force']);
 
     assert.equal(result.status, 0, result.stderr);

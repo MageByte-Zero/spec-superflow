@@ -6,6 +6,8 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
+import { canCreateSymlink } from '../helpers/symlink-support.mjs';
 
 let tempDir;
 let planInstall, installWorkBuddy;
@@ -13,9 +15,13 @@ let planInstall, installWorkBuddy;
 describe('cmd-install-workbuddy', () => {
   beforeEach(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-workbuddy-'));
-    const mod = await import(join(process.cwd(), 'scripts/lib/cmd-install-workbuddy.mjs'));
+    const mod = await import(pathToFileURL(join(process.cwd(), 'scripts/lib/cmd-install-workbuddy.mjs')).href);
     planInstall = mod.planInstall;
-    installWorkBuddy = mod.installWorkBuddy;
+    // Installer library functions write progress to stdout via an injected
+    // logger; tests silence it so their stdout stays clean for the test runner
+    // IPC channel (stray emoji bytes corrupt the v8-serialized frames).
+    const silentLogger = { log() {} };
+    installWorkBuddy = (opts) => mod.installWorkBuddy({ ...opts, logger: silentLogger });
   });
 
   afterEach(() => {
@@ -148,11 +154,11 @@ describe('cmd-install-workbuddy', () => {
 
     const installed = readFileSync(join(homeDir, '.workbuddy', 'plugins', 'marketplaces', 'test', 'plugins', 'spec-superflow', 'commands', 'ssf', 'resume.md'), 'utf8');
     assert.match(installed, /allowed-tools: Bash\(node:\*\)/);
-    assert.match(installed, /node ['"]?.*scripts\/spec-superflow\.mjs['"]? resume --json/);
+    assert.match(installed, /node ['"]?.*scripts[\\/]spec-superflow\.mjs['"]? resume --json/);
     assert.doesNotMatch(installed, /\bssf resume --json/);
   });
 
-  it('rejects symbolic links in the canonical command tree before writing WorkBuddy home', async () => {
+  it('rejects symbolic links in the canonical command tree before writing WorkBuddy home', { skip: !canCreateSymlink() }, async () => {
     const pluginRoot = makePluginRoot();
     const homeDir = join(tempDir, 'symlink-home');
     const source = join(pluginRoot, 'commands', 'ssf', 'resume.md');
@@ -296,7 +302,7 @@ describe('cmd-install-workbuddy', () => {
     for (const name of ['resume', 'save', 'switch']) {
       const installed = readFileSync(join(result.targetCommands, 'ssf', `${name}.md`), 'utf-8');
       assert.match(installed, /allowed-tools: Bash\(node:\*\)/);
-      assert.match(installed, /node .*scripts\/spec-superflow\.mjs/);
+      assert.match(installed, /node .*scripts[\\/]spec-superflow\.mjs/);
       assert.doesNotMatch(installed, /\bssf (?:resume|save|switch)\b/);
     }
 

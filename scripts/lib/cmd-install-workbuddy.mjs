@@ -23,7 +23,7 @@ import { dirname, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { shellQuote } from './shell-quote.mjs';
+import { rewriteRuntime } from './runtime-rewrite.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const defaultPluginRoot = resolve(__dirname, '..', '..'); // repo root when run from clone
@@ -153,10 +153,8 @@ async function copyValidatedCommands(commandAssets, targetCommands, pluginRootAb
   for (const asset of commandAssets) {
     const targetPath = join(targetCommands, ...asset.relativePath.split('/'));
     ensureDir(dirname(targetPath));
-    const content = asset.content.replace(
-      /(?:npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf|node scripts\/spec-superflow\.mjs|\bssf(?=\s+(?:audit|checkpoint|config|execution|handoff|inject|isolate|resume|runtime|save|state|switch|sync|validate|workflow)\b))/g,
-      `node ${shellQuote(join(pluginRootAbs, 'scripts', 'spec-superflow.mjs'))}`,
-    ).replace(/allowed-tools:\s*Bash\(ssf:\*\)/g, 'allowed-tools: Bash(node:*)');
+    const content = rewriteRuntime(asset.content, pluginRootAbs)
+      .replace(/allowed-tools:\s*Bash\(ssf:\*\)/g, 'allowed-tools: Bash(node:*)');
     await writeFile(targetPath, content, 'utf-8');
   }
   return commandAssets.length;
@@ -208,10 +206,7 @@ async function copySkillsWithRoot(sourceSkills, targetSkills, pluginRootAbs) {
     if (content.includes('${CLAUDE_PLUGIN_ROOT}')) {
       content = content.replace(/\$\{CLAUDE_PLUGIN_ROOT\}/g, pluginRootAbs);
     }
-    content = content.replace(
-      /(?:npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf|node scripts\/spec-superflow\.mjs|\bssf(?=\s+(?:audit|checkpoint|config|execution|handoff|inject|isolate|resume|runtime|save|state|switch|sync|validate|workflow)\b))/g,
-      `node ${shellQuote(join(pluginRootAbs, 'scripts', 'spec-superflow.mjs'))}`,
-    );
+    content = rewriteRuntime(content, pluginRootAbs);
     writeFileSync(filePath, content, 'utf-8');
   }
 
@@ -349,7 +344,7 @@ function planInstall({ pluginRoot = defaultPluginRoot, homeDir = homedir(), mark
 
 // ─── install ──────────────────────────────────────────────
 
-async function installWorkBuddy({ pluginRoot, homeDir, marketplaceName, plan } = {}) {
+async function installWorkBuddy({ pluginRoot, homeDir, marketplaceName, plan, logger = console } = {}) {
   const installPlan = plan || planInstall({ pluginRoot, homeDir, marketplaceName });
   const { skillNames, commandNames, commandAssets, targetPluginDir, targetSkills, targetCommands, targetRules, manifestDir, settingsPath, enabledPluginKey, version, pluginRootAbs } = installPlan;
 
@@ -360,35 +355,35 @@ async function installWorkBuddy({ pluginRoot, homeDir, marketplaceName, plan } =
   ensureDir(targetPluginDir);
 
   // 1. Copy runtime dependencies (scripts/docs/templates/dist/hooks).
-  console.log('📋 Copying runtime dependencies...');
+  logger.log('📋 Copying runtime dependencies...');
   for (const dir of RUNTIME_DIRS) {
     const src = join(installPlan.pluginRoot, dir);
     const dst = join(targetPluginDir, dir);
     if (existsSync(src)) {
       const count = await copyDir(src, dst);
-      console.log(`   ${dir}/ → ${dst} (${count} entries)`);
+      logger.log(`   ${dir}/ → ${dst} (${count} entries)`);
     } else {
-      console.log(`   ${dir}/ — skipped (not found)`);
+      logger.log(`   ${dir}/ — skipped (not found)`);
     }
   }
 
   // 2. Copy canonical recovery commands as complete Markdown assets.
   const commandCount = await copyValidatedCommands(commandAssets, targetCommands, pluginRootAbs);
-  console.log(`   commands/ → ${targetCommands} (${commandCount} entries, ${commandNames.length} commands)`);
+  logger.log(`   commands/ → ${targetCommands} (${commandCount} entries, ${commandNames.length} commands)`);
 
   // 3. Copy skills with ${CLAUDE_PLUGIN_ROOT} rewriting.
   const count = await copySkillsWithRoot(installPlan.skillsDir, targetSkills, pluginRootAbs);
-  console.log(`   skills/ → ${targetSkills} (${count} skills, paths rewritten)`);
+  logger.log(`   skills/ → ${targetSkills} (${count} skills, paths rewritten)`);
 
   // 4. Write phase-guard rule.
   ensureDir(targetRules);
   await writeFile(join(targetRules, 'phase-guard.md'), phaseGuardContent(), 'utf-8');
-  console.log(`   phase-guard → ${join(targetRules, 'phase-guard.md')}`);
+  logger.log(`   phase-guard → ${join(targetRules, 'phase-guard.md')}`);
 
   // 5. Write plugin manifest.
   ensureDir(manifestDir);
   await writeFile(join(manifestDir, 'plugin.json'), JSON.stringify(pluginManifest(skillNames, version), null, 2) + '\n', 'utf-8');
-  console.log(`   manifest → ${join(manifestDir, 'plugin.json')}`);
+  logger.log(`   manifest → ${join(manifestDir, 'plugin.json')}`);
 
   // 6. Enable plugin in settings.json.
   ensureDir(installPlan.workbuddyRoot);
@@ -402,7 +397,7 @@ async function installWorkBuddy({ pluginRoot, homeDir, marketplaceName, plan } =
   }
   settings.enabledPlugins[enabledPluginKey] = true;
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
-  console.log(`   settings → ${enabledPluginKey} enabled`);
+  logger.log(`   settings → ${enabledPluginKey} enabled`);
 
   return installPlan;
 }

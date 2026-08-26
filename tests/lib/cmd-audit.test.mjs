@@ -3,9 +3,10 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { recordDebugAttempt, recordDebugEscalation } from '../../scripts/lib/debug-attempts.mjs';
 import { computeArtifactsHash, computeContractHash } from '../../scripts/lib/hash.mjs';
 import { readState, rebuildState, writeState } from '../../scripts/lib/state-loader.mjs';
@@ -28,7 +29,7 @@ describe('cmd-audit: generateReport()', () => {
   before(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-audit-test-'));
     const modulePath = join(process.cwd(), 'scripts/lib/cmd-audit.mjs');
-    const mod = await import(modulePath);
+    const mod = await import(pathToFileURL(modulePath).href);
     generateReport = mod.generateReport;
     DP_NAMES = mod.DP_NAMES;
   });
@@ -179,7 +180,7 @@ describe('cmd-audit: generateReport()', () => {
     const report = generateReport(tempDir, state);
 
     // tempDir basename should appear
-    const dirName = tempDir.split('/').filter(Boolean).pop();
+    const dirName = basename(tempDir);
     assert.ok(report.includes(dirName), `Report should include directory name "${dirName}" as fallback`);
   });
 

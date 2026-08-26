@@ -17,6 +17,7 @@ import { writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
+import { applyPathEntry } from './path-shim.mjs';
 
 const PLUGIN_NAME = 'spec-superflow';
 
@@ -89,6 +90,7 @@ function stripSsfHooks(input) {
 function planUninstall({ configDir } = {}) {
   const codebuddyRoot = getCodebuddyRoot(configDir);
   const targetPluginDir = join(codebuddyRoot, PLUGIN_NAME);
+  const targetBinDir = join(targetPluginDir, 'bin');
   const targetSkills = join(codebuddyRoot, 'skills');
   const targetCommands = join(codebuddyRoot, 'commands', 'ssf');
   const targetPhaseGuard = join(codebuddyRoot, 'rules', 'phase-guard.md');
@@ -96,6 +98,7 @@ function planUninstall({ configDir } = {}) {
   return {
     codebuddyRoot,
     targetPluginDir,
+    targetBinDir,
     targetSkills,
     targetCommands,
     targetPhaseGuard,
@@ -103,7 +106,7 @@ function planUninstall({ configDir } = {}) {
   };
 }
 
-export async function uninstallCodeBuddy({ configDir } = {}) {
+export async function uninstallCodeBuddy({ configDir, applyPath = applyPathEntry } = {}) {
   const plan = planUninstall({ configDir });
   const removed = [];
 
@@ -120,13 +123,21 @@ export async function uninstallCodeBuddy({ configDir } = {}) {
     }
   }
 
-  // 2. Remove runtime dir.
+  // 2. Remove the registered PATH entry for the bin dir first. This must
+  //    happen even if the runtime dir no longer exists, so the stale PATH
+  //    entry is cleaned up. Removing the PATH entry before deleting the bin
+  //    dir also avoids Windows file-lock failures if a shell still references
+  //    the shims. Other PATH entries are preserved.
+  const { applied } = await applyPath({ binDir: plan.targetBinDir, action: 'remove' });
+  if (applied) removed.push(`PATH entry (${plan.targetBinDir})`);
+
+  // 3. Remove runtime dir (includes bin/ shims).
   if (existsSync(plan.targetPluginDir)) {
     rmSync(plan.targetPluginDir, { recursive: true, force: true });
     removed.push(plan.targetPluginDir);
   }
 
-  // 3. Remove only the managed recovery command files (resume/save/switch.md).
+  // 4. Remove only the managed recovery command files (resume/save/switch.md).
   //    The shared ~/.codebuddy/commands/ssf/ directory may hold user-created
   //    commands (e.g. custom.md); those must NOT be deleted. Only remove the
   //    directory when it is empty after dropping the managed files.
@@ -146,13 +157,13 @@ export async function uninstallCodeBuddy({ configDir } = {}) {
     }
   }
 
-  // 4. Remove phase-guard rule (other rules untouched).
+  // 5. Remove phase-guard rule (other rules untouched).
   if (existsSync(plan.targetPhaseGuard)) {
     rmSync(plan.targetPhaseGuard, { force: true });
     removed.push(plan.targetPhaseGuard);
   }
 
-  // 5. Remove the 9 spec-superflow skill directories (other skills untouched).
+  // 6. Remove the 9 spec-superflow skill directories (other skills untouched).
   if (existsSync(plan.targetSkills)) {
     for (const name of SPEC_SUPERFLOW_SKILLS) {
       const dir = join(plan.targetSkills, name);
@@ -182,6 +193,8 @@ export async function run(args) {
     console.log(`  Config dir:  ${plan.codebuddyRoot}`);
     console.log(`  Settings:    ${plan.settingsPath} (strip spec-superflow SessionStart, keep rest)`);
     console.log(`  Runtime:     ${plan.targetPluginDir}`);
+    console.log(`  Bin dir:     ${plan.targetBinDir} (ssf shims)`);
+    console.log(`  PATH:        remove ${plan.targetBinDir} from user PATH (keep other entries)`);
     console.log(`  Commands:    ${plan.targetCommands}`);
     console.log(`  Phase guard: ${plan.targetPhaseGuard}`);
     console.log(`  Skills (${SPEC_SUPERFLOW_SKILLS.length}): ${SPEC_SUPERFLOW_SKILLS.join(', ')}`);

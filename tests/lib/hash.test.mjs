@@ -6,6 +6,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import crypto from 'node:crypto';
+import { pathToFileURL } from 'node:url';
 
 let tempDir;
 
@@ -15,7 +16,7 @@ describe('hash: computeArtifactsHash()', () => {
   before(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-hash-test-'));
     const modulePath = join(process.cwd(), 'scripts/lib/hash.mjs');
-    hashMod = await import(modulePath);
+    hashMod = await import(pathToFileURL(modulePath).href);
   });
 
   after(() => {
@@ -118,7 +119,7 @@ describe('hash: computeContractHash()', () => {
   before(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-hash-contract-'));
     const modulePath = join(process.cwd(), 'scripts/lib/hash.mjs');
-    hashMod = await import(modulePath);
+    hashMod = await import(pathToFileURL(modulePath).href);
   });
 
   after(() => {

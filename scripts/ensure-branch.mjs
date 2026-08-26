@@ -11,8 +11,8 @@
 // the same form proven safe by install-cursor.mjs / install.mjs. There is no
 // string-form shell command, no variable command, and no dynamic args array.
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, realpathSync } from 'node:fs';
-import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { cpSync, existsSync, mkdirSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 
 const changeDir = process.argv[2];
 const changeName = process.argv[3];
@@ -25,11 +25,6 @@ if (!changeDir) {
 
 const PROTECTED = ['main', 'master'];
 const GIT_OPTS = { encoding: 'utf-8', cwd: changeDir, stdio: ['ignore', 'pipe', 'pipe'] };
-
-function insideRepository(repoRoot, candidate) {
-  const relativePath = relative(repoRoot, candidate);
-  return relativePath !== '' && relativePath !== '..' && !relativePath.startsWith(`..${sep}`);
-}
 
 function isSafePathSegment(value) {
   return typeof value === 'string'
@@ -57,18 +52,26 @@ console.error(`ensure-branch: on protected branch '${branch}'. Creating an isola
 
 let repoRoot;
 try {
-  repoRoot = realpathSync((execFileSync('git', ['rev-parse', '--show-toplevel'], GIT_OPTS) || '').trim());
+  repoRoot = resolve((execFileSync('git', ['rev-parse', '--show-toplevel'], GIT_OPTS) || '').trim());
 } catch {
   console.error('ensure-branch: could not determine the Git repository root.');
   process.exit(1);
 }
 
-const sourceChangeDir = realpathSync(resolve(changeDir));
-if (!insideRepository(repoRoot, sourceChangeDir)) {
-  console.error('ensure-branch: change directory must be inside the Git repository.');
+// `git rev-parse --show-toplevel` already succeeded with cwd = changeDir, which
+// proves changeDir lives inside the repository — no path-string comparison
+// needed. Compute the change-dir-relative-to-root path via `git rev-parse
+// --show-prefix` (not `path.relative`) so Windows 8.3 short names, junctions,
+// and case mismatches between git and Node cannot yield a wrong result.
+let changeRelativePath;
+try {
+  changeRelativePath = (execFileSync('git', ['rev-parse', '--show-prefix'], GIT_OPTS) || '').trim().replace(/[\\/]+$/, '');
+} catch {
+  console.error('ensure-branch: could not resolve the change directory relative to the repository root.');
   process.exit(1);
 }
-const changeRelativePath = relative(repoRoot, sourceChangeDir);
+
+const sourceChangeDir = resolve(changeDir);
 const repoName = basename(repoRoot) || 'repo';
 const name = changeName || repoName;
 if (!isSafePathSegment(name)) {

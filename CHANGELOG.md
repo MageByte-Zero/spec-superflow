@@ -6,6 +6,14 @@ The format loosely follows Keep a Changelog.
 
 ## [Unreleased]
 
+### Added
+
+- **`ssf` command on CodeBuddy installs**: `ssf install-codebuddy` now generates `ssf` / `ssf.cmd` / `ssf.ps1` command shims under `~/.codebuddy/spec-superflow/bin/` and registers that `bin/` directory on the user PATH (idempotent, Windows user environment / POSIX shell rc files). After install, `ssf` is available in a new terminal just like a global npm install. `--no-path` skips the PATH change while still writing the shims. `ssf uninstall-codebuddy` removes the shims and the PATH entry.
+
+### Fixed
+
+- **CRLF-tolerant risk ownership matrix test**: `verification-risk-ownership.test.mjs` now normalizes line endings so the matrix parses identically on Windows (CRLF checkouts) and POSIX.
+
 ## [1.0.1] - 2026-08-10
 
 ### Fixed

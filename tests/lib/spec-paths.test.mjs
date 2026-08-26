@@ -1,8 +1,15 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
+
+// Strip the change dir prefix and normalize to forward slashes so path
+// assertions stay platform-neutral (Windows join() emits backslashes).
+function toRel(dir, file) {
+  return file.slice(dir.length + 1).replaceAll(sep, '/');
+}
 
 let mod;
 let tempDir;
@@ -10,7 +17,7 @@ let tempDir;
 describe('spec-paths', () => {
   before(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-spec-paths-'));
-    mod = await import(join(process.cwd(), 'scripts/lib/spec-paths.mjs'));
+    mod = await import(pathToFileURL(join(process.cwd(), 'scripts/lib/spec-paths.mjs')).href);
   });
 
   after(() => {
@@ -24,7 +31,7 @@ describe('spec-paths', () => {
     writeFileSync(join(dir, 'specs', 'z-auth', 'spec.md'), 'z');
     writeFileSync(join(dir, 'specs', 'a-ui', 'spec.md'), 'a');
 
-    const files = mod.findCanonicalSpecFiles(dir).map(f => f.replace(dir + '/', ''));
+    const files = mod.findCanonicalSpecFiles(dir).map(f => toRel(dir, f));
     assert.deepEqual(files, ['specs/a-ui/spec.md', 'specs/z-auth/spec.md']);
   });
 
@@ -35,14 +42,14 @@ describe('spec-paths', () => {
     writeFileSync(join(dir, 'specs', 'ui-theme', 'nested', 'spec.md'), 'nested');
 
     assert.deepEqual(
-      mod.findCanonicalSpecFiles(dir).map(file => file.replace(dir + '/', '')),
+      mod.findCanonicalSpecFiles(dir).map(file => toRel(dir, file)),
       ['specs/ui-theme/spec.md'],
     );
 
     const result = mod.validateSpecPathLayout(dir, { requireSpecs: true });
     assert.equal(result.pass, false);
     assert.deepEqual(
-      result.specFiles.map(file => file.replace(dir + '/', '')),
+      result.specFiles.map(file => toRel(dir, file)),
       ['specs/ui-theme/spec.md'],
     );
     assert.deepEqual(result.diagnostics, [{

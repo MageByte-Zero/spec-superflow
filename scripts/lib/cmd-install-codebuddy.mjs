@@ -38,7 +38,8 @@ import { dirname, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { shellQuote } from './shell-quote.mjs';
+import { rewriteRuntime } from './runtime-rewrite.mjs';
+import { writeShims, applyPathEntry } from './path-shim.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const defaultPluginRoot = resolve(__dirname, '..', '..'); // repo root when run from clone
@@ -68,6 +69,11 @@ function readJsonIfExists(filePath) {
 function getCodebuddyRoot(configDir) {
   if (configDir) return resolve(configDir);
   return join(homedir(), '.codebuddy');
+}
+
+/** The shim file set generated for a platform (see codebuddy-ssf-path spec). */
+function shimNamesForPlatform(platform = process.platform) {
+  return platform === 'win32' ? ['ssf.cmd', 'ssf.ps1'] : ['ssf'];
 }
 
 function listSkillNames(skillsDir) {
@@ -173,21 +179,13 @@ function assertCanonicalCommands(commandNames) {
 }
 
 async function copyValidatedCommands(commandAssets, targetCommands, pluginRootAbs) {
-  const scriptPath = join(pluginRootAbs, 'scripts', 'spec-superflow.mjs');
-  const nodeCmd = `node ${shellQuote(scriptPath)}`;
   for (const asset of commandAssets) {
     const targetPath = join(targetCommands, ...asset.relativePath.split('/'));
     ensureDir(dirname(targetPath));
-    let content = asset.content;
     // Rewrite either supported source command to the deployed local runtime,
     // so --local installs neither fetch a pinned package nor depend on a
     // caller's globally linked `ssf` executable.
-    content = content.replace(
-      /(?:npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf|\bssf(?=\s+(?:resume|save|switch)\b))/g,
-      nodeCmd,
-    );
-    // The command adapters no longer shell out to npx; allow node instead.
-    content = content.replace(
+    const content = rewriteRuntime(asset.content, pluginRootAbs).replace(
       /^allowed-tools:\s*Bash\((?:npx|ssf):\*\)\s*$/m,
       'allowed-tools: Bash(node:*)',
     );
@@ -244,10 +242,7 @@ async function copySkillsWithRoot(sourceSkills, targetSkills, pluginRootAbs, sou
     if (content.includes('${CLAUDE_PLUGIN_ROOT}')) {
       content = content.replace(/\$\{CLAUDE_PLUGIN_ROOT\}/g, pluginRootAbs);
     }
-    content = content.replace(
-      /npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf/g,
-      `node ${shellQuote(join(pluginRootAbs, 'scripts', 'spec-superflow.mjs'))}`,
-    );
+    content = rewriteRuntime(content, pluginRootAbs);
     writeFileSync(filePath, content, 'utf-8');
   }
 
@@ -415,6 +410,7 @@ function planInstall({ pluginRoot = defaultPluginRoot, configDir } = {}) {
   const version = readVersion(root);
   const pluginRootAbs = resolve(targetPluginDir);
   const sessionStartScript = join(pluginRootAbs, 'hooks', 'session-start');
+  const targetBinDir = join(targetPluginDir, 'bin');
 
   return {
     pluginRoot: root,
@@ -433,12 +429,14 @@ function planInstall({ pluginRoot = defaultPluginRoot, configDir } = {}) {
     version,
     pluginRootAbs,
     sessionStartScript,
+    targetBinDir,
+    shimNames: shimNamesForPlatform(),
   };
 }
 
 // ─── install ──────────────────────────────────────────────
 
-async function installCodeBuddy({ pluginRoot, configDir, plan: providedPlan } = {}) {
+async function installCodeBuddy({ pluginRoot, configDir, noPath = false, applyPath = applyPathEntry, plan: providedPlan, logger = console } = {}) {
   const installPlan = providedPlan || planInstall({ pluginRoot, configDir });
   const {
     skillNames,
@@ -454,6 +452,7 @@ async function installCodeBuddy({ pluginRoot, configDir, plan: providedPlan } = 
     version,
     pluginRootAbs,
     sessionStartScript,
+    targetBinDir,
   } = installPlan;
 
   // 0. Clean old plugin runtime dir (runtime deps only; skills are managed separately).
@@ -463,15 +462,15 @@ async function installCodeBuddy({ pluginRoot, configDir, plan: providedPlan } = 
   ensureDir(targetPluginDir);
 
   // 1. Copy runtime dependencies (scripts/docs/templates/dist/hooks).
-  console.log('📋 Copying runtime dependencies...');
+  logger.log('📋 Copying runtime dependencies...');
   for (const dir of RUNTIME_DIRS) {
     const src = join(installPlan.pluginRoot, dir);
     const dst = join(targetPluginDir, dir);
     if (existsSync(src)) {
       const count = await copyDir(src, dst);
-      console.log(`   ${dir}/ → ${dst} (${count} files)`);
+      logger.log(`   ${dir}/ → ${dst} (${count} files)`);
     } else {
-      console.log(`   ${dir}/ — skipped (not found)`);
+      logger.log(`   ${dir}/ — skipped (not found)`);
     }
   }
 
@@ -486,16 +485,16 @@ async function installCodeBuddy({ pluginRoot, configDir, plan: providedPlan } = 
   //    fixed npm package version (P1: --local recovery commands must use the
   //    deployed runtime).
   const commandCount = await copyValidatedCommands(commandAssets, targetCommands, pluginRootAbs);
-  console.log(`   commands/ → ${targetCommands} (${commandCount} files, ${commandNames.length} commands, npx→node rewritten)`);
+  logger.log(`   commands/ → ${targetCommands} (${commandCount} files, ${commandNames.length} commands, npx→node rewritten)`);
 
   // 3. Copy skills with ${CLAUDE_PLUGIN_ROOT} rewriting (preserves unrelated skills).
   const count = await copySkillsWithRoot(installPlan.skillsDir, targetSkills, pluginRootAbs, skillNames);
-  console.log(`   skills/ → ${targetSkills} (${count} skills, paths rewritten, unrelated skills preserved)`);
+  logger.log(`   skills/ → ${targetSkills} (${count} skills, paths rewritten, unrelated skills preserved)`);
 
   // 4. Write phase-guard rule (other rules in the directory are left untouched).
   ensureDir(targetRules);
   await writeFile(join(targetRules, 'phase-guard.md'), phaseGuardContent(), 'utf-8');
-  console.log(`   phase-guard → ${join(targetRules, 'phase-guard.md')}`);
+  logger.log(`   phase-guard → ${join(targetRules, 'phase-guard.md')}`);
 
   // 5. Write/merge SessionStart hook into ~/.codebuddy/settings.json.
   //    CodeBuddy loads hooks from settings.json; user-level hooks.json is not
@@ -505,7 +504,21 @@ async function installCodeBuddy({ pluginRoot, configDir, plan: providedPlan } = 
   const settingsHooks = buildSettingsHooks(sessionStartScript);
   const mergedSettings = mergeSettingsJson(settingsPath, settingsHooks);
   await writeFile(settingsPath, JSON.stringify(mergedSettings, null, 2) + '\n', 'utf-8');
-  console.log(`   settings.json → ${settingsPath} (SessionStart hook merged)`);
+  logger.log(`   settings.json → ${settingsPath} (SessionStart hook merged)`);
+
+  // 6. Generate the `ssf` command shims and register the bin dir on the user
+  //    PATH. This mirrors the npm global-install experience: after install,
+  //    `ssf` is available in any new shell. `--no-path` skips the PATH change
+  //    but still writes the shims so the command works with a manual PATH.
+  const binDir = await writeShims(pluginRootAbs);
+  logger.log(`   bin/ → ${binDir} (${installPlan.shimNames.join(', ')})`);
+  if (!noPath) {
+    const { applied, detail } = await applyPath({ binDir, action: 'add' });
+    logger.log(`   PATH → ${detail}${applied ? '' : ' (already registered)'}`);
+    logger.log(`   Next: open a new terminal for the PATH change to take effect; use --no-path to skip.`);
+  } else {
+    logger.log(`   PATH → skipped (--no-path); shims remain at ${targetBinDir}`);
+  }
 
   return installPlan;
 }
@@ -520,6 +533,7 @@ export async function run(args) {
       'config-dir': { type: 'string' },
       tag: { type: 'string' },
       'dry-run': { type: 'boolean' },
+      'no-path': { type: 'boolean' },
     },
   });
 
@@ -539,6 +553,8 @@ export async function run(args) {
     console.log(`  Rules:       ${plan.targetRules}/phase-guard.md`);
     console.log(`  Commands:    ${plan.targetCommands}`);
     console.log(`  Settings:    ${plan.settingsPath} (SessionStart hook, merged)`);
+    console.log(`  Bin dir:     ${plan.targetBinDir} (${plan.shimNames.join(', ')})`);
+    console.log(`  PATH:        ${values['no-path'] ? 'skip (--no-path)' : 'register bin dir on user PATH'}`);
     return;
   }
 
@@ -561,6 +577,7 @@ export async function run(args) {
     const plan = await installCodeBuddy({
       pluginRoot,
       configDir: values['config-dir'],
+      noPath: values['no-path'],
     });
 
     console.log(`\n✅ CodeBuddy install complete:`);
@@ -572,6 +589,8 @@ export async function run(args) {
     console.log(`   Skills dir:  ${plan.targetSkills}`);
     console.log(`   Rules:       ${plan.targetRules}/phase-guard.md`);
     console.log(`   Settings:    ${plan.settingsPath} (SessionStart hook merged)`);
+    console.log(`   Bin dir:     ${plan.targetBinDir} (${plan.shimNames.join(', ')})`);
+    console.log(`   PATH:        ${values['no-path'] ? 'skipped (--no-path)' : 'registered on user PATH'}`);
     if (installedTag) {
       console.log(`   Version:     ${installedTag}`);
     }

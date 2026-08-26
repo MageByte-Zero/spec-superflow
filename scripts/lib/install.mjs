@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { getPlatform, rulesTargetDir, phaseGuardFileName } from './platforms.mjs';
-import { shellQuote } from './shell-quote.mjs';
+import { rewriteRuntime } from './runtime-rewrite.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const defaultPluginRoot = resolve(__dirname, '..', '..'); // repo root when run from clone
@@ -103,10 +103,7 @@ async function copySkillsWithRoot(sourceSkills, targetSkills, pluginRootAbs) {
     if (content.includes('${CLAUDE_PLUGIN_ROOT}')) {
       content = content.replace(/\$\{CLAUDE_PLUGIN_ROOT\}/g, pluginRootAbs);
     }
-    content = content.replace(
-      /(?:npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf|node scripts\/spec-superflow\.mjs|\bssf(?=\s+(?:audit|checkpoint|config|execution|handoff|inject|isolate|resume|runtime|save|state|switch|sync|validate|workflow)\b))/g,
-      `node ${shellQuote(join(pluginRootAbs, 'scripts', 'spec-superflow.mjs'))}`,
-    );
+    content = rewriteRuntime(content, pluginRootAbs);
     writeFileSync(filePath, content, 'utf-8');
   }
 

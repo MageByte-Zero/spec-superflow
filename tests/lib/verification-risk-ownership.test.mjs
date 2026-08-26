@@ -15,7 +15,8 @@ const REQUIRED_COLUMNS = [
 describe('verification risk ownership matrix', () => {
   it('names one end-to-end owner and a fast contract for every migrated repeated risk', () => {
     assert.equal(existsSync(MATRIX_PATH), true, 'risk ownership matrix must be available as a curated public example');
-    const lines = readFileSync(MATRIX_PATH, 'utf8').split('\n').filter(line => line.startsWith('|'));
+    // Normalize CRLF so the matrix parses identically on Windows and POSIX.
+    const lines = readFileSync(MATRIX_PATH, 'utf8').replace(/\r/g, '').split('\n').filter(line => line.startsWith('|'));
     assert.deepEqual(lines[0].split('|').filter(Boolean).map(value => value.trim()), REQUIRED_COLUMNS);
 
     const rows = lines.slice(2).map(line => line.split('|').filter(Boolean).map(value => value.trim()));

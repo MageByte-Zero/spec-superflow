@@ -64,7 +64,7 @@ describe('ssf runtime', () => {
     assert.match(write.stderr, /read-only|--set/i);
   });
 
-  it('uses the existing update-check result without requiring a global ssf command', () => {
+  it('uses the existing update-check result without requiring a global ssf command', { skip: process.platform === 'win32' && 'POSIX-only npm shim' }, () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'ssf-runtime-update-'));
     tempDirs.push(tempDir);
     const binDir = join(tempDir, 'bin');

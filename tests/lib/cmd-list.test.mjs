@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 
 let tempDir;
 
@@ -14,7 +15,7 @@ describe('cmd-list: detectChangeStatus()', () => {
   before(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-list-test-'));
     const modulePath = join(process.cwd(), 'scripts/lib/cmd-list.mjs');
-    const mod = await import(modulePath);
+    const mod = await import(pathToFileURL(modulePath).href);
     detectChangeStatus = mod.detectChangeStatus;
   });
 
