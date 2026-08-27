@@ -184,9 +184,16 @@ export function recordReview(changeDir, waveId, receipt) {
 /**
  * Resolves a stale plan (see changes/plan-resync): refreshes the plan's
  * artifacts_hash reference to the current artifacts snapshot, recomputes the
- * plan content hash, migrates both receipt stores' plan_hash fields, and
- * appends an audit record to the progress ledger. The revision — and with it
- * the plan-scoped directory identity — deliberately stays unchanged.
+ * plan content hash, refreshes the recommendation overlay seal, migrates both
+ * receipt stores' plan_hash fields plus repair-state records, and appends an
+ * audit record to the progress ledger. The revision — and with it the
+ * plan-scoped directory identity — deliberately stays unchanged.
+ *
+ * Migration order (review-findings-fix R1/R4): every record first, the plan
+ * file last. Each step appends {path, previousContent} to an undo log, so a
+ * failure at any point replays the log in reverse and restores the exact
+ * pre-resync state: plan untouched means the system is still in its original
+ * self-consistent stale state.
  */
 export function resyncPlan(changeDir, { reason } = {}) {
   if (!isNonEmptyText(reason)) throw new Error('resync requires a reason describing the non-semantic correction');
@@ -205,64 +212,135 @@ export function resyncPlan(changeDir, { reason } = {}) {
     throw new Error(`Cannot resync while repair chains are open; waves with fail receipts must close their repair loop first: ${failedWaves.join(', ')}`);
   }
 
-  const previousArtifactsHash = plan.artifacts_hash;
-  // The frozen receipt snapshot references the artifacts snapshot it certified;
-  // resync deliberately refreshes that reference together with the plan itself.
-  // The receipt's content hash covers every field including artifacts_hash, so
-  // the seal must be recomputed or any future validateRecommendationReceiptStructure
-  // consumer would report a hash mismatch.
-  if (isObject(plan.recommendation_receipt)) {
-    plan.recommendation_receipt.artifacts_hash = currentArtifactsHash;
-    plan.recommendation_receipt.hash = hashReceipt(plan.recommendation_receipt);
+  const undoLog = [];
+  const writeWithUndo = (targetPath, content) => {
+    // 撤销语义要求"写入前必然已读"：旧内容留存于内存，恢复时可用。
+    const previousContent = existsSync(targetPath) ? readFileSync(targetPath, 'utf8') : null;
+    atomicWrite(targetPath, content);
+    undoLog.push({ path: targetPath, previousContent });
+  };
+
+  try {
+    const previousArtifactsHash = plan.artifacts_hash;
+    const previousIdentity = getPlanScopedPaths(changeDir, plan);
+
+    // The frozen receipt inside the plan references the artifacts snapshot it
+    // certified; resync deliberately refreshes that reference together with
+    // the plan itself. The receipt's content hash covers every field including
+    // artifacts_hash, so the seal must be recomputed.
+    if (isObject(plan.recommendation_receipt)) {
+      plan.recommendation_receipt.artifacts_hash = currentArtifactsHash;
+      plan.recommendation_receipt.hash = hashReceipt(plan.recommendation_receipt);
+    }
+    delete plan.hash;
+    plan.artifacts_hash = currentArtifactsHash;
+    plan.hash = hashPlan(plan);
+    // revision 不变，但身份含 hash，因此 plan-scoped 目录搬移到新 identity。
+    const migratedIdentity = getPlanScopedPaths(changeDir, plan);
+
+    // 决策 4：overlay 是迁移循环的第一项——更新 artifacts_hash 并重算封印。
+    const overlayPath = getOverlayPaths(changeDir).executionRecommendation;
+    if (existsSync(overlayPath)) {
+      let overlay;
+      try {
+        overlay = JSON.parse(readFileSync(overlayPath, 'utf8'));
+      } catch (error) {
+        throw new Error(`Unable to read execution recommendation overlay for resync: ${error.message}`);
+      }
+      if (isObject(overlay)) {
+        overlay.artifacts_hash = currentArtifactsHash;
+        overlay.hash = hashReceipt(overlay);
+        writeWithUndo(overlayPath, `${JSON.stringify(overlay, null, 2)}\n`);
+      }
+    }
+
+    // 逐项迁移 root reviews + plan-scoped reviews（读旧→改写→写→记撤销），
+    // 并在新身份目录补齐目标副本。
+    migrateReceiptsPlanHashWithUndo(
+      [getOverlayPaths(changeDir).reviews, previousIdentity.reviews],
+      new Set([getOverlayPaths(changeDir).reviews, migratedIdentity.reviews]),
+      writeWithUndo,
+      plan,
+    );
+    migrateReceiptsPlanHashWithUndo(
+      [previousIdentity.repairState],
+      new Set([migratedIdentity.repairState, previousIdentity.repairState]),
+      writeWithUndo,
+      plan,
+    );
+
+    // Checkpoints, handoffs, and the workspace carry no plan_hash field of
+    // their own: readers resolve them purely by the plan-scoped directory
+    // identity. Move every remaining record subdirectory onto the resynced
+    // identity; moves join the undo log as restore closures.
+    migratePlanScopedDirectoryWithUndo(previousIdentity.checkpoints, migratedIdentity.checkpoints, undoLog);
+    migratePlanScopedDirectoryWithUndo(previousIdentity.handoffs, migratedIdentity.handoffs, undoLog);
+    migratePlanScopedDirectoryWithUndo(previousIdentity.workspace, migratedIdentity.workspace, undoLog);
+    removeDirIfEmpty(previousIdentity.planRoot);
+
+    // 决策 2：plan 文件收尾——plan 未动 = 系统仍处原始 stale 态的判据始终成立。
+    // C1：plan 与 state summary 两个尾部写入也纳入撤销保护——旧内容读自磁盘
+    // （写前必读），后续任何失败都按 undoLog 逆序恢复为 resync 前内容，杜绝
+    // "plan 已落新 hash 而 receipts/overlay 恢复旧值"的死锁复发状态。
+    writeWithUndo(getOverlayPaths(changeDir).executionPlan, `${JSON.stringify(plan, null, 2)}\n`);
+    const summaryPath = join(changeDir, '.spec-superflow.yaml');
+    const previousSummaryContent = existsSync(summaryPath) ? readFileSync(summaryPath, 'utf8') : null;
+    writeExecutionPlanSummary(changeDir, plan);
+    undoLog.push({ path: summaryPath, previousContent: previousSummaryContent });
+
+    // 取舍声明（review-findings-fix C1）：progress.md 是 append 型审计日志，其
+    // 追加失败不回滚已成功的 plan/summary 迁移——审计日志缺少一行不影响 plan 与
+    // receipts 的一致性（收尾锚点不变式只依赖前序写入），故仅告警不中断。
+    try {
+      appendProgressAudit(changeDir, [
+        '## Execution Plan Resync',
+        `- recorded_at: ${new Date().toISOString()}`,
+        `- reason: ${reason}`,
+        `- previous_artifacts_hash: ${previousArtifactsHash}`,
+        `- artifacts_hash: ${currentArtifactsHash}`,
+        `- plan_hash: ${plan.hash}`,
+        `- plan_revision: ${plan.revision}`,
+      ]);
+    } catch (auditError) {
+      process.stderr.write(`WARN: resync 完成但 progress.md 审计追加失败（append-only 审计缺一行，不回滚）：${auditError.message}\n`);
+    }
+    return readPlan(changeDir);
+  } catch (error) {
+    try {
+      restoreUndoLog(undoLog);
+    } catch (restoreError) {
+      // M2：原始错误在前，恢复失败清单追加在后，不顶替根因。
+      error.message = `${error.message}; ${restoreError.message}`;
+    }
+    throw error;
   }
-  const previousIdentity = getPlanScopedPaths(changeDir, plan);
-  delete plan.hash;
-  plan.artifacts_hash = currentArtifactsHash;
-  plan.hash = hashPlan(plan);
-  // The revision is untouched, but the plan identity includes the hash, so the
-  // plan-scoped directory moves. Persist the plan first, then converge both
-  // receipt stores onto the NEW identity so readCurrentReviewEvidence keeps
-  // resolving every receipt.
-  atomicWrite(getOverlayPaths(changeDir).executionPlan, `${JSON.stringify(plan, null, 2)}\n`);
-  writeExecutionPlanSummary(changeDir, plan);
-
-  const migratedIdentity = getPlanScopedPaths(changeDir, plan);
-  migrateReceiptsPlanHash(
-    [getOverlayPaths(changeDir).reviews, previousIdentity.reviews],
-    [getOverlayPaths(changeDir).reviews, migratedIdentity.reviews],
-    plan,
-  );
-  migrateReceiptsPlanHash(
-    [previousIdentity.repairState],
-    new Set([migratedIdentity.repairState, previousIdentity.repairState]),
-    plan,
-  );
-  // Checkpoints, handoffs, and the workspace carry no plan_hash field of their
-  // own: readers resolve them purely by the plan-scoped directory identity.
-  // Move every remaining record subdirectory so they stay visible under the
-  // resynced identity, then drop the emptied old-identity directory.
-  migratePlanScopedDirectory(previousIdentity.checkpoints, migratedIdentity.checkpoints);
-  migratePlanScopedDirectory(previousIdentity.handoffs, migratedIdentity.handoffs);
-  migratePlanScopedDirectory(previousIdentity.workspace, migratedIdentity.workspace);
-  removeDirIfEmpty(previousIdentity.planRoot);
-
-  appendProgressAudit(changeDir, [
-    '## Execution Plan Resync',
-    `- recorded_at: ${new Date().toISOString()}`,
-    `- reason: ${reason}`,
-    `- previous_artifacts_hash: ${previousArtifactsHash}`,
-    `- artifacts_hash: ${currentArtifactsHash}`,
-    `- plan_hash: ${plan.hash}`,
-    `- plan_revision: ${plan.revision}`,
-  ]);
-  return readPlan(changeDir);
 }
 
-// Converges every record in the source directories onto the resynced plan
-// identity: rewrites each record's plan_hash to the new content hash and, when
-// targetDirectories differ from the sources (identity moved), also persists a
-// migrated copy there. revision and all other fields stay untouched.
-function migrateReceiptsPlanHash(sourceDirectories, targetDirectories, plan) {
+// 按 undoLog 逆序恢复：文件项写回旧内容（或删除新增文件），目录搬移项调用
+// restore 闭包。单个恢复动作失败不静默——聚合进清单后抛出复合错误。
+function restoreUndoLog(undoLog) {
+  const restorationFailures = [];
+  for (const entry of [...undoLog].reverse()) {
+    try {
+      if (typeof entry.restore === 'function') {
+        entry.restore();
+      } else if (entry.previousContent === null) {
+        if (existsSync(entry.path)) rmSync(entry.path, { force: true });
+      } else {
+        atomicWrite(entry.path, entry.previousContent);
+      }
+    } catch (undoError) {
+      restorationFailures.push(`${entry.path}: ${undoError.message}`);
+    }
+  }
+  if (restorationFailures.length > 0) {
+    throw new Error(`resync rollback restoration failures (${restorationFailures.join('; ')})`);
+  }
+}
+
+// 与旧版 migrateReceiptsPlanHash 相同的收敛逻辑，但每次写入经 writeWithUndo
+// 记入撤销日志。文件旧的 JSON 解析失败则跳过（与既有行为一致）。
+function migrateReceiptsPlanHashWithUndo(sourceDirectories, targetDirectories, writeWithUndo, plan) {
   const targets = new Set(targetDirectories);
   for (const directory of sourceDirectories) {
     if (!existsSync(directory)) continue;
@@ -275,11 +353,14 @@ function migrateReceiptsPlanHash(sourceDirectories, targetDirectories, plan) {
       }
       if (!isObject(record) || record.plan_revision !== plan.revision || record.plan_hash === plan.hash) continue;
       record.plan_hash = plan.hash;
-      atomicWrite(join(directory, fileName), `${JSON.stringify(record, null, 2)}\n`);
+      const serialized = `${JSON.stringify(record, null, 2)}\n`;
+      writeWithUndo(join(directory, fileName), serialized);
       for (const target of targets) {
         if (target === directory) continue;
         mkdirSync(target, { recursive: true });
-        atomicWrite(join(target, fileName), `${JSON.stringify(record, null, 2)}\n`);
+        // 新身份下的目标副本同样注册撤销（C2）：迁移中途失败时副本一并回滚，
+        // 不残留指向新 plan_hash 的孤儿文件。
+        writeWithUndo(join(target, fileName), serialized);
       }
     }
   }
@@ -287,19 +368,41 @@ function migrateReceiptsPlanHash(sourceDirectories, targetDirectories, plan) {
 
 // Moves one plan-scoped record directory (checkpoints/handoffs/workspace) onto
 // the resynced identity. These records contain no plan_hash fields, so a whole
-// directory move preserves them exactly as recorded.
-function migratePlanScopedDirectory(source, target) {
+// directory move preserves them exactly as recorded. Each completed move is
+// recorded in the undo log as {path, previousContent: null, restore} so the
+// catch-side replay can restore the pre-move layout.
+function migratePlanScopedDirectoryWithUndo(source, target, undoLog) {
   if (!existsSync(source)) return;
   if (existsSync(target)) {
+    const movedEntries = [];
     for (const entry of readdirSync(source, { withFileTypes: true })) {
       const destination = join(target, entry.name);
       rmSync(destination, { recursive: true, force: true });
       renameSync(join(source, entry.name), destination);
+      movedEntries.push({ from: destination, to: join(source, entry.name) });
     }
-    rmSync(source, { recursive: true, force: true });
+    undoLog.push({
+      path: target,
+      previousContent: null,
+      restore: () => {
+        // I1：旧身份父目录可能已被 removeDirIfEmpty 清掉，逆序搬回前先 mkdir 兜底。
+        mkdirSync(source, { recursive: true });
+        for (const moved of [...movedEntries].reverse()) {
+          renameSync(moved.from, moved.to);
+        }
+      },
+    });
   } else {
     mkdirSync(dirname(target), { recursive: true });
     renameSync(source, target);
+    undoLog.push({
+      path: target,
+      previousContent: null,
+      restore: () => {
+        mkdirSync(dirname(source), { recursive: true });
+        renameSync(target, source);
+      },
+    });
   }
 }
 
@@ -630,7 +733,8 @@ function defaultRunGit(args, options) {
  * R4: head 只被 protected 分支（main/master）包含时，拒绝 review receipt。
  * 验证使用 `git branch --contains`：结果含任一非 protected 分支（含隔离分支
  * 已 merge 回主干、head 同时被 main 与隔离分支包含的场景）即放行。此步骤在
- * 写 receipt 之前执行，拒绝时不写入任何 receipt 文件。
+ * 写 receipt 之前执行，拒绝时不写入任何 receipt 文件。git root 解析失败时
+ * 抛出明确错误（review-findings-fix R4）：静默 return 等于绕过安全校验。
  */
 function assertReviewHeadBranch(changeDir, head) {
   let gitRoot;
@@ -638,16 +742,16 @@ function assertReviewHeadBranch(changeDir, head) {
     gitRoot = execFileSync('git', ['-C', changeDir, 'rev-parse', '--show-toplevel'], {
       encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
-  } catch {
-    return;
+  } catch (error) {
+    throw new Error(`Review head branch verification cannot resolve the git root for '${changeDir}': ${error.message}`);
   }
   let output;
   try {
     output = execFileSync('git', ['-C', gitRoot, 'branch', '--contains', head, '--format=%(refname:short)'], {
       encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
-  } catch {
-    return;
+  } catch (error) {
+    throw new Error(`Review head branch verification failed for commit ${head}: ${error.message}`);
   }
   const branches = output.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
   if (branches.length === 0) return;
@@ -660,6 +764,8 @@ function assertReviewHeadBranch(changeDir, head) {
  * R5: change 存在隔离 worktree 且进程 cwd 不在该 worktree 内时，输出一行含
  * worktree 绝对路径的 WARN（不阻断命令）。change 无隔离 worktree 时不输出。
  * 隔离 worktree 按 change 目录名命名（isolate 创建的分支名 = change-name）。
+ * git root / worktree 列表解析失败时（review-findings-fix R5）输出解析失败
+ * 原因的 WARN，而非静默返回。
  */
 function warnIfCwdOutsideIsolation(changeDir) {
   const name = basename(resolve(changeDir));
@@ -668,7 +774,8 @@ function warnIfCwdOutsideIsolation(changeDir) {
     gitRoot = execFileSync('git', ['-C', changeDir, 'rev-parse', '--show-toplevel'], {
       encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
-  } catch {
+  } catch (error) {
+    process.stderr.write(`WARN: 无法确认进程 cwd 是否在隔离 worktree 内——git root 解析失败：${error.message}\n`);
     return;
   }
   let entries;
@@ -676,7 +783,8 @@ function warnIfCwdOutsideIsolation(changeDir) {
     entries = parseWorktreeEntries(execFileSync('git', ['-C', gitRoot, 'worktree', 'list', '--porcelain'], {
       encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
     }).trim());
-  } catch {
+  } catch (error) {
+    process.stderr.write(`WARN: 无法确认进程 cwd 是否在隔离 worktree 内——git worktree list 失败：${error.message}\n`);
     return;
   }
   const entry = entries.find(item => item.branch === `refs/heads/${name}`);

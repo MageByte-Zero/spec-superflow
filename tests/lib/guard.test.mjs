@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { acceptWorkflowRecommendation, saveWorkflowRecommendation } from '../../scripts/lib/workflow-recommendation.mjs';
 import { getPlanScopedPaths } from '../../scripts/lib/sdd-overlay.mjs';
-import { runGuard as runGuardInProcess } from '../../scripts/guard/guard.mjs';
+import { runGuard as runGuardInProcess, getTransitionCheckTables } from '../../scripts/guard/guard.mjs';
 import { run as runExecution } from '../../scripts/lib/cmd-execution.mjs';
 import { readState, writeState, rebuildState } from '../../scripts/lib/state-loader.mjs';
 import { computeArtifactsHash, computeContractHash } from '../../scripts/lib/hash.mjs';
@@ -301,6 +301,11 @@ describe('guard: direct short paths', () => {
 describe('guard: hotfix minimal contract', () => {
   let dir;
 
+  // P1（review-findings-fix R2）：解析 guard 的转换检查表
+  function runGuardTable(workflow) {
+    return getTransitionCheckTables()[workflow];
+  }
+
   before(() => {
     dir = mkdtempSync(join(tmpdir(), 'ssf-hotfix-guard-'));
     writeFileSync(join(dir, '.spec-superflow.yaml'), 'state: exploring\nworkflow: hotfix\nchange_name: hotfix-test\n');
@@ -374,8 +379,16 @@ describe('guard: hotfix minimal contract', () => {
       '--reason', 'hotfix user-selected execution plan', '--wave', 'wave-1:serial:1.1']);
     const result = run('approved-for-build', 'executing');
     assert.equal(result.exitCode, 0, JSON.stringify(result.output));
+    // P1（review-findings-fix R2）：hotfix 快速路径不挂 tasks-checkbox-format
+    // ——hotfix 可能没有完整 tasks.md，格式检查仅适用于 full 流程主表。
     const dims = result.output.checks.map(c => c.dimension);
-    assert.deepEqual(dims, ['contract-current', 'dp3-approved', 'execution-plan-ready', 'tasks-checkbox-format']);
+    assert.deepEqual(dims, ['contract-current', 'dp3-approved', 'execution-plan-ready']);
+  });
+
+  it('keeps tasks-checkbox-format only in the full workflow main table', () => {
+    // 直接断言 guard 内部表：hotfix 表还原、full 主表仍含该维度
+    assert.ok(!runGuardTable('hotfix')['approved-for-build:executing'].includes('tasks-checkbox-format'));
+    assert.ok(runGuardTable('full')['approved-for-build:executing'].includes('tasks-checkbox-format'));
   });
 
   it('allows a reviewed hotfix without tasks.md to enter closing', () => {

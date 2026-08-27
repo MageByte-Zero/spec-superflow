@@ -1,8 +1,9 @@
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import {
   createGitRangeValidator, createPlan as createRawPlan, describeWaves, readCurrentReview, readPlan,
   recordReview, resyncPlan, validatePlan, writePlan,
@@ -10,8 +11,11 @@ import {
 import { createRecommendationReceipt, recommendExecutionModes, validateRecommendationReceiptStructure } from '../../scripts/lib/execution-recommendation.mjs';
 import { readState } from '../../scripts/lib/state-loader.mjs';
 import { getCheckpoint, getPlanScopedPaths, listCheckpoints, saveCheckpoint } from '../../scripts/lib/sdd-overlay.mjs';
+import * as sddOverlayModule from '../../scripts/lib/sdd-overlay.mjs';
 import { createGitSeedFixture } from '../helpers/git-seed-fixture.mjs';
 import { canCreateSymlink } from '../helpers/symlink-support.mjs';
+import { computeArtifactsHash } from '../../scripts/lib/hash.mjs';
+import { hashReceipt, readRecommendationReceipt, writeRecommendationReceipt } from '../../scripts/lib/execution-recommendation.mjs';
 
 let changeDir;
 let gitRefs;
@@ -819,6 +823,341 @@ describe('execution plan resync (plan-resync R1)', () => {
       reviewsDirBefore,
       'fail-receipt rejection must not write any receipt file',
     );
+  });
+
+  // —— P0/P3（review-findings-fix R1/R4）测试辅助 ——
+
+  // —— P0/P3（review-findings-fix R1/R4）测试辅助 ——
+
+  // 注错原则：ESM 解构导入的绑定不可重写（execution-plan.mjs 内部解构导入
+  // writeFileSync/renameSync），故一律制造真实文件系统故障来命中迁移中途。
+  // 注入点都保证必然抛错：目录出现在文件路径上 → readFileSync/renameSync
+  // 抛 EISDIR/EPERM；父路径是普通文件 → mkdirSync 抛 ENOTDIR。
+
+  // 预测 resync 后的新 plan identity：把 change 复制到临时目录并真实 resync，
+  // 读回新 plan 推导身份。resync 对 plan 的改写是确定性的，因此该身份与真实
+  // change 目录内执行 resync 将产生的新身份一致（避免在测试里复制内部 hashPlan）。
+  function resyncPreviewIdentity(changeDir) {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'ssf-resync-preview-'));
+    const tempChange = join(tempRoot, 'preview');
+    cpSync(changeDir, tempChange, { recursive: true });
+    try {
+      resyncPlan(tempChange, { reason: 'identity preview for fault injection' });
+      return getPlanScopedPaths(tempChange, readPlan(tempChange)).planIdentity;
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  }
+
+  // 把 state summary 文件（.spec-superflow.yaml）替换为同名目录：resync 尾部
+  // 更新 summary 时（写前预读旧内容）必然抛 EISDIR——精确命中"plan 已写、
+  // summary 即将写"的 C1 位置。dispose 恢复原文件内容。
+  function withStateSummaryBlocked(run) {
+    const statePath = join(changeDir, '.spec-superflow.yaml');
+    const original = existsSync(statePath) ? readFileSync(statePath, 'utf8') : null;
+    rmSync(statePath, { recursive: true, force: true });
+    mkdirSync(statePath);
+    try {
+      run();
+    } finally {
+      rmSync(statePath, { recursive: true, force: true });
+      if (original !== null) writeFileSync(statePath, original);
+    }
+  }
+
+  // 构造含两个 pass receipt + overlay + checkpoint 的 stale 场景，并记录迁移
+  // 涉及的每个文件写入前的旧内容快照（供回滚断言比对）。
+  function makeStaleScenarioWithMultipleReceipts() {
+    const waves = [
+      { id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] },
+      { id: 'wave-2', strategy: 'serial', tasks: ['1.2'], depends_on: ['wave-1'] },
+    ];
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'atomic resync with several receipts',
+      waves,
+    });
+    writePlan(changeDir, plan);
+    recordReview(changeDir, 'wave-1', {
+      status: 'pass', base: gitRefs.base, head: gitRefs.head, report: writeReviewReport('resync-pass-1.md'),
+    });
+    recordReview(changeDir, 'wave-2', {
+      status: 'pass', base: gitRefs.base, head: gitRefs.head, report: writeReviewReport('resync-pass-2.md'),
+    });
+    saveCheckpoint(changeDir, { taskId: '1.1', next: 'continue after resync' });
+    // 预置 overlay（resync 迁移第一项）：写入时 artifacts_hash 与 plan 一致，
+    // 随后修改 tasks.md 使 plan 与 overlay 同时 stale。
+    writeRecommendationReceipt(changeDir, createRecommendationReceipt(changeDir, waves));
+    writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 First task refined\n- [ ] 1.2 Second task\n');
+    assert.equal(validatePlan(changeDir, readPlan(changeDir)).valid, false, 'precondition: plan must be stale');
+
+    const planPath = join(changeDir, '.superpowers', 'sdd', 'execution-plan.json');
+    return {
+      plan,
+      oldPlanJson: readFileSync(planPath, 'utf8'),
+      oldOverlayReceipt: structuredClone(readRecommendationReceipt(changeDir)),
+      reviewFilesOldContent: readAllReceiptContents(join(changeDir, '.superpowers', 'sdd', 'reviews')),
+    };
+  }
+
+  function readAllReceiptContents(directory) {
+    if (!existsSync(directory)) return {};
+    const contents = {};
+    for (const name of readdirSync(directory).filter(fileName => fileName.endsWith('.json'))) {
+      contents[join(directory, name)] = readFileSync(join(directory, name), 'utf8');
+    }
+    return contents;
+  }
+
+  function readScopedAndRootReceiptValues() {
+    const resynced = readPlan(changeDir);
+    const directories = [join(changeDir, '.superpowers', 'sdd', 'reviews'), getPlanScopedPaths(changeDir, resynced).reviews];
+    const values = [];
+    for (const directory of directories) {
+      for (const fileName of readdirSync(directory).filter(name => name.endsWith('.json'))) {
+        values.push(JSON.parse(readFileSync(join(directory, fileName), 'utf8')));
+      }
+    }
+    return { values, resynced };
+  }
+
+  // 用 monkey-patch 包装模块导出函数的尝试已确认不可行（ESM 解构绑定不可重写），
+  // 相关半成品（injectRenameFailure / injectRenameFailureAtWriteCount /
+  // injectFailureOnDirectoryMove）已删除，避免误导后续维护者；注错一律走真实
+  // 文件系统故障（见 resyncPreviewIdentity / withStateSummaryBlocked 等辅助）。
+  function withCheckpointTargetBlocked(run) {
+    const plansRoot = join(changeDir, '.superpowers', 'sdd', 'plans');
+    if (existsSync(plansRoot)) {
+      rmSync(plansRoot, { recursive: true, force: true });
+    }
+    writeFileSync(plansRoot, 'blocked');
+    try {
+      run();
+    } finally {
+      try { rmSync(plansRoot, { force: true }); } catch { /* best effort */ }
+    }
+  }
+
+  it('restores every migrated file when a receipt migration fails mid-way (P0-A)', () => {
+    const context = makeStaleScenarioWithMultipleReceipts();
+    // 预测 resync 后的新身份（在干净的临时副本上真实 resync，推导确定性一致），
+    // 以便把注入点精确放在"第二个 receipt 即将写入新身份"的目标路径上。
+    const previewIdentity = resyncPreviewIdentity(changeDir);
+    const migratedReviews = join(changeDir, '.superpowers', 'sdd', 'plans', previewIdentity, 'reviews');
+    // C2 关键验证标准：注入必须真能命中 receipts 迁移中途，绝不允许 resync
+    // 意外成功而静默跳过断言。把第二个 receipt（wave-2）在新身份下的目标路径
+    // 预置为同名目录：第一个 receipt 的写回与目标副本完成后，第二个 receipt 的
+    // 目标副本（writeWithUndo 写前预读旧内容）在目录上必然抛 EISDIR/EPERM——
+    // 命中点精确落在"第一个已写、第二个即将写"，且任何平台都必然抛错。
+    const secondReceiptName = `${Buffer.from('wave-2', 'utf8').toString('base64url')}.json`;
+    const firstReceiptName = `${Buffer.from('wave-1', 'utf8').toString('base64url')}.json`;
+    mkdirSync(join(migratedReviews, secondReceiptName), { recursive: true });
+
+    let caught;
+    try {
+      resyncPlan(changeDir, { reason: 'mid-receipt-migration injected failure' });
+    } catch (error) {
+      caught = error;
+    }
+    assert.ok(caught, 'resync must fail when the second receipt target copy is blocked');
+    // (d) 错误信息含原始原因（文件系统 EISDIR/EPERM）
+    assert.match(caught.message, /EISDIR|EPERM|ENOTDIR|not a directory|illegal operation/i);
+
+    // (a) plan 文件保持旧 hash 内容
+    const planPath = join(changeDir, '.superpowers', 'sdd', 'execution-plan.json');
+    assert.equal(readFileSync(planPath, 'utf8'), context.oldPlanJson, 'plan file must be rolled back to the pre-resync content');
+
+    // (b) 已写出的 root receipts 恢复旧 plan_hash（第一个已写的 receipt 被恢复）
+    const reviewsDir = join(changeDir, '.superpowers', 'sdd', 'reviews');
+    for (const [filePath, oldContent] of Object.entries(context.reviewFilesOldContent)) {
+      if (!existsSync(filePath)) continue;
+      assert.equal(readFileSync(filePath, 'utf8'), oldContent, `receipt ${filePath} must keep its pre-resync content`);
+    }
+    for (const receipt of readdirSync(reviewsDir).filter(name => name.endsWith('.json'))
+      .map(name => JSON.parse(readFileSync(join(reviewsDir, name), 'utf8')))) {
+      assert.equal(receipt.plan_hash, context.plan.hash, 'all rolled-back receipts must reference the old plan hash');
+    }
+    // 迁移到新身份的第一个 receipt 目标副本也随撤销日志删除（副本同样注册了 undo）
+    assert.equal(existsSync(join(migratedReviews, firstReceiptName)), false,
+      'the migrated target copy of the first receipt must be rolled back too');
+
+    // (c) overlay 被恢复为 resync 前内容
+    assert.deepEqual(readRecommendationReceipt(changeDir), context.oldOverlayReceipt, 'overlay must be rolled back');
+
+    // 系统回到自洽 stale 态：移除注入点后可重新 resync 并成功
+    rmSync(join(migratedReviews, secondReceiptName), { recursive: true, force: true });
+    resyncPlan(changeDir, { reason: 'retry after injected failure' });
+    assert.equal(validatePlan(changeDir, readPlan(changeDir)).valid, true);
+  });
+
+  it('keeps the system fully consistent when the directory migration step fails (P0)', () => {
+    const plan = makeStalePlanWithPassReceipt();
+    saveCheckpoint(changeDir, { taskId: '1.1', next: 'continue after directory-move failure' });
+    const oldPlanJson = readFileSync(join(changeDir, '.superpowers', 'sdd', 'execution-plan.json'), 'utf8');
+    const reviewsSnapshot = readAllReceiptContents(join(changeDir, '.superpowers', 'sdd', 'reviews'));
+
+    // 注错：把整个 plans 目录替换为普通文件——receipts 迁移向新身份写目标副本
+    // 时 mkdirSync(plans/<newIdentity>/...) 落在文件父路径上必然抛 ENOTDIR。
+    let caught;
+    try {
+      withCheckpointTargetBlocked(() => {
+        resyncPlan(changeDir, { reason: 'directory move injected failure' });
+      });
+    } catch (error) {
+      caught = error;
+    }
+    assert.ok(caught, 'the migration failure must propagate unchanged');
+
+    assert.equal(readFileSync(join(changeDir, '.superpowers', 'sdd', 'execution-plan.json'), 'utf8'), oldPlanJson,
+      'plan file must stay on the pre-resync content after a migration failure');
+    const freshReviews = readAllReceiptContents(join(changeDir, '.superpowers', 'sdd', 'reviews'));
+    assert.deepEqual(freshReviews, reviewsSnapshot, 'all receipt files must equal their pre-resync content');
+    const current = readCurrentReview(changeDir, 'wave-1', plan);
+    assert.equal(current?.status, 'pass', 'rolled-back receipts must still be valid evidence for the old plan');
+  });
+
+  it('rolls back the plan file and receipts when the tail summary write fails (C1)', () => {
+    const context = makeStaleScenarioWithMultipleReceipts();
+    const progressPath = join(changeDir, '.superpowers', 'sdd', 'progress.md');
+    const progressBefore = existsSync(progressPath) ? readFileSync(progressPath, 'utf8') : '';
+
+    // 在尾部注入失败：state summary 文件被替换为同名目录，resync 写 plan 之后、
+    // 更新 summary 时（写前预读旧内容）必然抛 EISDIR——正是 C1 判定的
+    // "plan 已落盘、summary 即将写"死锁窗口。
+    let caught;
+    try {
+      withStateSummaryBlocked(() => {
+        resyncPlan(changeDir, { reason: 'tail summary injected failure' });
+      });
+    } catch (error) {
+      caught = error;
+    }
+    assert.ok(caught, 'resync must fail when the state summary write is blocked');
+
+    // plan 文件恢复旧 hash 内容（已随 writeWithUndo 注册撤销）
+    const planPath = join(changeDir, '.superpowers', 'sdd', 'execution-plan.json');
+    assert.equal(readFileSync(planPath, 'utf8'), context.oldPlanJson, 'plan file must be rolled back to the pre-resync content');
+
+    // 全部 root receipts 恢复旧 plan_hash
+    const reviewsDir = join(changeDir, '.superpowers', 'sdd', 'reviews');
+    for (const [filePath, oldContent] of Object.entries(context.reviewFilesOldContent)) {
+      if (!existsSync(filePath)) continue;
+      assert.equal(readFileSync(filePath, 'utf8'), oldContent, `receipt ${filePath} must keep its pre-resync content`);
+    }
+
+    // overlay 恢复旧值
+    assert.deepEqual(readRecommendationReceipt(changeDir), context.oldOverlayReceipt, 'overlay must be rolled back');
+
+    // 目录搬移撤销闭包生效：checkpoint 回到旧身份目录
+    const oldIdentity = getPlanScopedPaths(changeDir, readPlan(changeDir)).planIdentity;
+    const oldCheckpoints = join(changeDir, '.superpowers', 'sdd', 'plans', oldIdentity, 'checkpoints');
+    assert.equal(existsSync(join(oldCheckpoints, '1.1.md')), true, 'the moved checkpoint must be restored under the old identity');
+
+    // 取舍声明（C1）：progress.md 是 append 型审计日志，失败的 resync 不写入
+    // 审计行（回滚也不截断它）——追加失败可容忍，这里断言失败路径不留半截审计。
+    const progressAfter = existsSync(progressPath) ? readFileSync(progressPath, 'utf8') : '';
+    assert.equal(progressAfter, progressBefore, 'a failed resync must not append any audit line');
+
+    // 系统回到自洽 stale 态：可重新 resync 并成功（审计在成功路径照常追加）
+    resyncPlan(changeDir, { reason: 'retry after tail failure' });
+    assert.equal(validatePlan(changeDir, readPlan(changeDir)).valid, true);
+    assert.match(readFileSync(progressPath, 'utf8'), /## Execution Plan Resync/, 'the retry audit line must be appended on success');
+  });
+
+  it('moves back entry-level directory entries through the reverse restore closure (I2)', () => {
+    // 构造只有 checkpoint（无 reviews）的 stale 场景：checkpoint 搬走后旧身份
+    // 目录被 removeDirIfEmpty 清空，restore 闭包必须 mkdir 兜底（I1）才能逆序搬回。
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'entry-level restore closure coverage',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+    writePlan(changeDir, plan);
+    saveCheckpoint(changeDir, { taskId: '1.1', next: 'continue after entry-move rollback' });
+    writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 First task refined\n- [ ] 1.2 Second task\n');
+    assert.equal(validatePlan(changeDir, readPlan(changeDir)).valid, false, 'precondition: plan must be stale');
+
+    const oldPlanJson = readFileSync(join(changeDir, '.superpowers', 'sdd', 'execution-plan.json'), 'utf8');
+    const oldIdentity = getPlanScopedPaths(changeDir, readPlan(changeDir)).planIdentity;
+    const previewIdentity = resyncPreviewIdentity(changeDir);
+    // 预置新身份 checkpoints 目标为已存在的目录（含哨兵文件），使搬移走
+    // target-exists 分支（entry 级逐个 rename + 逆序 restore 闭包），而非整目录 rename。
+    const migratedCheckpoints = join(changeDir, '.superpowers', 'sdd', 'plans', previewIdentity, 'checkpoints');
+    mkdirSync(migratedCheckpoints, { recursive: true });
+    writeFileSync(join(migratedCheckpoints, 'sentinel.txt'), 'pre-existing\n');
+
+    // 在尾部 summary 写入注入失败：plan 已落盘、checkpoint 已逐项搬移，catch 侧
+    // restoreUndoLog 逆序执行 entry 级 restore 闭包（I1 mkdir 兜底 + I2 逆序搬回）。
+    let caught;
+    try {
+      withStateSummaryBlocked(() => {
+        resyncPlan(changeDir, { reason: 'entry-level move restore injected failure' });
+      });
+    } catch (error) {
+      caught = error;
+    }
+    assert.ok(caught, 'resync must fail when the tail summary write is blocked');
+
+    assert.equal(readFileSync(join(changeDir, '.superpowers', 'sdd', 'execution-plan.json'), 'utf8'), oldPlanJson,
+      'plan file must be rolled back to the pre-resync content');
+    // 逆序搬回生效：checkpoint 回到旧身份目录，且不残留于新身份目标
+    const oldCheckpoints = join(changeDir, '.superpowers', 'sdd', 'plans', oldIdentity, 'checkpoints');
+    assert.equal(existsSync(join(oldCheckpoints, '1.1.md')), true, 'the checkpoint must be moved back under the old identity');
+    assert.deepEqual(readdirSync(migratedCheckpoints), ['sentinel.txt'],
+      'the migrated target must retain only its pre-existing sentinel after the entry-level rollback');
+
+    // 系统回到自洽 stale 态：可重新 resync 并成功（目标已存在 → 再次走 entry 级搬移）
+    resyncPlan(changeDir, { reason: 'retry after entry-move rollback' });
+    assert.equal(validatePlan(changeDir, readPlan(changeDir)).valid, true);
+    assert.equal(existsSync(join(migratedCheckpoints, '1.1.md')), true, 'the retry must migrate the checkpoint onto the new identity');
+  });
+
+  it('refreshes the recommendation overlay artifacts_hash and reseals it during resync (P3)', () => {
+    makeStalePlanWithPassReceipt();
+    // 写入一份带旧 artifacts_hash 的 overlay 文件（模拟 ssf execution recommend
+    // 在 plan 冻结前生成的持久化 receipt），随后修改 tasks.md 使其 stale。
+    writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 First task pre-overlay\n');
+    const overlay = createRecommendationReceipt(changeDir, [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }]);
+    writeRecommendationReceipt(changeDir, overlay);
+    assert.equal(readRecommendationReceipt(changeDir).artifacts_hash, computeArtifactsHash(changeDir), 'precondition: overlay starts current');
+    // 非语义修正 → plan 与 overlay 同时 stale
+    writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 First task refined post-overlay\n');
+
+    resyncPlan(changeDir, { reason: 'overlay sync check' });
+
+    const refreshed = readRecommendationReceipt(changeDir);
+    assert.notEqual(refreshed, null);
+    assert.deepEqual(validateRecommendationReceiptStructure(refreshed), [], 'overlay seal must remain valid after resync');
+    assert.equal(refreshed.artifacts_hash, computeArtifactsHash(changeDir), 'overlay artifacts_hash must equal the current snapshot hash');
+  });
+
+  it('rejects the review with a clear error and writes no receipt when the git root cannot be resolved (P2)', () => {
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'git root failure must not silently pass',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+    writePlan(changeDir, plan);
+
+    // 注入 git 解析失败：把 change 目录复制到 git worktree 之外的孤立目录并
+    // 移除 .git——plan/receipt 状态有效，但 git root 无法解析（rev-parse 失败）。
+    const orphanRoot = mkdtempSync(join(tmpdir(), 'ssf-p2-orphan-'));
+    const orphanChangeDir = join(orphanRoot, 'orphan-change');
+    cpSync(changeDir, orphanChangeDir, { recursive: true });
+    rmSync(join(orphanChangeDir, '.git'), { recursive: true, force: true });
+    try {
+      const orphanReportsDir = join(orphanChangeDir, '.superpowers', 'sdd', 'reviews');
+      mkdirSync(orphanReportsDir, { recursive: true });
+      const orphanReport = join(orphanReportsDir, 'p2.md');
+      writeFileSync(orphanReport, 'Review report in an orphan directory.\n');
+      assert.throws(
+        () => recordReview(orphanChangeDir, 'wave-1', {
+          status: 'pass', base: gitRefs.base, head: gitRefs.head, report: orphanReport,
+        }),
+        error => /inside a Git work tree/i.test(error.message),
+        'review must be rejected with an explicit error',
+      );
+      assert.equal(readdirSync(orphanReportsDir).filter(name => name.endsWith('.json')).length, 0, 'no receipt may be written');
+    } finally {
+      rmSync(orphanRoot, { recursive: true, force: true });
+    }
   });
 });
 

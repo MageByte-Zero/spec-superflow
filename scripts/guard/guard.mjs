@@ -62,7 +62,8 @@ const WORKFLOW_TRANSITION_CHECKS = {
   hotfix: {
     'exploring:bridging': [],
     'bridging:approved-for-build': ['contract-current', 'dp3-approved'],
-    'approved-for-build:executing': ['contract-current', 'dp3-approved', 'execution-plan-ready', 'tasks-checkbox-format'],
+    // hotfix 可能没有完整 tasks.md（review-findings-fix R2）：tasks-checkbox-format 仅挂 full 主表。
+    'approved-for-build:executing': ['contract-current', 'dp3-approved', 'execution-plan-ready'],
     'executing:closing': ['tests-passing', 'specs-merged', 'execution-plan-ready', 'execution-reviews-passed'],
   },
   tweak: {
@@ -101,6 +102,11 @@ function checkWorkflowAllowed(key, workflow) {
       failures: [`${key.replace(':', ' -> ')} is a fast-path transition allowed only for workflow ${allowed.join(' or ')}; current workflow is ${workflow}`],
     }],
   };
+}
+
+// 导出表引用供测试断言维度归属（review-findings-fix R2）。
+export function getTransitionCheckTables() {
+  return { full: TRANSITION_CHECKS, hotfix: WORKFLOW_TRANSITION_CHECKS.hotfix, tweak: WORKFLOW_TRANSITION_CHECKS.tweak };
 }
 
 function resolveDimensions(key, workflow, directShortPath) {
