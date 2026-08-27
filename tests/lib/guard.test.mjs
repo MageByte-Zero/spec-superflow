@@ -368,13 +368,14 @@ describe('guard: hotfix minimal contract', () => {
   it('allows approved-for-build to executing with fresh contract and approved DP-3', () => {
     prepareFreshHotfixState();
     runNodeScript(CLI_PATH, ['state', 'set', dir, 'dp_3_result', 'approved: user confirmed minimal contract']);
+    writeFileSync(join(dir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 Hotfix task\n');
     runNodeScript(CLI_PATH, ['execution', 'recommend', dir, '--wave', 'wave-1:serial:1.1']);
     runNodeScript(CLI_PATH, ['execution', 'plan', dir, '--mode', 'sdd', '--confirm', '--acknowledge-recommendation',
       '--reason', 'hotfix user-selected execution plan', '--wave', 'wave-1:serial:1.1']);
     const result = run('approved-for-build', 'executing');
     assert.equal(result.exitCode, 0, JSON.stringify(result.output));
     const dims = result.output.checks.map(c => c.dimension);
-    assert.deepEqual(dims, ['contract-current', 'dp3-approved', 'execution-plan-ready']);
+    assert.deepEqual(dims, ['contract-current', 'dp3-approved', 'execution-plan-ready', 'tasks-checkbox-format']);
   });
 
   it('allows a reviewed hotfix without tasks.md to enter closing', () => {

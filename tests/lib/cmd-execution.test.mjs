@@ -1,7 +1,7 @@
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -826,6 +826,98 @@ describe('ssf execution', () => {
 
     assert.notEqual(result.exitCode, 0);
     assert.match(result.stderr, /acknowledge/i);
+  });
+
+  // plan-resync R2：resync 子命令的 CLI 级拒绝路径与成功路径
+  describe('ssf execution resync (plan-resync R2)', () => {
+    const planPath = () => join(changeDir, '.superpowers', 'sdd', 'execution-plan.json');
+
+    function createPlanSnapshot() {
+      const planned = runSsf(['execution', 'plan', changeDir, '--mode', 'sdd',
+        '--reason', 'full workflow default', '--wave', 'wave-1:serial:1.1']);
+      assert.equal(planned.exitCode, 0, planned.stderr);
+      return readFileSync(planPath(), 'utf8');
+    }
+
+    function makeStalePlan() {
+      const before = createPlanSnapshot();
+      // 非语义结构修正：修改 tasks.md 冻结内容，触发 artifacts_hash 变化 → plan stale
+      writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 First task refined\n- [ ] 1.2 Second task\n');
+      return before;
+    }
+
+    it('rejects resync without --confirm and writes nothing', () => {
+      makeStalePlan();
+      const before = readFileSync(planPath(), 'utf8');
+
+      const result = runSsf(['execution', 'resync', changeDir,
+        '--reason', 'format fix'], process.cwd(), { confirmPlan: false });
+
+      assert.notEqual(result.exitCode, 0);
+      assert.match(result.stderr, /confirm/i);
+      assert.equal(readFileSync(planPath(), 'utf8'), before, 'missing --confirm must not write');
+    });
+
+    it('rejects resync when the plan is not stale and leaves the plan byte-identical', () => {
+      const before = createPlanSnapshot();
+
+      const result = runSsf(['execution', 'resync', changeDir, '--confirm',
+        '--reason', 'nothing changed', '--json']);
+
+      assert.notEqual(result.exitCode, 0);
+      assert.match(result.stderr, /no need to resync|not stale|无需|不需要/is);
+      assert.equal(readFileSync(planPath(), 'utf8'), before, 'no-op rejection must not write');
+    });
+
+    it('rejects resync while a wave has a fail receipt, naming the wave id and writing nothing', () => {
+      const before = createPlanSnapshot();
+      const reviewed = runSsf(['execution', 'review', changeDir, '--wave', 'wave-1',
+        '--base', gitRefs.base, '--head', gitRefs.head, '--report', writeReviewReport('resync-cli-fail.md'), '--verdict', 'fail']);
+      assert.equal(reviewed.exitCode, 0, reviewed.stderr);
+      // plan 保持与录音 receipt 时一致的 artifacts_hash → 不 stale；
+      // 但 fail receipt 存在本身就是独立拒绝条件，无需 stale 前置
+      writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 First task refined\n- [ ] 1.2 Second task\n');
+      const reviewsBefore = readdirSync(join(changeDir, '.superpowers', 'sdd', 'reviews')).sort();
+
+      const result = runSsf(['execution', 'resync', changeDir, '--confirm',
+        '--reason', 'attempted while repair chain open', '--json']);
+
+      assert.notEqual(result.exitCode, 0);
+      assert.match(result.stderr, /wave-1/);
+      assert.equal(readFileSync(planPath(), 'utf8'), before, 'fail-receipt rejection must not write the plan');
+      assert.deepEqual(
+        readdirSync(join(changeDir, '.superpowers', 'sdd', 'reviews')).sort(),
+        reviewsBefore,
+        'fail-receipt rejection must not modify the root receipt store',
+      );
+    });
+
+    it('rejects resync without --reason with a message explaining its purpose', () => {
+      makeStalePlan();
+      const before = readFileSync(planPath(), 'utf8');
+
+      const result = runSsf(['execution', 'resync', changeDir, '--confirm']);
+
+      assert.notEqual(result.exitCode, 0);
+      assert.match(result.stderr, /--reason/i);
+      assert.match(result.stderr, /non-semantic planning-document correction/i,
+        `--reason error must explain its purpose, got: ${result.stderr}`);
+      assert.equal(readFileSync(planPath(), 'utf8'), before, 'missing --reason must not write');
+    });
+
+    it('resyncs a stale plan via the CLI and keeps validatePlan passing', () => {
+      makeStalePlan();
+
+      const result = runSsf(['execution', 'resync', changeDir, '--confirm',
+        '--reason', 'format fix', '--json']);
+
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.equal(result.json.ok, true);
+      const shown = runSsf(['execution', 'show', changeDir, '--json']);
+      assert.equal(shown.exitCode, 0, shown.stderr);
+      assert.equal(shown.json.valid, true, 'plan must be current after CLI resync');
+      assert.equal(shown.json.current, true);
+    });
   });
 });
 

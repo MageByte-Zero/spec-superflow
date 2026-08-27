@@ -4,6 +4,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createRecoverySummary, resolveChangeTarget } from '../../scripts/lib/change-recovery.mjs';
+import { createPlan, writePlan } from '../../scripts/lib/execution-plan.mjs';
+import { createRecommendationReceipt } from '../../scripts/lib/execution-recommendation.mjs';
 import { createHandoff, finishHandoff, saveCheckpoint } from '../../scripts/lib/sdd-overlay.mjs';
 
 describe('change-recovery: resolveChangeTarget()', () => {
@@ -58,6 +60,29 @@ describe('change-recovery: resolveChangeTarget()', () => {
     const planDir = join(changeDir, '.superpowers', 'sdd');
     mkdirSync(planDir, { recursive: true });
     writeFileSync(join(planDir, 'execution-plan.json'), '{not valid JSON');
+  }
+
+  function makeCurrentExecutionPlan(changeDir, { waveId = 'content-wave' } = {}) {
+    writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 Content-level recovery\n');
+    writeFileSync(join(changeDir, 'execution-contract.md'), '# Execution Contract\n\nContent evidence.\n');
+    const waves = [{ id: waveId, strategy: 'serial', tasks: ['1.1'], depends_on: [] }];
+    const recommendationReceipt = createRecommendationReceipt(changeDir, waves);
+    const recommendation = recommendationReceipt.recommendation;
+    const plan = createPlan(changeDir, {
+      mode: recommendation.recommendation.mode,
+      source: 'user-confirmed',
+      rationale: 'Route from content-level plan evidence',
+      waves,
+      recommendation,
+      recommendationReceipt,
+      selection: {
+        confirmed: true,
+        followed_recommendation: true,
+        acknowledged_non_recommendation: false,
+      },
+    });
+    writePlan(changeDir, plan);
+    return plan;
   }
 
   it('selects the only active change and rejects ambiguous recovery', () => {
@@ -145,6 +170,39 @@ describe('change-recovery: resolveChangeTarget()', () => {
 
   it('returns no next skill for abandoned changes', () => {
     const change = makeChange('abandoned', 'abandoned');
+    const summary = createRecoverySummary(change);
+
+    assert.equal(summary.terminal, true);
+    assert.equal(summary.next_action.skill, 'none');
+    assert.deepEqual(summary.blockers, []);
+  });
+
+  it('routes to build-executor from plan content despite a lagging state field', () => {
+    const change = makeChange('stale-state-plan', 'exploring');
+    makeCurrentExecutionPlan(change, { waveId: 'wave-content-1' });
+
+    const summary = createRecoverySummary(change);
+
+    assert.equal(summary.execution.current, true);
+    assert.equal(summary.execution.next_eligible_wave, 'wave-content-1');
+    assert.equal(summary.next_action.skill, 'build-executor');
+    assert.match(summary.next_action.reason, /wave-content-1/);
+  });
+
+  it('falls back to state-field routing when no execution plan exists', () => {
+    const change = makeChange('no-plan', 'exploring');
+
+    const summary = createRecoverySummary(change);
+
+    assert.equal(summary.execution.present, false);
+    assert.equal(summary.next_action.skill, 'need-explorer');
+    assert.match(summary.next_action.reason, /Route from exploring/);
+  });
+
+  it('keeps terminal changes routed to no skill even with a valid plan', () => {
+    const change = makeChange('terminal-plan', 'closing');
+    makeCurrentExecutionPlan(change);
+
     const summary = createRecoverySummary(change);
 
     assert.equal(summary.terminal, true);

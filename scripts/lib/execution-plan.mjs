@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { isAbsolute, basename, join, relative, resolve, sep } from 'node:path';
+import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, isAbsolute, basename, join, relative, resolve, sep } from 'node:path';
 import { computeArtifactsHash, computeContractHash } from './hash.mjs';
+import { hashReceipt } from './execution-recommendation.mjs';
 import { getOverlayPaths, getPlanScopedPaths } from './sdd-overlay.mjs';
 import { readState } from './state-loader.mjs';
 
@@ -178,6 +179,142 @@ export function recordReview(changeDir, waveId, receipt) {
     rmSync(getPlanScopedPaths(changeDir, plan).workspace, { recursive: true, force: true });
   }
   return savedReceipt;
+}
+
+/**
+ * Resolves a stale plan (see changes/plan-resync): refreshes the plan's
+ * artifacts_hash reference to the current artifacts snapshot, recomputes the
+ * plan content hash, migrates both receipt stores' plan_hash fields, and
+ * appends an audit record to the progress ledger. The revision — and with it
+ * the plan-scoped directory identity — deliberately stays unchanged.
+ */
+export function resyncPlan(changeDir, { reason } = {}) {
+  if (!isNonEmptyText(reason)) throw new Error('resync requires a reason describing the non-semantic correction');
+  const plan = readPlan(changeDir);
+  if (!plan) throw new Error(`No execution plan exists in '${changeDir}'; create one before resyncing`);
+
+  const currentArtifactsHash = computeArtifactsHash(changeDir);
+  if (plan.artifacts_hash === currentArtifactsHash) {
+    throw new Error('Execution plan is not stale: no need to resync until its artifacts hash differs from the current snapshot');
+  }
+
+  const failedWaves = (plan.waves ?? [])
+    .filter(wave => readCurrentReviewEvidence(changeDir, wave.id, plan).receipt?.status === 'fail')
+    .map(wave => wave.id);
+  if (failedWaves.length > 0) {
+    throw new Error(`Cannot resync while repair chains are open; waves with fail receipts must close their repair loop first: ${failedWaves.join(', ')}`);
+  }
+
+  const previousArtifactsHash = plan.artifacts_hash;
+  // The frozen receipt snapshot references the artifacts snapshot it certified;
+  // resync deliberately refreshes that reference together with the plan itself.
+  // The receipt's content hash covers every field including artifacts_hash, so
+  // the seal must be recomputed or any future validateRecommendationReceiptStructure
+  // consumer would report a hash mismatch.
+  if (isObject(plan.recommendation_receipt)) {
+    plan.recommendation_receipt.artifacts_hash = currentArtifactsHash;
+    plan.recommendation_receipt.hash = hashReceipt(plan.recommendation_receipt);
+  }
+  const previousIdentity = getPlanScopedPaths(changeDir, plan);
+  delete plan.hash;
+  plan.artifacts_hash = currentArtifactsHash;
+  plan.hash = hashPlan(plan);
+  // The revision is untouched, but the plan identity includes the hash, so the
+  // plan-scoped directory moves. Persist the plan first, then converge both
+  // receipt stores onto the NEW identity so readCurrentReviewEvidence keeps
+  // resolving every receipt.
+  atomicWrite(getOverlayPaths(changeDir).executionPlan, `${JSON.stringify(plan, null, 2)}\n`);
+  writeExecutionPlanSummary(changeDir, plan);
+
+  const migratedIdentity = getPlanScopedPaths(changeDir, plan);
+  migrateReceiptsPlanHash(
+    [getOverlayPaths(changeDir).reviews, previousIdentity.reviews],
+    [getOverlayPaths(changeDir).reviews, migratedIdentity.reviews],
+    plan,
+  );
+  migrateReceiptsPlanHash(
+    [previousIdentity.repairState],
+    new Set([migratedIdentity.repairState, previousIdentity.repairState]),
+    plan,
+  );
+  // Checkpoints, handoffs, and the workspace carry no plan_hash field of their
+  // own: readers resolve them purely by the plan-scoped directory identity.
+  // Move every remaining record subdirectory so they stay visible under the
+  // resynced identity, then drop the emptied old-identity directory.
+  migratePlanScopedDirectory(previousIdentity.checkpoints, migratedIdentity.checkpoints);
+  migratePlanScopedDirectory(previousIdentity.handoffs, migratedIdentity.handoffs);
+  migratePlanScopedDirectory(previousIdentity.workspace, migratedIdentity.workspace);
+  removeDirIfEmpty(previousIdentity.planRoot);
+
+  appendProgressAudit(changeDir, [
+    '## Execution Plan Resync',
+    `- recorded_at: ${new Date().toISOString()}`,
+    `- reason: ${reason}`,
+    `- previous_artifacts_hash: ${previousArtifactsHash}`,
+    `- artifacts_hash: ${currentArtifactsHash}`,
+    `- plan_hash: ${plan.hash}`,
+    `- plan_revision: ${plan.revision}`,
+  ]);
+  return readPlan(changeDir);
+}
+
+// Converges every record in the source directories onto the resynced plan
+// identity: rewrites each record's plan_hash to the new content hash and, when
+// targetDirectories differ from the sources (identity moved), also persists a
+// migrated copy there. revision and all other fields stay untouched.
+function migrateReceiptsPlanHash(sourceDirectories, targetDirectories, plan) {
+  const targets = new Set(targetDirectories);
+  for (const directory of sourceDirectories) {
+    if (!existsSync(directory)) continue;
+    for (const fileName of readdirSync(directory).filter(name => name.endsWith('.json'))) {
+      let record;
+      try {
+        record = JSON.parse(readFileSync(join(directory, fileName), 'utf8'));
+      } catch {
+        continue;
+      }
+      if (!isObject(record) || record.plan_revision !== plan.revision || record.plan_hash === plan.hash) continue;
+      record.plan_hash = plan.hash;
+      atomicWrite(join(directory, fileName), `${JSON.stringify(record, null, 2)}\n`);
+      for (const target of targets) {
+        if (target === directory) continue;
+        mkdirSync(target, { recursive: true });
+        atomicWrite(join(target, fileName), `${JSON.stringify(record, null, 2)}\n`);
+      }
+    }
+  }
+}
+
+// Moves one plan-scoped record directory (checkpoints/handoffs/workspace) onto
+// the resynced identity. These records contain no plan_hash fields, so a whole
+// directory move preserves them exactly as recorded.
+function migratePlanScopedDirectory(source, target) {
+  if (!existsSync(source)) return;
+  if (existsSync(target)) {
+    for (const entry of readdirSync(source, { withFileTypes: true })) {
+      const destination = join(target, entry.name);
+      rmSync(destination, { recursive: true, force: true });
+      renameSync(join(source, entry.name), destination);
+    }
+    rmSync(source, { recursive: true, force: true });
+  } else {
+    mkdirSync(dirname(target), { recursive: true });
+    renameSync(source, target);
+  }
+}
+
+function removeDirIfEmpty(directory) {
+  try {
+    if (existsSync(directory) && readdirSync(directory).length === 0) rmSync(directory, { recursive: true, force: true });
+  } catch {
+    // Best-effort cleanup only; leftover empty directories are harmless.
+  }
+}
+
+function appendProgressAudit(changeDir, lines) {
+  const progressPath = join(changeDir, '.superpowers', 'sdd', 'progress.md');
+  mkdirSync(dirname(progressPath), { recursive: true });
+  appendFileSync(progressPath, `${lines.join('\n')}\n`);
 }
 
 /**

@@ -148,7 +148,7 @@ function result(availableModes, mode, reasons, facts) {
   };
 }
 
-function validateRecommendationReceiptStructure(receipt) {
+export function validateRecommendationReceiptStructure(receipt) {
   const failures = [];
   if (!isObject(receipt)) return ['execution recommendation must be an object'];
   if (!isObject(receipt.recommendation)) failures.push('execution recommendation payload is required');
@@ -187,7 +187,7 @@ function normalizeWaves(waves) {
   })) : [];
 }
 
-function hashReceipt(receipt) {
+export function hashReceipt(receipt) {
   const { hash, ...content } = receipt || {};
   return `sha256:${createHash('sha256').update(stableJson(content)).digest('hex')}`;
 }

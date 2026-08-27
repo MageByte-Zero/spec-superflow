@@ -130,6 +130,8 @@ ssf state set <change-dir> dp_0_confirmed true
 ssf state set <change-dir> dp_0_timestamp $(date -u +%Y-%m-%dT%H:%M:%SZ)
 ```
 
+At this point the change sits in `exploring`; all later state advancement is owned by downstream skills — do not run `state transition` here.
+
 Config-aware routing: check `artifacts.order`, `artifacts.skip`, and
 `execution.defaultLanguage` from project config.
 

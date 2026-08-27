@@ -152,6 +152,27 @@ function selectNextAction(changeDir, state, terminal, checkpoint, blockers) {
     };
   }
 
+  const execution = inspectExecution(changeDir, state.state);
+  if (execution.present && execution.current) {
+    const waves = describeWaves(changeDir, readPlan(changeDir));
+    const eligibleWave = waves.find(wave => wave.eligible);
+    if (eligibleWave) {
+      return {
+        skill: 'build-executor',
+        command: null,
+        reason: `Current execution plan has eligible wave '${eligibleWave.id}'`,
+      };
+    }
+    const allReviewed = waves.length > 0 && waves.every(wave => wave.receipt?.status === 'pass');
+    if (allReviewed) {
+      return {
+        skill: 'build-executor',
+        command: null,
+        reason: 'All waves reviewed, close out the change',
+      };
+    }
+  }
+
   const routes = {
     exploring: 'need-explorer',
     specifying: 'spec-writer',

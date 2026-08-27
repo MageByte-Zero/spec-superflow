@@ -4,11 +4,12 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  createGitRangeValidator, createPlan as createRawPlan, describeWaves, readPlan, recordReview, validatePlan, writePlan,
+  createGitRangeValidator, createPlan as createRawPlan, describeWaves, readCurrentReview, readPlan,
+  recordReview, resyncPlan, validatePlan, writePlan,
 } from '../../scripts/lib/execution-plan.mjs';
-import { createRecommendationReceipt, recommendExecutionModes } from '../../scripts/lib/execution-recommendation.mjs';
+import { createRecommendationReceipt, recommendExecutionModes, validateRecommendationReceiptStructure } from '../../scripts/lib/execution-recommendation.mjs';
 import { readState } from '../../scripts/lib/state-loader.mjs';
-import { getPlanScopedPaths } from '../../scripts/lib/sdd-overlay.mjs';
+import { getCheckpoint, getPlanScopedPaths, listCheckpoints, saveCheckpoint } from '../../scripts/lib/sdd-overlay.mjs';
 import { createGitSeedFixture } from '../helpers/git-seed-fixture.mjs';
 import { canCreateSymlink } from '../helpers/symlink-support.mjs';
 
@@ -683,6 +684,141 @@ describe('execution plan data contract', () => {
 
     assert.equal(result.valid, false);
     assert.ok(result.failures.includes('wave 1 depends_on must be an array'));
+  });
+});
+
+describe('execution plan resync (plan-resync R1)', () => {
+  function makeStalePlanWithPassReceipt() {
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'freeze artifacts before resync',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+    writePlan(changeDir, plan);
+    recordReview(changeDir, 'wave-1', {
+      status: 'pass', base: gitRefs.base, head: gitRefs.head, report: writeReviewReport('resync-pass.md'),
+    });
+    // 非语义结构修正：修改 tasks.md 冻结内容，触发 artifacts_hash 变化 → plan stale
+    writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 First task refined\n- [ ] 1.2 Second task\n');
+    assert.equal(validatePlan(changeDir, readPlan(changeDir)).valid, false, 'precondition: plan must be stale');
+    return plan;
+  }
+
+  it('unlocks a stale plan by refreshing hashes and migrating receipts without re-review', () => {
+    makeStalePlanWithPassReceipt();
+
+    resyncPlan(changeDir, { reason: 'non-semantic wording fix in tasks.md' });
+
+    const result = validatePlan(changeDir, readPlan(changeDir));
+    assert.equal(result.valid, true, result.failures.join('\n'));
+    const current = readCurrentReview(changeDir, 'wave-1');
+    assert.equal(current?.status, 'pass', 'existing receipt must remain valid without re-recording');
+
+    const receipt = readPlan(changeDir).recommendation_receipt;
+    assert.deepEqual(
+      validateRecommendationReceiptStructure(receipt),
+      [],
+      'the recommendation receipt content seal must stay valid after resync refreshes artifacts_hash',
+    );
+
+    const progressPath = join(changeDir, '.superpowers', 'sdd', 'progress.md');
+    assert.equal(existsSync(progressPath), true, 'progress ledger must exist for audit');
+    const progress = readFileSync(progressPath, 'utf8');
+    assert.match(progress, /non-semantic wording fix in tasks\.md/);
+    assert.ok(progress.includes(current.plan_hash), 'audit must mention the new plan hash');
+  });
+
+  it('keeps root and plan-scoped receipts and the state summary on the new plan identity', () => {    makeStalePlanWithPassReceipt();
+
+    resyncPlan(changeDir, { reason: 'identity consistency check' });
+
+    const resynced = readPlan(changeDir);
+    const reviewsDir = join(changeDir, '.superpowers', 'sdd', 'reviews');
+    const scopedReviewsDir = getPlanScopedPaths(changeDir, resynced).reviews;
+    for (const directory of [reviewsDir, scopedReviewsDir]) {
+      const receipts = readdirSync(directory)
+        .filter(fileName => fileName.endsWith('.json'))
+        .map(fileName => JSON.parse(readFileSync(join(directory, fileName), 'utf8')));
+      assert.equal(receipts.length, 1);
+      assert.equal(receipts[0].plan_hash, resynced.hash, `${directory} receipt plan_hash must equal the new plan hash`);
+      assert.equal(receipts[0].plan_revision, resynced.revision, 'revision must stay unchanged');
+    }
+    assert.equal(readState(changeDir).execution_plan_hash, resynced.hash);
+  });
+
+  it('migrates plan-scoped checkpoints and handoffs so they stay visible under the resynced identity', () => {
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'checkpoint identity must follow the plan',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+    writePlan(changeDir, plan);
+    saveCheckpoint(changeDir, { taskId: '1.1', next: 'continue with 1.2' });
+    const oldIdentity = getPlanScopedPaths(changeDir, readPlan(changeDir)).planIdentity;
+    // 非语义结构修正：修改 tasks.md 冻结内容，触发 artifacts_hash 变化 → plan stale
+    writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 First task refined\n- [ ] 1.2 Second task\n');
+    assert.equal(validatePlan(changeDir, readPlan(changeDir)).valid, false, 'precondition: plan must be stale');
+
+    resyncPlan(changeDir, { reason: 'non-semantic wording fix before checkpoint lookup' });
+
+    const resynced = readPlan(changeDir);
+    const newIdentity = getPlanScopedPaths(changeDir, resynced).planIdentity;
+    assert.notEqual(newIdentity, oldIdentity);
+    const checkpoints = listCheckpoints(changeDir);
+    assert.equal(checkpoints.length, 1, `checkpoint must be readable under the new identity (was in ${oldIdentity})`);
+    assert.equal(checkpoints[0].task_id, '1.1');
+    // 整目录搬移不重写内部字段：plan_hash 保留保存时的快照值，
+    // 但 readers 按 planRoot 目录身份解析（legacyPlan=null 不过滤），故仍可读。
+    assert.equal(checkpoints[0].plan_hash, plan.hash);
+    assert.equal(getCheckpoint(changeDir, '1.1')?.task_id, '1.1');
+    const plansRoot = join(changeDir, '.superpowers', 'sdd', 'plans');
+    if (existsSync(join(plansRoot, oldIdentity))) {
+      assert.equal(
+        readdirSync(join(plansRoot, oldIdentity)).length, 0,
+        'old identity directory must not retain migrated record directories',
+      );
+    }
+    assert.equal(existsSync(join(plansRoot, newIdentity, 'checkpoints')), true);
+  });
+
+  it('rejects resync when no execution plan exists or the plan is not stale', () => {
+    // plan 不存在
+    assert.throws(() => resyncPlan(changeDir, { reason: 'no plan yet' }), /execution plan/i);
+
+    // plan 存在但未 stale（no-op 保护）
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'current plan must refuse resync',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+    writePlan(changeDir, plan);
+    const planBefore = readFileSync(join(changeDir, '.superpowers', 'sdd', 'execution-plan.json'), 'utf8');
+    assert.throws(() => resyncPlan(changeDir, { reason: 'nothing changed' }), /no need to resync|not stale/i);
+    assert.equal(readFileSync(join(changeDir, '.superpowers', 'sdd', 'execution-plan.json'), 'utf8'), planBefore, 'no-op rejection must not write');
+  });
+
+  it('rejects resync while any wave has an unresolved fail receipt and lists the wave id', () => {
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'fail receipts block resync',
+      waves: [
+        { id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] },
+        { id: 'wave-2', strategy: 'serial', tasks: ['1.2'], depends_on: ['wave-1'] },
+      ],
+    });
+    writePlan(changeDir, plan);
+    recordReview(changeDir, 'wave-1', {
+      status: 'fail', base: gitRefs.base, head: gitRefs.head, report: writeReviewReport('resync-fail.md'),
+    });
+    writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 Changed first task\n- [ ] 1.2 Second task\n');
+
+    const planPath = join(changeDir, '.superpowers', 'sdd', 'execution-plan.json');
+    const planBefore = readFileSync(planPath, 'utf8');
+    const reviewsDirBefore = readdirSync(join(changeDir, '.superpowers', 'sdd', 'reviews')).sort();
+
+    assert.throws(() => resyncPlan(changeDir, { reason: 'attempted while repair chain open' }), /wave-1/);
+    assert.equal(readFileSync(planPath, 'utf8'), planBefore, 'fail-receipt rejection must not modify the execution plan');
+    assert.deepEqual(
+      readdirSync(join(changeDir, '.superpowers', 'sdd', 'reviews')).sort(),
+      reviewsDirBefore,
+      'fail-receipt rejection must not write any receipt file',
+    );
   });
 });
 

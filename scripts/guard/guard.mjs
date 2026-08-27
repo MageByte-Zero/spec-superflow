@@ -8,6 +8,7 @@ import { realpathSync } from 'node:fs';
 import { checkArtifactsExist } from './checks/artifacts-exist.mjs';
 import { checkSchemaValid } from './checks/schema-valid.mjs';
 import { checkTasksComplete } from './checks/tasks-complete.mjs';
+import { checkTasksCheckboxFormat } from './checks/tasks-checkbox-format.mjs';
 import { checkTestsPassing } from './checks/tests-passing.mjs';
 import { checkContractFresh } from './checks/contract-fresh.mjs';
 import { check as checkDpGate } from './checks/dp-gate-passed.mjs';
@@ -29,7 +30,7 @@ const TRANSITION_CHECKS = {
   'exploring:specifying':           [],
   'specifying:bridging':            ['artifacts-exist', 'schema-valid'],
   'bridging:approved-for-build':    ['artifacts-exist', 'schema-valid', 'contract-fresh', 'dp-gate-passed'],
-  'approved-for-build:executing':   ['artifacts-exist', 'contract-fresh', 'dp-gate-passed', 'execution-plan-ready'],
+  'approved-for-build:executing':   ['artifacts-exist', 'contract-fresh', 'dp-gate-passed', 'execution-plan-ready', 'tasks-checkbox-format'],
   'executing:closing':              ['tasks-complete', 'tests-passing', 'specs-merged', 'execution-plan-ready', 'execution-reviews-passed'],
 
   // Debugging side-path
@@ -61,7 +62,7 @@ const WORKFLOW_TRANSITION_CHECKS = {
   hotfix: {
     'exploring:bridging': [],
     'bridging:approved-for-build': ['contract-current', 'dp3-approved'],
-    'approved-for-build:executing': ['contract-current', 'dp3-approved', 'execution-plan-ready'],
+    'approved-for-build:executing': ['contract-current', 'dp3-approved', 'execution-plan-ready', 'tasks-checkbox-format'],
     'executing:closing': ['tests-passing', 'specs-merged', 'execution-plan-ready', 'execution-reviews-passed'],
   },
   tweak: {
@@ -228,6 +229,7 @@ export function runGuard(args, {
     'contract-fresh': (dir) => checkContractFresh(dir),
     'contract-current': (dir) => checkContractCurrent(dir),
     'tasks-complete': (dir) => checkTasksComplete(dir),
+    'tasks-checkbox-format': (dir) => checkTasksCheckboxFormat(dir),
     'tests-passing': (dir) => checkTestsPassing(dir),
     'specs-merged': (dir) => checkSpecsMerged(dir),
     'dp-gate-passed': (dir) => checkDpGate(dir, fromState, toState),
