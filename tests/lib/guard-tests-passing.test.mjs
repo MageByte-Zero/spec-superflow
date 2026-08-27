@@ -43,6 +43,9 @@ function initializeGitRepository(directory) {
   writeFileSync(join(directory, 'git-range-marker.txt'), 'second commit\n');
   runGit(directory, ['add', 'git-range-marker.txt']);
   runGit(directory, ['commit', '--quiet', '--message', 'second closing guard change']);
+  // R4: review head 须被至少一个非 protected 分支包含。默认分支为 master
+  // （protected），建立一个指向 head 的隔离分支使分支校验放行。
+  runGit(directory, ['branch', 'test-isolation']);
   return { base, head: runGit(directory, ['rev-parse', 'HEAD']) };
 }
 

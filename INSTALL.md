@@ -865,6 +865,7 @@ ssf execution revise changes/my-change --mode sdd --confirm --reason "need paral
   --wave integration:serial:2.1:foundation
 ssf execution review changes/my-change --wave foundation --base <sha> --head <sha> \
   --report .superpowers/sdd/reviews/foundation.md --verdict pass
+ssf finish changes/my-change
 ```
 
 `--report` 相对于 `<change>` 解析，且必须位于
@@ -872,6 +873,14 @@ ssf execution review changes/my-change --wave foundation --base <sha> --head <sh
 `<change>` Git 工作树中的真实 commit，且 `base` 必须是 `head` 的祖先。
 `<change>/.superpowers/sdd/reviews/` 的目录层级必须是物理、非符号链接目录；
 report 本身必须为普通、非空、非符号链接文件。
+
+`ssf isolate <change-dir>` 创建隔离上下文后会自动递归初始化子模块（存在
+`.gitmodules` 时），并向 `<change>/.superpowers/sdd/progress.md` 追加 cwd 不持续警告。
+`ssf execution review` 在记录 receipt 前校验 head 必须被至少一个非 `main`/`master`
+分支包含——head 只落在主干上会被拒绝且不写 receipt。全部 wave 通过后，
+`ssf finish <change-dir>` 一条命令完成收尾：`merge --no-ff` 回主干、验证主干包含
+隔离分支全部提交、删除 worktree 与隔离分支；`finish` 与 `review` 在 cwd 位于
+worktree 之外时会输出含 worktree 绝对路径的 WARN（不阻断执行）。
 
 每一个 wave 均须有当前 `pass` review receipt，才可启动依赖 wave 或进入 closing；
 修订计划会废止旧 receipt。恢复、切换和手动保存属于 control-plane overlay，不增加第九个状态。

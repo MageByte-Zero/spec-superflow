@@ -39,6 +39,10 @@ before(() => {
 beforeEach(() => {
   changeDir = fixture.createCopy();
   gitRefs = { base: fixture.base, head: fixture.head };
+  // R4: head 须被至少一个非 protected 分支包含。seed 默认分支为 master
+  // （protected），既有 review 用例直接使用该分支上的 head；建立一个指向
+  // head 的非 protected 隔离分支，使分支校验放行，保持既有行为不变。
+  runGit(changeDir, ['branch', 'test-isolation', fixture.head]);
 });
 
 afterEach(() => {
@@ -66,7 +70,26 @@ function createRepairCommit(label) {
   writeFileSync(marker, `${label}\n`);
   runGit(changeDir, ['add', marker]);
   runGit(changeDir, ['commit', '--quiet', '--message', `repair ${label}`]);
+  // R4: 让隔离分支跟随默认分支的新提交，使 head 始终被非 protected 分支包含
+  runGit(changeDir, ['branch', '-f', 'test-isolation', 'HEAD']);
   return runGit(changeDir, ['rev-parse', 'HEAD']);
+}
+
+// 从 base 检出新分支并提交一个文件，返回该分支上的新 head。
+function commitOnNewBranch(branch, label) {
+  runGit(changeDir, ['checkout', '--quiet', '-b', branch, gitRefs.base]);
+  const marker = join(changeDir, `iso-${label}.txt`);
+  writeFileSync(marker, `${label}\n`);
+  runGit(changeDir, ['add', marker]);
+  runGit(changeDir, ['commit', '--quiet', '--message', `isolated ${label}`]);
+  return runGit(changeDir, ['rev-parse', 'HEAD']);
+}
+
+function containingBranches(commit) {
+  return runGit(changeDir, ['branch', '--contains', commit, '--format=%(refname:short)'])
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean);
 }
 
 function createPlan(directory, input) {
@@ -660,5 +683,70 @@ describe('execution plan data contract', () => {
 
     assert.equal(result.valid, false);
     assert.ok(result.failures.includes('wave 1 depends_on must be an array'));
+  });
+});
+
+describe('execution review branch protection (worktree-lifecycle R4)', () => {
+  it('records a review receipt when head is on a non-protected isolated branch', () => {
+    const defaultBranch = runGit(changeDir, ['rev-parse', '--abbrev-ref', 'HEAD']);
+    const isolatedHead = commitOnNewBranch('isolation-ok', 'feature');
+    // head 只被隔离分支包含（不落在默认分支上）
+    const containing = containingBranches(isolatedHead);
+    assert.deepEqual(containing, ['isolation-ok']);
+    assert.notEqual(defaultBranch, 'isolation-ok');
+
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'review an isolated branch commit',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+    writePlan(changeDir, plan);
+
+    const receipt = recordReview(changeDir, 'wave-1', {
+      status: 'pass', base: gitRefs.base, head: isolatedHead, report: writeReviewReport('isolation-ok.md'),
+    });
+
+    assert.equal(receipt.status, 'pass');
+    assert.equal(receipt.head, isolatedHead);
+  });
+
+  it('rejects review and writes no receipt when head is only contained by a protected branch', () => {
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'review must not target main directly',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+    writePlan(changeDir, plan);
+    // 移除 beforeEach 建立的隔离分支，使 head 只被 protected 默认分支包含
+    runGit(changeDir, ['branch', '-D', 'test-isolation']);
+
+    assert.throws(() => recordReview(changeDir, 'wave-1', {
+      status: 'pass', base: gitRefs.base, head: gitRefs.head, report: writeReviewReport('direct-main.md'),
+    }), /protected|isolated/i);
+
+    const reviewsDir = join(changeDir, '.superpowers', 'sdd', 'reviews');
+    assert.equal(readdirSync(reviewsDir).filter(fileName => fileName.endsWith('.json')).length, 0);
+  });
+
+  it('allows review after the isolated branch is merged back into the default branch', () => {
+    const defaultBranch = runGit(changeDir, ['rev-parse', '--abbrev-ref', 'HEAD']);
+    const isolatedHead = commitOnNewBranch('isolation-merged', 'feature');
+    runGit(changeDir, ['checkout', '--quiet', defaultBranch]);
+    runGit(changeDir, ['merge', '--quiet', '--no-ff', 'isolation-merged', '-m', 'merge isolation back']);
+    // head 同时被默认分支与隔离分支包含 → 放行
+    const containing = containingBranches(isolatedHead);
+    assert.ok(containing.includes('isolation-merged'), containing.join(','));
+    assert.ok(containing.includes(defaultBranch), containing.join(','));
+
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'review a merged isolated commit',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+    writePlan(changeDir, plan);
+
+    const receipt = recordReview(changeDir, 'wave-1', {
+      status: 'pass', base: gitRefs.base, head: isolatedHead, report: writeReviewReport('merged-back.md'),
+    });
+
+    assert.equal(receipt.status, 'pass');
+    assert.equal(receipt.head, isolatedHead);
   });
 });

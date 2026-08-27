@@ -148,6 +148,8 @@ npx spec-superflow list          # 或通过 npx 使用
 | `ssf handoff list <dir>` | 列出 handoff 生命周期状态 |
 | `ssf handoff finish <dir> <id>` | 校验 handoff 结果 |
 | `ssf handoff resolve <dir> <id> --decision <decision>` | 记录显式 handoff 决策 |
+| `ssf isolate <dir>` | 实现前强制 git 隔离：在 main/master 时创建 worktree（含递归初始化子模块）或分支，并向 progress 账本写入 cwd 不持续警告 |
+| `ssf finish <dir> [--test-cmd <command>]` | 一键收尾：merge --no-ff 回主干、验证同步、在主干执行验证命令（默认 `npm test`，10 分钟超时），验证通过才删除 worktree 与隔离分支；失败保留 worktree 返回修改 |
 | `ssf execution recommend <dir> ...` | 基于任务量、wave 和工作流列出可用执行方式并给出推荐 |
 | `ssf execution plan <dir> ...` | 在用户确认选择后，为 Full/legacy Hotfix 保存受 guard 保护的执行计划 |
 | `ssf execution show <dir> [--json]` | 查看并校验当前执行计划、wave 与 receipt |

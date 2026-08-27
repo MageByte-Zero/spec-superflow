@@ -22,6 +22,7 @@ const COMMANDS = {
   save:           () => import('./lib/cmd-save.mjs'),
   handoff:        () => import('./lib/cmd-handoff.mjs'),
   isolate:        () => import('./lib/cmd-isolate.mjs'),
+  finish:         () => import('./lib/cmd-finish.mjs'),
   execution:      () => import('./lib/cmd-execution.mjs'),
   resume:         () => import('./lib/cmd-resume.mjs'),
   switch:         () => import('./lib/cmd-switch.mjs'),
@@ -80,6 +81,7 @@ Commands:
                         Validate a handoff result
   handoff resolve <change-dir> <id> --decision <accept|reject|defer>
                         Record the explicit handoff decision
+  ssf finish <change-dir>   Merge the isolated branch back to the trunk (--no-ff), verify sync, clean up worktree/branch
   execution recommend <change-dir> [--wave <id>:<strategy>:<task,...>]
                         List execution modes and an evidence-based recommendation
   execution plan <change-dir> --mode <mode> --confirm --reason <text> --wave <id>:<strategy>:<task,...> [--acknowledge-recommendation]

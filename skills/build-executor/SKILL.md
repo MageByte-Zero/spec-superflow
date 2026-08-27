@@ -23,9 +23,24 @@ Branch/worktree preflight before ANY implementation edit (mandatory — do not s
    have not approved `--force`.
 2. If `ssf isolate` exits non-zero: STOP. Do not edit `main`/`master` in place.
    Ask the user for explicit approval (and re-run with `ssf isolate <change-dir> --force`
-   only after they approve).
+   only after they approve). A non-zero exit also covers a failed submodule
+   initialization after the isolation context was created — never implement on a
+   half-initialized worktree.
 3. If it succeeds, report the chosen branch/worktree and make all implementation
-   edits there.
+   edits there. `ssf isolate` also recursively initializes submodules in the new
+   isolation context when a `.gitmodules` exists, and appends a cwd-persistence
+   warning (isolation path + mandatory `cd` prefix rule) to
+   `<change-dir>/.superpowers/sdd/progress.md` so later Bash calls do not silently
+   edit the trunk.
+4. When the implementation is fully committed and reviewed, close out the change
+   with `ssf finish <change-dir>` instead of manual merge/cleanup. `ssf finish`
+   merges the isolation branch back to the trunk with `--no-ff`, verifies the trunk
+   contains every isolation commit, then runs a verification gate on the trunk
+   (default `npm test`, overridable with `--test-cmd <command>`, 10-minute
+   timeout) before removing the worktree and the isolation branch. If the trunk
+   verification fails or times out, `ssf finish` keeps the worktree and the
+   isolation branch, prints the failure details, and prompts you to return to the
+   worktree, fix the issue, and re-run `ssf finish <change-dir>`.
 
 ## Core Laws
 

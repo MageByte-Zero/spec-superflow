@@ -79,6 +79,9 @@ function initializeGitRepository(directory) {
   writeFileSync(join(directory, 'git-range-marker.txt'), 'second commit\n');
   runGit(directory, ['add', 'git-range-marker.txt']);
   runGit(directory, ['commit', '--quiet', '--message', 'second guard control records change']);
+  // R4: review head 须被至少一个非 protected 分支包含。seed 默认分支为 master
+  // （protected），建立一个指向 head 的隔离分支使分支校验放行。
+  runGit(directory, ['branch', 'test-isolation']);
   return { base, head: runGit(directory, ['rev-parse', 'HEAD']) };
 }
 
@@ -457,6 +460,9 @@ describe('guard: execution control records', () => {
   function prepareFreshFullState() {
     if (dir) rmSync(dir, { recursive: true, force: true });
     dir = fixture.createCopy();
+    // R4: head 须被至少一个非 protected 分支包含。seed 默认分支为 master
+    // （protected），建立指向 head 的隔离分支使分支校验放行。
+    runGit(dir, ['branch', 'test-isolation', fixture.head]);
     gitRefs = { base: fixture.base, head: fixture.head };
   }
 

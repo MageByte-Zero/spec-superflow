@@ -8,10 +8,15 @@ The format loosely follows Keep a Changelog.
 
 ### Added
 
+- **Worktree lifecycle management**: `ssf isolate <change-dir>` now recursively initializes submodules (`git submodule update --init --recursive`) in the new isolation context when a `.gitmodules` exists, and appends a cwd-persistence warning (isolation path + mandatory `cd` prefix rule) to `<change-dir>/.superpowers/sdd/progress.md` without overwriting existing records.
+- **`ssf finish <change-dir>` one-command close-out**: locates the isolation worktree by branch name, refuses to run on uncommitted changes or merge conflicts, merges the isolation branch back to the trunk with `--no-ff`, verifies the trunk contains every isolation commit, then removes the worktree and the isolation branch. Exits non-zero with a "run `ssf isolate` first" hint when no isolation context exists.
+- **`ssf finish` trunk verification gate**: `ssf finish <change-dir>` now runs a verification command on the main trunk (default `npm test`, overridable with `--test-cmd <command>`, 10-minute timeout) after the `--no-ff` merge and sync verification pass, before deleting the worktree and the isolation branch. A failed or timed-out verification keeps both the worktree and the isolation branch, prints the failure details, and instructs the user to return to the worktree, fix the issue, and re-run `ssf finish`.
 - **`ssf` command on CodeBuddy installs**: `ssf install-codebuddy` now generates `ssf` / `ssf.cmd` / `ssf.ps1` command shims under `~/.codebuddy/spec-superflow/bin/` and registers that `bin/` directory on the user PATH (idempotent, Windows user environment / POSIX shell rc files). After install, `ssf` is available in a new terminal just like a global npm install. `--no-path` skips the PATH change while still writing the shims. `ssf uninstall-codebuddy` removes the shims and the PATH entry.
 
 ### Fixed
 
+- **`ssf execution review` rejects trunk-only commits**: before recording a review receipt, the head commit must be contained by at least one non-protected branch (`main`/`master` excluded). A head that only sits on `main`/`master` is rejected with a non-zero exit and no receipt is written; heads on an isolation branch (including one already merged back to the trunk) still pass.
+- **cwd-escape WARN in `ssf finish` / `ssf execution review`**: when the change has an isolation worktree and the process cwd is outside it, both commands emit a WARN containing the worktree absolute path without blocking execution. No worktree → no WARN.
 - **CRLF-tolerant risk ownership matrix test**: `verification-risk-ownership.test.mjs` now normalizes line endings so the matrix parses identically on Windows (CRLF checkouts) and POSIX.
 
 ## [1.0.1] - 2026-08-10
