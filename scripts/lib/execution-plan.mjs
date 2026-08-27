@@ -119,7 +119,7 @@ export function validatePlan(changeDir, plan) {
   return { valid: failures.length === 0, failures, plan };
 }
 
-export function recordReview(changeDir, waveId, receipt) {
+export function recordReview(changeDir, waveId, receipt, options = {}) {
   const plan = readPlan(changeDir);
   const validation = validatePlan(changeDir, plan);
   if (!validation.valid) throw new Error(`Cannot record a review for an invalid execution plan: ${validation.failures.join('; ')}`);
@@ -140,7 +140,7 @@ export function recordReview(changeDir, waveId, receipt) {
   const reportEvidence = validateReviewReportEvidence(changeDir, receipt?.report);
   const { base, head } = validateReviewRange(changeDir, receipt.base, receipt.head);
   warnIfCwdOutsideIsolation(changeDir);
-  assertReviewHeadBranch(changeDir, head);
+  assertReviewHeadBranch(changeDir, head, options.runGit);
   const currentReview = readCurrentReviewEvidence(changeDir, waveId, plan);
   if (currentReview.blocker) {
     throw new Error(`Wave '${waveId}' cannot be reviewed while its failed report evidence is invalid: ${currentReview.blocker}`);
@@ -736,10 +736,10 @@ function defaultRunGit(args, options) {
  * 写 receipt 之前执行，拒绝时不写入任何 receipt 文件。git root 解析失败时
  * 抛出明确错误（review-findings-fix R4）：静默 return 等于绕过安全校验。
  */
-function assertReviewHeadBranch(changeDir, head) {
+function assertReviewHeadBranch(changeDir, head, runGit = defaultRunGit) {
   let gitRoot;
   try {
-    gitRoot = execFileSync('git', ['-C', changeDir, 'rev-parse', '--show-toplevel'], {
+    gitRoot = runGit(['-C', changeDir, 'rev-parse', '--show-toplevel'], {
       encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
   } catch (error) {
@@ -747,7 +747,7 @@ function assertReviewHeadBranch(changeDir, head) {
   }
   let output;
   try {
-    output = execFileSync('git', ['-C', gitRoot, 'branch', '--contains', head, '--format=%(refname:short)'], {
+    output = runGit(['-C', gitRoot, 'branch', '--contains', head, '--format=%(refname:short)'], {
       encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
   } catch (error) {

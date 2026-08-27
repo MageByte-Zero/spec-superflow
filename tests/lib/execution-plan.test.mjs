@@ -783,6 +783,29 @@ describe('execution plan resync (plan-resync R1)', () => {
     assert.equal(existsSync(join(plansRoot, newIdentity, 'checkpoints')), true);
   });
 
+  it('still completes resync and warns when the progress audit append fails (Minor-B)', () => {
+    makeStalePlanWithPassReceipt();
+    // 把 progress.md 替换为同名目录：appendFileSync 写目录必然抛错，
+    // 触发 audit append 的取舍分支（append-only 审计缺一行，仅告警不回滚）。
+    const progressPath = join(changeDir, '.superpowers', 'sdd', 'progress.md');
+    if (existsSync(progressPath)) rmSync(progressPath, { force: true });
+    mkdirSync(progressPath, { recursive: true });
+    const originalStderrWrite = process.stderr.write.bind(process.stderr);
+    let captured = '';
+    process.stderr.write = chunk => { captured += String(chunk); return true; };
+    try {
+      const result = resyncPlan(changeDir, { reason: 'audit append trade-off (Minor-B)' });
+      assert.ok(result, 'resync must still succeed when the audit append fails');
+      const validated = validatePlan(changeDir, readPlan(changeDir));
+      assert.equal(validated.valid, true, validated.failures.join('\n'));
+      assert.match(captured, /WARN: resync 完成但 progress.md 审计追加失败/,
+        `expected an audit-failure WARN, got: ${captured}`);
+    } finally {
+      process.stderr.write = originalStderrWrite;
+      rmSync(progressPath, { recursive: true, force: true });
+    }
+  });
+
   it('rejects resync when no execution plan exists or the plan is not stale', () => {
     // plan 不存在
     assert.throws(() => resyncPlan(changeDir, { reason: 'no plan yet' }), /execution plan/i);
@@ -1129,35 +1152,36 @@ describe('execution plan resync (plan-resync R1)', () => {
     assert.equal(refreshed.artifacts_hash, computeArtifactsHash(changeDir), 'overlay artifacts_hash must equal the current snapshot hash');
   });
 
-  it('rejects the review with a clear error and writes no receipt when the git root cannot be resolved (P2)', () => {
+  it('rejects the review with a clear error when head branch verification fails (P2)', () => {
     const plan = createPlan(changeDir, {
-      mode: 'sdd', source: 'default', rationale: 'git root failure must not silently pass',
+      mode: 'sdd', source: 'default', rationale: 'head branch verification failure must not silently pass',
       waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
     });
     writePlan(changeDir, plan);
 
-    // 注入 git 解析失败：把 change 目录复制到 git worktree 之外的孤立目录并
-    // 移除 .git——plan/receipt 状态有效，但 git root 无法解析（rev-parse 失败）。
-    const orphanRoot = mkdtempSync(join(tmpdir(), 'ssf-p2-orphan-'));
-    const orphanChangeDir = join(orphanRoot, 'orphan-change');
-    cpSync(changeDir, orphanChangeDir, { recursive: true });
-    rmSync(join(orphanChangeDir, '.git'), { recursive: true, force: true });
-    try {
-      const orphanReportsDir = join(orphanChangeDir, '.superpowers', 'sdd', 'reviews');
-      mkdirSync(orphanReportsDir, { recursive: true });
-      const orphanReport = join(orphanReportsDir, 'p2.md');
-      writeFileSync(orphanReport, 'Review report in an orphan directory.\n');
-      assert.throws(
-        () => recordReview(orphanChangeDir, 'wave-1', {
-          status: 'pass', base: gitRefs.base, head: gitRefs.head, report: orphanReport,
-        }),
-        error => /inside a Git work tree/i.test(error.message),
-        'review must be rejected with an explicit error',
-      );
-      assert.equal(readdirSync(orphanReportsDir).filter(name => name.endsWith('.json')).length, 0, 'no receipt may be written');
-    } finally {
-      rmSync(orphanRoot, { recursive: true, force: true });
-    }
+    // 注入 runGit：rev-parse --show-toplevel 透传（validateReviewRange 走模块级
+    // defaultGitRangeValidator，仍用真实 git，故该步先成功）；assertReviewHeadBranch
+    // 的 git branch --contains 调用抛错——真实命中 R4 的 throw 路径而非
+    // validateReviewRange 的既有 git-root 错误（终审 final-review-c4a921c Important-A）。
+    const runGitForBranchFailure = (args, opts) => {
+      if (args.includes('--contains')) {
+        throw new Error('simulated git branch --contains failure');
+      }
+      return execFileSync('git', args, opts);
+    };
+    const reportPath = writeReviewReport('p2-branch-fail.md');
+    assert.throws(
+      () => recordReview(changeDir, 'wave-1', {
+        status: 'pass', base: gitRefs.base, head: gitRefs.head, report: reportPath,
+      }, { runGit: runGitForBranchFailure }),
+      error => /Review head branch verification failed for commit/i.test(error.message),
+      'review must be rejected when branch verification fails',
+    );
+    assert.equal(
+      readdirSync(join(changeDir, '.superpowers', 'sdd', 'reviews')).filter(name => name.endsWith('.json')).length,
+      0,
+      'no receipt may be written',
+    );
   });
 });
 
