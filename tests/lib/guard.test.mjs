@@ -744,6 +744,172 @@ describe('guard: execution control records', () => {
   });
 });
 
+describe('guard: workflow-aware transition resolution', () => {
+  let dir;
+
+  before(() => {
+    dir = mkdtempSync(join(tmpdir(), 'ssf-guard-workflow-aware-'));
+    writeFileSync(join(dir, '.spec-superflow.yaml'), 'state: exploring\nworkflow: quick\n');
+  });
+
+  after(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  });
+
+  function run(fromState, toState, workflow) {
+    try {
+      const stdout = runNodeScript(GUARD_PATH, ['check', dir, fromState, toState, '--json', '--workflow', workflow]);
+      return { exitCode: 0, output: JSON.parse(stdout.trim()) };
+    } catch (error) {
+      return { exitCode: error.status ?? 1, output: JSON.parse(error.stdout.toString().trim()) };
+    }
+  }
+
+  it('rejects exploring→specifying for quick with the correct fast-path hint', () => {
+    const result = run('exploring', 'specifying', 'quick');
+    assert.equal(result.exitCode, 1, JSON.stringify(result.output));
+    const failures = result.output.checks.flatMap(c => c.failures);
+    assert.ok(result.output.checks.some(c => c.dimension === 'workflow-mode'), JSON.stringify(result.output));
+    assert.ok(failures.some(f => f.includes('use exploring -> approved-for-build')), failures.join('\n'));
+  });
+
+  it('rejects exploring→specifying for tweak', () => {
+    const result = run('exploring', 'specifying', 'tweak');
+    assert.equal(result.exitCode, 1, JSON.stringify(result.output));
+    assert.ok(result.output.checks.some(c => c.dimension === 'workflow-mode'), JSON.stringify(result.output));
+  });
+
+  it('rejects exploring→specifying for hotfix', () => {
+    const result = run('exploring', 'specifying', 'hotfix');
+    assert.equal(result.exitCode, 1, JSON.stringify(result.output));
+    assert.ok(result.output.checks.some(c => c.dimension === 'workflow-mode'), JSON.stringify(result.output));
+  });
+
+  it('rejects specifying→bridging for quick', () => {
+    const result = run('specifying', 'bridging', 'quick');
+    assert.equal(result.exitCode, 1, JSON.stringify(result.output));
+    const failures = result.output.checks.flatMap(c => c.failures);
+    assert.ok(result.output.checks.some(c => c.dimension === 'workflow-mode'), JSON.stringify(result.output));
+    assert.ok(failures.some(f => f.includes('use exploring -> approved-for-build')), failures.join('\n'));
+  });
+
+  it('still allows exploring→specifying for full (regression)', () => {
+    const result = run('exploring', 'specifying', 'full');
+    assert.equal(result.exitCode, 0, JSON.stringify(result.output));
+    assert.deepEqual(result.output.checks, []);
+  });
+
+  it('allows specifying→approved-for-build for quick (corrective skip)', () => {
+    const result = run('specifying', 'approved-for-build', 'quick');
+    assert.equal(result.exitCode, 0, JSON.stringify(result.output));
+    assert.deepEqual(result.output.checks, []);
+  });
+
+  it('allows specifying→approved-for-build for lightweight (corrective skip)', () => {
+    const result = run('specifying', 'approved-for-build', 'lightweight');
+    assert.equal(result.exitCode, 0, JSON.stringify(result.output));
+    assert.deepEqual(result.output.checks, []);
+  });
+
+  it('rejects approved-for-build→bridging for quick as workflow-transition-unknown without artifacts demands', () => {
+    const result = run('approved-for-build', 'bridging', 'quick');
+    assert.equal(result.exitCode, 1, JSON.stringify(result.output));
+    const failures = result.output.checks.flatMap(c => c.failures);
+    assert.ok(result.output.checks.some(c => c.dimension === 'workflow-transition-unknown'), JSON.stringify(result.output));
+    assert.ok(failures.some(f => f.includes("workflow 'quick'") && f.includes('approved-for-build:bridging')), failures.join('\n'));
+    assert.ok(!failures.some(f => f.includes('artifacts-exist')), failures.join('\n'));
+  });
+
+  it('rejects exploring→bridging for quick as workflow-transition-unknown (full-only forward key)', () => {
+    const result = run('exploring', 'bridging', 'quick');
+    assert.equal(result.exitCode, 1, JSON.stringify(result.output));
+    assert.ok(result.output.checks.some(c => c.dimension === 'workflow-transition-unknown'), JSON.stringify(result.output));
+  });
+
+  it('keeps rewind specifying→exploring allowed for quick', () => {
+    const result = run('specifying', 'exploring', 'quick');
+    assert.equal(result.exitCode, 0, JSON.stringify(result.output));
+    assert.deepEqual(result.output.checks, []);
+  });
+
+  it('keeps rewind executing→specifying allowed for quick', () => {
+    const result = run('executing', 'specifying', 'quick');
+    assert.equal(result.exitCode, 0, JSON.stringify(result.output));
+    assert.deepEqual(result.output.checks, []);
+  });
+
+  it('keeps rewind approved-for-build→specifying allowed for tweak', () => {
+    const result = run('approved-for-build', 'specifying', 'tweak');
+    assert.equal(result.exitCode, 0, JSON.stringify(result.output));
+    assert.deepEqual(result.output.checks, []);
+  });
+
+  it('keeps abandon exploring→abandoned allowed for quick', () => {
+    const result = run('exploring', 'abandoned', 'quick');
+    assert.equal(result.exitCode, 0, JSON.stringify(result.output));
+    assert.deepEqual(result.output.checks, []);
+  });
+
+  it('keeps abandon debugging→abandoned allowed for lightweight', () => {
+    const result = run('debugging', 'abandoned', 'lightweight');
+    assert.equal(result.exitCode, 0, JSON.stringify(result.output));
+    assert.deepEqual(result.output.checks, []);
+  });
+
+  it('keeps quick executing→closing on direct short path with direct-test-result (regression)', () => {
+    const workflowDir = mkdtempSync(join(tmpdir(), 'ssf-guard-aware-quick-'));
+    try {
+      writeFileSync(join(workflowDir, '.spec-superflow.yaml'), 'state: executing\nworkflow: quick\n');
+      saveWorkflowRecommendation(workflowDir, {
+        task_count: 3, file_count: 3, config_doc_only: 'no', schema_api_change: 'no',
+        new_module: 'no', behavioral_constraint_change: 'no', cross_module_change: 'no',
+        uncertainty: 'low', request_kind: 'standard',
+      });
+      acceptWorkflowRecommendation(workflowDir, { source: 'direct-request', verificationStrategy: 'bounded' });
+      writeFileSync(join(workflowDir, '.spec-superflow.yaml'), 'state: executing\nworkflow: quick\ntest_result: pass: focused test\n');
+      const stdout = runNodeScript(GUARD_PATH, ['check', workflowDir, 'executing', 'closing', '--json', '--workflow', 'quick']);
+      const output = JSON.parse(stdout.trim());
+      assert.deepEqual(output.checks.map(c => c.dimension), ['direct-short-path', 'direct-test-result']);
+    } finally {
+      rmSync(workflowDir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps lightweight executing→closing carrying lightweight-completion-evidence (regression)', () => {
+    const workflowDir = mkdtempSync(join(tmpdir(), 'ssf-guard-aware-lw-'));
+    try {
+      writeFileSync(join(workflowDir, '.spec-superflow.yaml'), 'state: executing\nworkflow: lightweight\ntest_result: pass: targeted\n');
+      const result = run('executing', 'closing', 'lightweight');
+      assert.deepEqual(result.output.checks.map(c => c.dimension), [
+        'direct-short-path', 'direct-test-result', 'lightweight-completion-evidence',
+      ]);
+    } finally {
+      rmSync(workflowDir, { recursive: true, force: true });
+    }
+  });
+
+  it('releases exploring→specifying after escalate from quick to full (workflow switch)', () => {
+    const workflowDir = mkdtempSync(join(tmpdir(), 'ssf-guard-aware-escalate-'));
+    try {
+      writeFileSync(join(workflowDir, '.spec-superflow.yaml'), 'state: exploring\nworkflow: quick\n');
+      const rejected = run('exploring', 'specifying', 'quick');
+      assert.equal(rejected.exitCode, 1, JSON.stringify(rejected.output));
+      writeFileSync(join(workflowDir, '.spec-superflow.yaml'), 'state: exploring\nworkflow: full\n');
+      const released = run('exploring', 'specifying', 'full');
+      assert.equal(released.exitCode, 0, JSON.stringify(released.output));
+      assert.deepEqual(released.output.checks, []);
+    } finally {
+      rmSync(workflowDir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps legacy hotfix exploring→bridging allowed without direct receipt (regression)', () => {
+    const result = run('exploring', 'bridging', 'hotfix');
+    assert.equal(result.exitCode, 0, JSON.stringify(result.output));
+    assert.deepEqual(result.output.checks, []);
+  });
+});
+
 describe('guard: artifacts-exist check', () => {
   before(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-guard-artifacts-'));

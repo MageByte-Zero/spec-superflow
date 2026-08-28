@@ -14,9 +14,15 @@ import { realpathSync } from 'node:fs';
 
 const GIT_OPTS = { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] };
 
-function git(root, args, io) {
+// 可注入的 git 运行器（与 execution-plan.mjs defaultRunGit 同模式）。
+// 默认 execFileSync('git', args) 字面量参数数组，无 shell 字符串拼接。
+function defaultRunGit(args, options) {
+  return execFileSync('git', args, options);
+}
+
+function git(root, args, io, runGit) {
   try {
-    return execFileSync('git', ['-C', root, ...args], GIT_OPTS).trim();
+    return runGit(['-C', root, ...args], GIT_OPTS).trim();
   } catch (e) {
     const err = new Error(
       (e.stderr || e.stdout || e.message || 'unknown').toString().trim()
@@ -61,7 +67,7 @@ function parseWorktreeList(output) {
   return entries;
 }
 
-export function run(args, io = { stdout: process.stdout, stderr: process.stderr }) {
+export function run(args, io = { stdout: process.stdout, stderr: process.stderr }, runGit = defaultRunGit) {
   const { values, positionals } = parseArgs({
     args,
     allowPositionals: true,
@@ -79,14 +85,14 @@ export function run(args, io = { stdout: process.stdout, stderr: process.stderr 
   // 主仓库根：change-dir 必须在仓库内。
   let mainRoot;
   try {
-    mainRoot = resolve(git(changeDir, ['rev-parse', '--show-toplevel'], io));
+    mainRoot = resolve(git(changeDir, ['rev-parse', '--show-toplevel'], io, runGit));
   } catch (e) {
     io.stderr.write(`finish: ${changeDir} 不在任何 git 仓库内：${e.message}\n`);
     return { exitCode: 1 };
   }
 
   // 1. 定位隔离 worktree（按隔离分支名匹配）。
-  const list = parseWorktreeList(git(mainRoot, ['worktree', 'list', '--porcelain'], io));
+  const list = parseWorktreeList(git(mainRoot, ['worktree', 'list', '--porcelain'], io, runGit));
   const entry = list.find(item => item.branch === `refs/heads/${name}`);
   if (!entry) {
     io.stderr.write(
@@ -106,7 +112,7 @@ export function run(args, io = { stdout: process.stdout, stderr: process.stderr 
   }
 
   // 2. 校验 worktree 工作树干净；存在未提交改动则停止并列出路径。
-  const status = git(worktreePath, ['status', '--porcelain'], io);
+  const status = git(worktreePath, ['status', '--porcelain'], io, runGit);
   if (status) {
     io.stderr.write(
       `finish: 隔离 worktree 存在未提交改动，停止收尾。未提交路径：\n${status}\n` +
@@ -118,10 +124,10 @@ export function run(args, io = { stdout: process.stdout, stderr: process.stderr 
   // 3. 在主仓库当前分支（主干）执行 merge --no-ff。
   let mergeOut;
   try {
-    mergeOut = git(mainRoot, ['merge', '--no-ff', name], io);
+    mergeOut = git(mainRoot, ['merge', '--no-ff', name], io, runGit);
   } catch (e) {
     // 冲突检测：unmerged 路径非空即 merge 冲突。不自动解决，保留现场由用户手动处理。
-    const unmerged = git(mainRoot, ['diff', '--name-only', '--diff-filter=U'], io);
+    const unmerged = git(mainRoot, ['diff', '--name-only', '--diff-filter=U'], io, runGit);
     if (unmerged) {
       io.stderr.write(
         `finish: git merge --no-ff ${name} 产生冲突，停止收尾。冲突文件需手动解决：\n${unmerged}\n` +
@@ -136,9 +142,9 @@ export function run(args, io = { stdout: process.stdout, stderr: process.stderr 
   // 4. 同步验证：隔离分支 head 必须是主干 head 的祖先（主干已包含全部提交）。
   let isoHead, mainHead;
   try {
-    isoHead = git(mainRoot, ['rev-parse', name], io);
-    mainHead = git(mainRoot, ['rev-parse', 'HEAD'], io);
-    git(mainRoot, ['merge-base', '--is-ancestor', isoHead, mainHead], io);
+    isoHead = git(mainRoot, ['rev-parse', name], io, runGit);
+    mainHead = git(mainRoot, ['rev-parse', 'HEAD'], io, runGit);
+    git(mainRoot, ['merge-base', '--is-ancestor', isoHead, mainHead], io, runGit);
   } catch {
     io.stderr.write(
       'finish: 同步验证失败——隔离分支 head 不是主干 head 的祖先，主干未包含隔离分支全部提交。' +
@@ -146,6 +152,12 @@ export function run(args, io = { stdout: process.stdout, stderr: process.stderr 
     );
     return { exitCode: 1 };
   }
+
+  // 5b. merge 成功即时反馈（closing-finish-alignment R3）：同步验证通过后、
+  // 验证命令启动前输出一行含 merge commit sha 的成功信息，使
+  // merge-vs-verify 的执行顺序在日志中清晰可见。失败路径（merge 冲突/
+  // 同步验证失败）不会到达此处，故不输出该行。
+  io.stdout.write(`finish: merge --no-ff 成功（commit ${mainHead}），开始主干验证…\n`);
 
   // 5. 主干验证：merge --no-ff 成功且同步验证通过后、删除 worktree 前，
   // 在主仓库主干（当前分支）的 cwd 执行验证命令（默认 npm test，
@@ -179,14 +191,41 @@ export function run(args, io = { stdout: process.stdout, stderr: process.stderr 
       process.chdir(mainRoot);
     } catch { /* 忽略——移除仍会尝试，失败由下方错误路径处理 */ }
   }
+  // worktree 移除失败自动 fallback --force（closing-finish-alignment R2）：
+  // submodule 项目场景普通 remove 可能失败（目录非空/占用），自动以
+  // --force 重试；--force 成功则继续收尾并在报告标注 (force removed)；
+  // --force 仍失败则输出手动指引（merge 已成功 + 手动 remove/branch 命令）
+  // 但仍尝试删除隔离分支（分支引用独立于 worktree 目录）。
+  let forceRemoved = false;
   try {
-    git(mainRoot, ['worktree', 'remove', worktreePath], io);
+    git(mainRoot, ['worktree', 'remove', worktreePath], io, runGit);
   } catch (e) {
-    io.stderr.write(`finish: worktree 移除失败：${e.message}\n`);
-    return { exitCode: 1 };
+    io.stderr.write(`WARN: worktree remove 失败（${e.message}），尝试 --force 重试\n`);
+    try {
+      git(mainRoot, ['worktree', 'remove', '--force', worktreePath], io, runGit);
+      forceRemoved = true;
+    } catch (e2) {
+      io.stderr.write(
+        `finish: worktree 移除失败（含 --force 重试）：${e2.message}\n` +
+        `- merge 已成功（commit ${mainHead}），主干验证已通过。\n` +
+        `- 手动清理命令：\n` +
+        `  git worktree remove --force ${worktreePath}\n` +
+        `  git branch -d ${name}\n`
+      );
+      // 分支删除不依赖 worktree 移除成功：仍尝试删除，如实报告结果。
+      let branchOutcome;
+      try {
+        git(mainRoot, ['branch', '-d', name], io, runGit);
+        branchOutcome = `finish: 隔离分支已删除: ${name}\n`;
+      } catch (e3) {
+        branchOutcome = `finish: 隔离分支删除失败：${e3.message}\n`;
+      }
+      io.stderr.write(branchOutcome);
+      return { exitCode: 1 };
+    }
   }
   try {
-    git(mainRoot, ['branch', '-d', name], io);
+    git(mainRoot, ['branch', '-d', name], io, runGit);
   } catch (e) {
     io.stderr.write(`finish: 隔离分支删除失败：${e.message}\n`);
     return { exitCode: 1 };
@@ -196,7 +235,7 @@ export function run(args, io = { stdout: process.stdout, stderr: process.stderr 
   io.stdout.write(
     `finish: 收尾完成。\n` +
     `- merge commit: ${mainHead}\n` +
-    `- worktree 已移除: ${worktreePath}\n` +
+    `- worktree 已移除: ${worktreePath}${forceRemoved ? ' (force removed)' : ''}\n` +
     `- 隔离分支已删除: ${name}\n` +
     (mergeOut ? `- merge 输出: ${mergeOut}\n` : '')
   );

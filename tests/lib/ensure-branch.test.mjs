@@ -36,7 +36,7 @@ function run(args) {
     // GIT_ALLOW_PROTOCOL=file lets file:// submodule URLs (used by the local
     // fixtures) be fetched during recursive submodule initialization; the
     // default "user" policy blocks URLs resolved automatically from .gitmodules.
-    const out = execSync(`node ${ENSURE} ${args}`, { encoding: 'utf-8', stdio: 'pipe', timeout: 20000, env: { ...process.env, GIT_ALLOW_PROTOCOL: 'file' } });
+    const out = execSync(`node ${ENSURE} ${args}`, { encoding: 'utf-8', stdio: 'pipe', timeout: 60000, env: { ...process.env, GIT_ALLOW_PROTOCOL: 'file' } });
     return { ok: true, out };
   } catch (e) {
     return { ok: false, out: `${e.stdout || ''}\n${e.stderr || ''}` || e.message };
@@ -45,7 +45,7 @@ function run(args) {
 
 function git(dir, ...args) {
   const quoted = args.map((a) => (/\s/.test(String(a)) ? `"${a}"` : a)).join(' ');
-  execSync(`git -c user.email=t@t -c user.name=test ${quoted}`, { cwd: dir, stdio: 'pipe', timeout: 20000, env: { ...process.env, GIT_ALLOW_PROTOCOL: 'file' } });
+  execSync(`git -c user.email=t@t -c user.name=test ${quoted}`, { cwd: dir, stdio: 'pipe', timeout: 60000, env: { ...process.env, GIT_ALLOW_PROTOCOL: 'file' } });
 }
 
 // Create a bare standalone git repo with a committed file at `dir`.

@@ -50,8 +50,8 @@ describe('workflow handoff documentation contract', () => {
       const handoff = handoffSection(readSkill(skill));
       assert.match(handoff, /only.*successfully persisted `closing`.*`abandoned`.*terminal/is,
         `${skill} must limit terminal status to persisted closing and abandoned`);
-      assert.match(handoff, /Successful terminal report[\s\S]*?Current stage: successfully persisted `closing` or `abandoned`[\s\S]*?Next stage: `none`/,
-        `${skill} must report terminal next stage as none`);
+      assert.match(handoff, /Successful terminal report[\s\S]*?Current stage: successfully persisted `closing` or `abandoned`[\s\S]*?Next stage: (`none`|for Full\/legacy Hotfix)/,
+        `${skill} must report terminal next stage as none or route Full/legacy Hotfix to the physical archive`);
     }
   });
 

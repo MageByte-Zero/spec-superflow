@@ -4,11 +4,12 @@
 // 以及 cwd 越界 WARN。全部通过真实 git 操作 + 真实 CLI 进程完成。
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { run as finishRun } from '../../scripts/lib/cmd-finish.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
@@ -93,6 +94,152 @@ function runFinish(changeDir, cwd, extraArgs = []) {
     all: `${r.stdout || ''}\n${r.stderr || ''}`,
   };
 }
+
+// 进程内调用 finish 的 run()，注入 runGit 使指定 git 子命令首次调用抛错。
+// forceRemoveFirstCall: 'plain' → 拦截无 --force 的 worktree remove；
+// 'all' → 拦截所有 worktree remove。被拦截的调用抛出含原因的 Error，
+// 其余 git 调用透传真实 git。返回 { exitCode, stdout, stderr, all }。
+function runFinishInProcess(changeDir, cwd, { blockRemove = 'plain' } = {}) {
+  const out = [];
+  const err = [];
+  const io = { stdout: { write: s => out.push(s) }, stderr: { write: s => err.push(s) } };
+  const realRunGit = (args, options) => execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=test', ...args], {
+    encoding: 'utf8', ...(options || {}),
+  });
+  const runGit = (args, options) => {
+    const isRemove = args.includes('worktree') && args.includes('remove');
+    const forced = args.includes('--force');
+    const blocked = blockRemove === 'all' || (blockRemove === 'plain' && !forced);
+    if (isRemove && blocked) {
+      throw new Error('fixture: worktree remove blocked（模拟 submodule 占用场景）');
+    }
+    return realRunGit(args, options);
+  };
+  const prevCwd = process.cwd();
+  process.chdir(cwd);
+  try {
+    const result = finishRun([changeDir], io, runGit);
+    return { exitCode: result?.exitCode ?? 0, stdout: out.join(''), stderr: err.join(''), all: `${out.join('')}\n${err.join('')}` };
+  } finally {
+    process.chdir(prevCwd);
+  }
+}
+
+describe('ssf finish — force fallback 与 merge 即时反馈（closing-finish-alignment R2/R3）', () => {
+  it('R2a force 兜底成功：首次 remove 失败 → WARN + --force 重试 → 报告标注 force removed、worktree/分支真实删除、退出 0', () => {
+    const base = mkdtempSync(join(tmpdir(), 'ssf-finish-force-ok-'));
+    tempDirs.push(base);
+    const { main, changeDir, worktree } = createIsolatedWorktree(base, 'finish-force-ok');
+    commitFileInWorktree(worktree, 'feature.txt', 'branch work');
+
+    const r = runFinishInProcess(changeDir, main, { blockRemove: 'plain' });
+
+    assert.equal(r.exitCode, 0, r.all);
+    // WARN 包含首次失败原因与 force 重试意图
+    assert.match(r.all, /WARN: worktree remove 失败/);
+    assert.match(r.all, /--force/);
+    // 报告标注 force 移除
+    assert.match(r.all, /force removed/);
+    // worktree 与隔离分支真实删除
+    assert.equal(existsSync(worktree), false, 'worktree must be removed');
+    assert.equal(git(main, 'branch', '--list', 'finish-force-ok'), '', 'isolated branch must be deleted');
+    // merge commit 存在且在报告中
+    const mergeCommit = git(main, 'log', '--merges', '-1', '--format=%H');
+    assert.ok(r.all.includes(mergeCommit), 'report must include merge commit');
+  });
+
+  it('R2b force 也失败：手动指引含 merge sha 与两条命令、branch -d 仍被尝试并成功、退出 1、worktree 残留', () => {
+    const base = mkdtempSync(join(tmpdir(), 'ssf-finish-force-fail-'));
+    tempDirs.push(base);
+    const { main, changeDir, worktree } = createIsolatedWorktree(base, 'finish-force-fail');
+    commitFileInWorktree(worktree, 'feature.txt', 'branch work');
+    const mergeShaBefore = git(main, 'rev-parse', 'finish-force-fail');
+
+    const r = runFinishInProcess(changeDir, main, { blockRemove: 'all' });
+
+    assert.equal(r.exitCode, 1, r.all);
+    // 手动指引：merge 已成功（commit sha）
+    assert.match(r.all, /merge 已成功（commit [0-9a-f]{40}）/);
+    // 两条手动命令
+    assert.ok(r.all.includes(`git worktree remove --force ${worktree}`), r.all);
+    assert.ok(r.all.includes('git branch -d finish-force-fail'), r.all);
+    // branch -d 仍被尝试：worktree 残留时分支仍被其检出，真实 git 的
+    // branch -d 必然失败 → finish 必须如实报告删除失败而非静默跳过。
+    assert.match(r.all, /隔离分支删除失败/);
+    assert.notEqual(git(main, 'branch', '--list', 'finish-force-fail'), '', 'branch must survive (still checked out by surviving worktree)');
+    // worktree 残留
+    assert.equal(existsSync(worktree), true, 'worktree must survive when --force also fails');
+    assert.ok(mergeShaBefore, 'fixture sanity');
+  });
+
+  it('R3a merge 即时反馈：成功路径 stdout 在验证命令输出之前含 "merge --no-ff 成功（commit <sha>）"', () => {
+    const base = mkdtempSync(join(tmpdir(), 'ssf-finish-feedback-ok-'));
+    tempDirs.push(base);
+    const { main, changeDir, worktree } = createIsolatedWorktree(base, 'finish-feedback-ok');
+    commitFileInWorktree(worktree, 'feature.txt', 'branch work');
+
+    const r = runFinish(changeDir, main);
+
+    assert.equal(r.status, 0, r.all);
+    const mergeCommit = git(main, 'log', '--merges', '-1', '--format=%H');
+    const fbIdx = r.stdout.indexOf(`merge --no-ff 成功（commit ${mergeCommit}）`);
+    assert.notEqual(fbIdx, -1, `stdout must contain merge feedback with sha, got: ${r.stdout}`);
+    const verifyIdx = r.stdout.indexOf('在主干执行验证命令');
+    assert.ok(fbIdx < verifyIdx, 'merge feedback must precede the verification command line');
+  });
+
+  it('R3b merge 即时反馈：验证失败路径该行仍存在且位于失败信息之前（merge 已发生）', () => {
+    const base = mkdtempSync(join(tmpdir(), 'ssf-finish-feedback-fail-'));
+    tempDirs.push(base);
+    const { main, changeDir, worktree } = createIsolatedWorktree(base, 'finish-feedback-fail');
+    commitFileInWorktree(worktree, 'feature.txt', 'branch work');
+
+    const r = runFinish(changeDir, main, ['--test-cmd', 'node -e "process.exit(1)"']);
+
+    assert.notEqual(r.status, 0, r.all);
+    const mergeCommit = git(main, 'log', '--merges', '-1', '--format=%H');
+    assert.ok(mergeCommit, 'merge must have happened');
+    const fbIdx = r.all.indexOf(`merge --no-ff 成功（commit ${mergeCommit}）`);
+    assert.notEqual(fbIdx, -1, `feedback line must exist on verify-failure path, got: ${r.all}`);
+    const failIdx = r.all.indexOf('主干验证失败');
+    assert.notEqual(failIdx, -1, 'failure message must exist');
+    assert.ok(fbIdx < failIdx, 'merge feedback must precede the failure message');
+  });
+
+  it('R3c 失败路径（merge 冲突）不输出 merge 成功反馈行', () => {
+    const base = mkdtempSync(join(tmpdir(), 'ssf-finish-feedback-conflict-'));
+    tempDirs.push(base);
+    const { main, changeDir, worktree } = createIsolatedWorktree(base, 'finish-feedback-conflict');
+    commitFileInWorktree(worktree, 'shared.txt', 'branch version');
+    writeFileSync(join(main, 'shared.txt'), 'main version');
+    git(main, 'add', '-A');
+    git(main, 'commit', '-q', '-m', 'main conflict edit');
+
+    const r = runFinish(changeDir, main);
+
+    try {
+      assert.notEqual(r.status, 0, r.all);
+      assert.doesNotMatch(r.all, /merge --no-ff 成功/, 'conflict path must not print merge feedback');
+    } finally {
+      try { git(main, 'merge', '--abort'); } catch { /* ignore */ }
+    }
+  });
+
+  it('R2c 回归：无 remove 失败时无 WARN 无 force 标注（注入透传真实 git 的正常收尾）', () => {
+    const base = mkdtempSync(join(tmpdir(), 'ssf-finish-force-clean-'));
+    tempDirs.push(base);
+    const { main, changeDir, worktree } = createIsolatedWorktree(base, 'finish-force-clean');
+    commitFileInWorktree(worktree, 'feature.txt', 'branch work');
+
+    const r = runFinishInProcess(changeDir, main, { blockRemove: 'none' });
+
+    assert.equal(r.exitCode, 0, r.all);
+    assert.doesNotMatch(r.all, /WARN: worktree remove 失败/);
+    assert.doesNotMatch(r.all, /force removed/);
+    assert.equal(existsSync(worktree), false, 'worktree must be removed');
+    assert.equal(git(main, 'branch', '--list', 'finish-force-clean'), '', 'branch must be deleted');
+  });
+});
 
 describe('ssf finish — 一键收尾（worktree-lifecycle R3/R5）', () => {
   it('标准收尾：merge --no-ff 提交存在、worktree/分支删除、退出 0（cwd=主仓库时含 cwd WARN 但不阻断）', () => {

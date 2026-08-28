@@ -13,7 +13,9 @@ For Full or legacy Hotfix, read `execution-contract.md`, `tasks.md`, relevant `s
 
 Check workflow mode and receipt first. Tweak → direct edit mode. Quick or a valid direct incident Hotfix → Direct Quick and Hotfix. Full or legacy Hotfix → standard contract-first discipline.
 
-Branch/worktree preflight before ANY implementation edit (mandatory — do not skip):
+Branch/worktree preflight before ANY implementation edit — **workflow-aware**:
+
+**Full / legacy Hotfix — isolation mandatory (do not skip):**
 1. Run the isolation check:
    ```bash
    ssf isolate <change-dir>
@@ -32,15 +34,9 @@ Branch/worktree preflight before ANY implementation edit (mandatory — do not s
    warning (isolation path + mandatory `cd` prefix rule) to
    `<change-dir>/.superpowers/sdd/progress.md` so later Bash calls do not silently
    edit the trunk.
-4. When the implementation is fully committed and reviewed, close out the change
-   with `ssf finish <change-dir>` instead of manual merge/cleanup. `ssf finish`
-   merges the isolation branch back to the trunk with `--no-ff`, verifies the trunk
-   contains every isolation commit, then runs a verification gate on the trunk
-   (default `npm test`, overridable with `--test-cmd <command>`, 10-minute
-   timeout) before removing the worktree and the isolation branch. If the trunk
-   verification fails or times out, `ssf finish` keeps the worktree and the
-   isolation branch, prints the failure details, and prompts you to return to the
-   worktree, fix the issue, and re-run `ssf finish <change-dir>`.
+4. Closure (including `ssf finish <change-dir>` for Full/legacy Hotfix) is owned by release-archivist — route there after review passes.
+
+**Quick / direct Hotfix / Tweak / lightweight — skip isolation, edit directly on the current branch.** Rationale: no recordReview (R4 never fires), no `ssf finish` merge, no wave receipts — a worktree would be dead weight. For sensitive scenarios requiring manual isolation, run `ssf isolate <change-dir> --force` explicitly.
 
 ## Core Laws
 

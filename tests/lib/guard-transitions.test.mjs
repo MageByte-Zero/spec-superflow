@@ -278,7 +278,9 @@ describe('Fast-path validation', () => {
     const result = runGuard('exploring', 'bridging', dir, 'tweak');
     const output = guardOutput(result);
     assert.equal(result.ok, false, 'tweak should use exploring -> approved-for-build, not bridging');
-    assert.match(output, /workflow-mode|hotfix/i);
+    // workflow-aware 化后 tweak 下 exploring:bridging 不再回退 full 主表，
+    // 以 workflow-transition-unknown 明确拒绝（比原先的 workflow-mode gate 更精确）。
+    assert.match(output, /workflow-mode|hotfix|workflow-transition-unknown/i);
   });
 
   it('SHALL reject tweak fast-path when workflow is full', () => {
