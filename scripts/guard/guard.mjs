@@ -251,7 +251,7 @@ function directTestResultCheck(changeDir) {
   }
   return {
     pass: false,
-      failures: ['fast-path closing requires test_result starting with pass; DP-6 is not a substitute'],
+    failures: ['fast-path closing requires test_result starting with pass; DP-6 is not a substitute. Fix: run `ssf state set <change-dir> test_result "pass: <verification summary>"` before transitioning to closing'],
   };
 }
 

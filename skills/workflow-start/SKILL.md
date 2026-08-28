@@ -187,7 +187,7 @@ work.
 ### Fast-Path Routing
 - **Legacy Hotfix**: Route to contract-builder (minimal), skip need-explorer + spec-writer, guard check `exploring bridging --workflow hotfix`, then `bridging -> approved-for-build`, after DP-3 → build-executor (recommend, show, and confirm an execution mode), after → release-archivist (lightweight). It may skip planning artifacts but still requires a minimal contract, DP-3, and a current execution plan. A direct Hotfix instead follows Direct Short-Path Intake.
 - **Tweak**: Route to build-executor (direct edit), skip need-explorer + spec-writer + contract-builder, guard check `exploring approved-for-build --workflow tweak`, after → release-archivist (lightweight)
-- **Quick / direct Hotfix / lightweight**: Route to build-executor (direct edit on trunk), skip isolate + contract + plan + wave receipts; guard check `exploring approved-for-build` (receipt-aware), then edit, persist `test_result: pass` (lightweight also records completion evidence via `ssf workflow evidence`), then `executing closing`.
+- **Quick / direct Hotfix / lightweight**: Route to build-executor (direct edit on trunk), skip isolate + contract + plan + wave receipts; guard check `exploring approved-for-build` (receipt-aware), then edit, persist `test_result: pass` (`ssf state set <change-dir> test_result "pass: <verification summary>"` — required by the guard's direct-test-result check before `executing closing`; lightweight also records completion evidence via `ssf workflow evidence`), then `executing closing`.
 
 Post-transition: 💡 `ssf inject <change-dir>` to update phase-guard artifacts.
 
