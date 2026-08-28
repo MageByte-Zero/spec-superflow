@@ -164,6 +164,10 @@ describe('ssf finish — force fallback 与 merge 即时反馈（closing-finish-
     const base = mkdtempSync(join(tmpdir(), 'ssf-finish-force-fail-'));
     tempDirs.push(base);
     const { main, changeDir, worktree } = createIsolatedWorktree(base, 'finish-force-fail');
+    // 手动指引里的 worktree 路径经生产代码 native realpath 规范化（git
+    // 返回长路径形式）；CI Windows 的 TEMP 是 8.3 短名，断言须用同形式，
+    // 且必须在收尾删除前捕获（该路径本测试中保留，但统一防御 ENOENT）。
+    const worktreeReal = realpathSync.native(worktree);
     commitFileInWorktree(worktree, 'feature.txt', 'branch work');
     const mergeShaBefore = git(main, 'rev-parse', 'finish-force-fail');
 
@@ -173,7 +177,7 @@ describe('ssf finish — force fallback 与 merge 即时反馈（closing-finish-
     // 手动指引：merge 已成功（commit sha）
     assert.match(r.all, /merge 已成功（commit [0-9a-f]{40}）/);
     // 两条手动命令
-    assert.ok(r.all.includes(`git worktree remove --force ${worktree}`), r.all);
+    assert.ok(r.all.includes(`git worktree remove --force ${worktreeReal}`), r.all);
     assert.ok(r.all.includes('git branch -d finish-force-fail'), r.all);
     // branch -d 仍被尝试：worktree 残留时分支仍被其检出，真实 git 的
     // branch -d 必然失败 → finish 必须如实报告删除失败而非静默跳过。

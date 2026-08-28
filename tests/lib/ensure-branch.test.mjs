@@ -290,7 +290,10 @@ describe('worktree-lifecycle R1/R2: submodule init + progress cwd warning', () =
       writeFileSync(join(changeDir, '.superpowers', 'sdd', 'progress.md'), 'EXISTING RECORD\n');
 
       const r = run(`"${changeDir}" pg-change`);
-      const worktree = join(base, 'main-pg-change');
+      // ensure-branch 写入 progress 的隔离路径来自 `git rev-parse
+      // --show-toplevel`（长路径形式）；CI Windows 的 TEMP 是 8.3 短名，
+      // 断言必须用 native realpath 规范化后的形式比较。
+      const worktree = realpathSync.native(join(base, 'main-pg-change'));
 
       assert.equal(r.ok, true, r.out);
       const progress = readFileSync(join(changeDir, '.superpowers', 'sdd', 'progress.md'), 'utf8');
