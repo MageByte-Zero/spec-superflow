@@ -5,7 +5,7 @@
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -64,7 +64,7 @@ function createIsolatedWorktree(base, name, repoOpts) {
   const r = spawnSync(process.execPath, [ENSURE, changeDir, name], {
     encoding: 'utf8',
     timeout: 20000,
-    env: { ...process.env, GIT_ALLOW_PROTOCOL: 'file' },
+    env: { ...process.env, GIT_ALLOW_PROTOCOL: 'file', ...GIT_IDENTITY_ENV },
   });
   assert.equal(r.status, 0, `ensure-branch failed: ${r.stdout}\n${r.stderr}`);
   const worktree = join(base, `${basename(main)}-${name}`);
@@ -81,11 +81,23 @@ function commitFileInWorktree(worktree, rel, content) {
   git(worktree, 'commit', '-q', '-m', `add ${rel}`);
 }
 
+// CI runner 无全局 git 身份，finish 的 merge --no-ff 创建 merge commit 时
+// 会报 "Committer identity unknown"（Ubuntu CI 实际故障）。所有 spawn 的
+// 子进程统一注入身份 env；-c 参数只对直接调用的 git 进程生效，覆盖不到
+// finish 内部 spawn 的 npm test / git 子进程链。
+const GIT_IDENTITY_ENV = {
+  GIT_AUTHOR_NAME: 'test',
+  GIT_AUTHOR_EMAIL: 't@t',
+  GIT_COMMITTER_NAME: 'test',
+  GIT_COMMITTER_EMAIL: 't@t',
+};
+
 function runFinish(changeDir, cwd, extraArgs = []) {
   const r = spawnSync(process.execPath, [CLI, 'finish', changeDir, ...extraArgs], {
     cwd,
     encoding: 'utf8',
     timeout: 60000,
+    env: { ...process.env, ...GIT_IDENTITY_ENV },
   });
   return {
     status: r.status,
@@ -246,6 +258,10 @@ describe('ssf finish — 一键收尾（worktree-lifecycle R3/R5）', () => {
     const base = mkdtempSync(join(tmpdir(), 'ssf-finish-ok-'));
     tempDirs.push(base);
     const { main, changeDir, worktree } = createIsolatedWorktree(base, 'finish-ok');
+    // WARN 路径断言用的规范化形式必须在收尾删除 worktree 之前捕获
+    //（realpath 对已删除路径抛 ENOENT）。CI Windows 的 TEMP 是 8.3 短名
+    //（RUNNER~1），生产代码经 native realpath 规范化输出，断言须用同形式。
+    const worktreeReal = realpathSync.native(worktree);
     commitFileInWorktree(worktree, 'feature.txt', 'branch work');
     const isoHead = git(main, 'rev-parse', 'finish-ok');
 
@@ -254,7 +270,7 @@ describe('ssf finish — 一键收尾（worktree-lifecycle R3/R5）', () => {
     assert.equal(r.status, 0, r.all);
     // cwd=主仓库不在 worktree 内 → 输出一行含 worktree 绝对路径的 WARN，但不阻断
     assert.match(r.all, /WARN/);
-    assert.ok(r.all.includes(resolve(worktree)), `WARN must contain worktree path ${resolve(worktree)}`);
+    assert.ok(r.all.includes(worktreeReal), `WARN must contain worktree path ${worktreeReal}`);
     assert.match(r.all, /worktree 内路径/);
     // merge --no-ff 提交存在
     const mergeCommit = git(main, 'log', '--merges', '-1', '--format=%H');

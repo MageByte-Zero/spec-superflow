@@ -5,9 +5,9 @@
 
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { execSync } from 'node:child_process';
-import { mkdtempSync, rmSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, existsSync, mkdirSync, writeFileSync, readFileSync, realpathSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -26,26 +26,41 @@ function rmRetry(dir) {
     } catch (e) {
       if (!['EPERM', 'EBUSY'].includes(e.code)) throw e;
       if (attempt === 4) throw e;
-      execSync(process.platform === 'win32' ? 'ping -n 1 -w 300 127.0.0.1 > nul' : 'sleep 0.3', { shell: true });
+      // 阻塞当前线程 300ms（Atomics.wait 无 shell、无定时器泄漏），
+      // 等待 Windows 释放 git/submodule 文件句柄后重试。
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300);
     }
   }
 }
 
+// 无 shell 的进程调用（literal argv 数组）：ai-plugin-scanner 会将
+// execSync + 模板字符串插值识别为 shell injection pattern（high），
+// 且 spawnSync 数组形式本身也更安全。统一从这里发起子进程。
+function runProcess(cmd, args, opts = {}) {
+  const r = spawnSync(cmd, args, {
+    encoding: 'utf-8',
+    stdio: 'pipe',
+    timeout: 60000,
+    env: { ...process.env, GIT_ALLOW_PROTOCOL: 'file' },
+    ...opts,
+  });
+  return r;
+}
+
 function run(args) {
-  try {
-    // GIT_ALLOW_PROTOCOL=file lets file:// submodule URLs (used by the local
-    // fixtures) be fetched during recursive submodule initialization; the
-    // default "user" policy blocks URLs resolved automatically from .gitmodules.
-    const out = execSync(`node ${ENSURE} ${args}`, { encoding: 'utf-8', stdio: 'pipe', timeout: 60000, env: { ...process.env, GIT_ALLOW_PROTOCOL: 'file' } });
-    return { ok: true, out };
-  } catch (e) {
-    return { ok: false, out: `${e.stdout || ''}\n${e.stderr || ''}` || e.message };
-  }
+  // args 由测试字面量拼接（路径可能含空格），拆分为 argv 数组传递。
+  const argv = args.match(/"[^"]*"|\S+/g).map((a) => a.replace(/^"|"$/g, ''));
+  const r = runProcess(process.execPath, [ENSURE, ...argv]);
+  if (r.status === 0) return { ok: true, out: r.stdout || '' };
+  return { ok: false, out: `${r.stdout || ''}\n${r.stderr || ''}` || r.stderr || String(r.error) };
 }
 
 function git(dir, ...args) {
-  const quoted = args.map((a) => (/\s/.test(String(a)) ? `"${a}"` : a)).join(' ');
-  execSync(`git -c user.email=t@t -c user.name=test ${quoted}`, { cwd: dir, stdio: 'pipe', timeout: 60000, env: { ...process.env, GIT_ALLOW_PROTOCOL: 'file' } });
+  const r = runProcess('git', ['-c', 'user.email=t@t', '-c', 'user.name=test', ...args], { cwd: dir });
+  if (r.status !== 0) {
+    throw new Error(`git ${args.join(' ')} failed (${r.status}): ${r.stderr || r.stdout}`);
+  }
+  return (r.stdout || '').trim();
 }
 
 // Create a bare standalone git repo with a committed file at `dir`.
@@ -116,8 +131,8 @@ function addBogusSubmodule(repoDir, name, url) {
   const modulesPath = join(repoDir, '.gitmodules');
   const existing = existsSync(modulesPath) ? readFileSync(modulesPath, 'utf8') : '';
   writeFileSync(modulesPath, `${existing}\n[submodule "${name}"]\n\tpath = ${name}\n\turl = ${url}\n`);
-  const head = execSync('git rev-parse HEAD', { cwd: repoDir, encoding: 'utf-8' }).trim();
-  execSync(`git update-index --add --cacheinfo 160000,${head},${name}`, { cwd: repoDir });
+  const head = git(repoDir, 'rev-parse', 'HEAD');
+  git(repoDir, 'update-index', '--add', '--cacheinfo', `160000,${head},${name}`);
   git(repoDir, 'add', '.gitmodules');
   git(repoDir, 'commit', '-q', '-m', 'add bogus submodule');
 }
@@ -183,7 +198,7 @@ describe('BUG/#15: ensure-branch enforces isolation', () => {
     try {
       assert.equal(r.ok, true, r.out);
       assert.match(r.out, /created git worktree .* on branch 'default-name'/i);
-      const branch = execSync('git branch --show-current', { cwd: worktree, encoding: 'utf-8' }).trim();
+      const branch = git(worktree, 'branch', '--show-current');
       assert.equal(branch, 'default-name', 'default isolation branch must be named after the change directory');
     } finally {
       if (existsSync(worktree)) git(repoDir, 'worktree', 'remove', '--force', worktree);
@@ -309,7 +324,9 @@ describe('worktree-lifecycle R1/R2: submodule init + progress cwd warning', () =
       assert.equal(existsSync(join(main, 'subA', 'a.txt')), true, 'fallback outer submodule content');
       assert.equal(existsSync(join(main, 'subA', 'subB', 'b.txt')), true, 'fallback nested submodule content');
       const progress = readFileSync(join(changeDir, '.superpowers', 'sdd', 'progress.md'), 'utf8');
-      assert.ok(progress.includes(resolve(main)), 'warning must mention the isolated (branch) context path');
+      // repoRoot 来自 `git rev-parse --show-toplevel`（长路径形式），CI
+      // Windows 的 TEMP 是 8.3 短名，断言必须用 native realpath 规范化。
+      assert.ok(progress.includes(realpathSync.native(main)), 'warning must mention the isolated (branch) context path');
     } finally {
       rmRetry(base);
     }

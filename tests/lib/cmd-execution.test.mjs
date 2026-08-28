@@ -1,8 +1,8 @@
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { getPlanScopedPaths } from '../../scripts/lib/sdd-overlay.mjs';
@@ -942,6 +942,10 @@ describe('ssf execution review — cwd 越界 WARN（worktree-lifecycle R5）', 
     assert.equal(r.status, 0, `${r.stdout}\n${r.stderr}`);
     const worktree = join(tmpBase, `${basename(main)}-${name}`);
     assert.equal(existsSync(worktree), true, `worktree must exist at ${worktree}`);
+    // 断言用规范化路径必须在 review 前捕获（防 worktree 被清理后 realpath
+    // 抛 ENOENT）。CI Windows 的 TEMP 是 8.3 短名（RUNNER~1），生产代码经
+    // native realpath 规范化输出，断言须用同形式。
+    const worktreeReal = realpathSync.native(worktree);
     commitFileInWorktree(worktree, 'feature.txt', 'branch work\n');
     const head = runGit(main, ['rev-parse', name]);
     const reportPath = writeReviewReportIn(changePath, 'wave-1.md');
@@ -953,7 +957,7 @@ describe('ssf execution review — cwd 越界 WARN（worktree-lifecycle R5）', 
 
     assert.equal(reviewed.status, 0, reviewed.all);
     assert.match(reviewed.all, /WARN/);
-    assert.ok(reviewed.stdout.includes(resolve(worktree)), `WARN must contain worktree path ${resolve(worktree)}`);
+    assert.ok(reviewed.stdout.includes(worktreeReal), `WARN must contain worktree path ${worktreeReal}`);
     assert.match(reviewed.all, /worktree 内路径/);
     assert.match(reviewed.stdout, /recorded: pass/);
   });

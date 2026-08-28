@@ -16,6 +16,9 @@ The format loosely follows Keep a Changelog.
 
 ### Fixed
 
+- **Windows 8.3 short-path compatibility in isolation checks**: the `isSubpath` helpers in `ssf finish` and `ssf execution review` (worktree-lifecycle R5) now normalize paths with `realpathSync.native`, which resolves 8.3 short names (`C:\Users\RUNNER~1\...`). The JS `realpathSync` cannot resolve short-name components, so on CI Windows runners — whose TEMP is a short path — the cwd was wrongly flagged as outside the isolation worktree even when it was inside.
+- **CI-stable `ssf finish` tests**: finish test helpers now inject git committer/author identity environment variables (CI runners have no global git identity, so `git merge --no-ff` failed with "Committer identity unknown"), and worktree-path assertions capture the `realpathSync.native` form before the worktree is removed.
+- **Tests: no shell-string process invocation in `ensure-branch` tests**: replaced `execSync` template-string interpolation with `spawnSync` literal argv arrays (flagged as high-severity shell-injection pattern by the plugin scanner) and replaced the shell-based sleep with `Atomics.wait`.
 - **`ssf execution review` rejects trunk-only commits**: before recording a review receipt, the head commit must be contained by at least one non-protected branch (`main`/`master` excluded). A head that only sits on `main`/`master` is rejected with a non-zero exit and no receipt is written; heads on an isolation branch (including one already merged back to the trunk) still pass.
 - **cwd-escape WARN in `ssf finish` / `ssf execution review`**: when the change has an isolation worktree and the process cwd is outside it, both commands emit a WARN containing the worktree absolute path without blocking execution. No worktree → no WARN.
 - **CRLF-tolerant risk ownership matrix test**: `verification-risk-ownership.test.mjs` now normalizes line endings so the matrix parses identically on Windows (CRLF checkouts) and POSIX.

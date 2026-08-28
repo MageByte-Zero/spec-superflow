@@ -35,16 +35,20 @@ function git(root, args, io, runGit) {
 }
 
 // 规范化路径：realpath 解析 8.3 短名/junction，失败时退化为 resolve。
+// 必须用 native 版本：JS 版 realpathSync 无法解析 8.3 短名组件（组件名
+// 与 readdir 结果不匹配 → ENOENT → 保留短形式），CI Windows runner 的
+// TEMP 是 C:\Users\RUNNER~1\... 短名形式，与 git 输出的长路径比较会误判。
 function normPath(p) {
   try {
-    return realpathSync(p);
+    return realpathSync.native(p);
   } catch {
     return resolve(p);
   }
 }
 
 // child 是否位于 parent 内（大小写不敏感，兼容 Windows 盘符）。
-function isSubpath(parent, child) {
+// 导出供测试验证 8.3 短路径兼容性（path-normalization.test.mjs）。
+export function isSubpath(parent, child) {
   const p = normPath(parent).toLowerCase();
   const c = normPath(child).toLowerCase();
   return c === p || c.startsWith(p + sep);

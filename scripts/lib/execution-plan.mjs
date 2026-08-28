@@ -813,16 +813,20 @@ function parseWorktreeEntries(output) {
 }
 
 // 规范化路径：realpath 解析 8.3 短名/junction，失败时退化为 resolve。
+// 必须用 native 版本：JS 版 realpathSync 无法解析 8.3 短名组件，CI
+// Windows runner 的 TEMP 是 C:\Users\RUNNER~1\... 短名形式，与 git
+// worktree list 输出的长路径比较会误报 R5 越界 WARN。
 function normalizedPath(p) {
   try {
-    return realpathSync(p);
+    return realpathSync.native(p);
   } catch {
     return resolve(p);
   }
 }
 
 // child 是否位于 parent 内（大小写不敏感，兼容 Windows 盘符）。
-function isSubpath(parent, child) {
+// 导出供测试验证 8.3 短路径兼容性（path-normalization.test.mjs）。
+export function isSubpath(parent, child) {
   const p = normalizedPath(parent).toLowerCase();
   const c = normalizedPath(child).toLowerCase();
   return c === p || c.startsWith(`${p}${sep}`);
