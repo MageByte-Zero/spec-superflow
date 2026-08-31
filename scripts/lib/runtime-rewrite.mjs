@@ -17,6 +17,7 @@ export const SSF_SUBCOMMANDS = [
   'debug',
   'doctor',
   'execution',
+  'finish',
   'handoff',
   'inject',
   'isolate',

@@ -31,7 +31,11 @@ function readText(dir, name) {
 }
 
 function countTasks(tasks) {
-  return (tasks.match(/^- \[([ x])\]/gm) || []).length;
+  const checkbox = (tasks.match(/^- \[([ x])\]/gm) || []).length;
+  // Numbered headings like "### 1. xxx" / "#### 2. xxx" also denote tasks.
+  // The two patterns are mutually exclusive on the same line, so no double counting.
+  const numberedHeadings = (tasks.match(/^#{3,4}\s+\d+\./gm) || []).length;
+  return checkbox + numberedHeadings;
 }
 
 function collectFiles(text) {

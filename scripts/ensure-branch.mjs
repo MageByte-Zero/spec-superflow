@@ -11,7 +11,7 @@
 // the same form proven safe by install-cursor.mjs / install.mjs. There is no
 // string-form shell command, no variable command, and no dynamic args array.
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync } from 'node:fs';
+import { appendFileSync, cpSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 
 const changeDir = process.argv[2];
@@ -73,7 +73,9 @@ try {
 
 const sourceChangeDir = resolve(changeDir);
 const repoName = basename(repoRoot) || 'repo';
-const name = changeName || repoName;
+// 默认隔离分支名 = change 目录名（与 ssf finish / review 的匹配假设一致：
+// finish 与 R5 WARN 均按 refs/heads/<change-dir-basename> 查找隔离 worktree）。
+const name = changeName || basename(sourceChangeDir) || repoName;
 if (!isSafePathSegment(name)) {
   console.error('ensure-branch: change name must be a single safe path segment.');
   process.exit(1);
@@ -91,23 +93,93 @@ function copyActiveChange(worktreeRoot) {
   });
 }
 
+// Initialize every (nested) submodule in an isolated context. Literal arg array
+// — no shell string. Returns false (and sets a non-zero exit code) when any
+// submodule cannot be fetched, because an unbuildable worktree must stop the
+// agent. The failure line is written synchronously to stderr: `console.error`
+// followed by `process.exit` can drop the final line before the pipe flushes
+// under Windows/pipe, silently hiding the reason.
+function initSubmodules(contextDir) {
+  if (!existsSync(join(contextDir, '.gitmodules'))) {
+    console.log(`ensure-branch: no .gitmodules in ${contextDir}; skipping submodule initialization.`);
+    return true;
+  }
+  console.log(`ensure-branch: initializing submodules in ${contextDir}...`);
+  try {
+    // A hard timeout: on Windows, `git submodule update` against an unreachable
+    // file:// URL can block for minutes instead of failing fast. Cap it so a
+    // broken submodule stops the agent promptly rather than hanging isolate.
+    execFileSync('git', ['-C', contextDir, 'submodule', 'update', '--init', '--recursive'], { ...GIT_OPTS, cwd: contextDir, timeout: 120000 });
+    return true;
+  } catch (e) {
+    const reason = (e.stderr || e.stdout || e.message || 'unknown').toString().trim();
+    process.stderr.write(`ensure-branch: submodule initialization failed: ${reason}\n`);
+    process.exitCode = 1;
+    return false;
+  }
+}
+
+// Append a cwd-persistence warning to the change's progress ledger. The ledger
+// (and its parent directories) is created when missing; existing content is
+// never overwritten.
+function writeProgressWarning(contextDir) {
+  const progressDir = join(changeDir, '.superpowers', 'sdd');
+  const progressFile = join(progressDir, 'progress.md');
+  mkdirSync(progressDir, { recursive: true });
+  const entry = [
+    '',
+    '## cwd 警告（ensure-branch 自动写入）',
+    '',
+    `- 隔离上下文：\`${contextDir}\``,
+    '- Bash cwd 不持续：每条命令都会回到会话初始目录，不会记住上一次的 cd',
+    `- 强制规则：后续实现编辑必须使用隔离上下文内的绝对路径，或每条命令以前缀 \`cd ${contextDir} &&\` 开头`,
+    '',
+  ].join('\n');
+  appendFileSync(progressFile, entry, 'utf-8');
+  console.log(`ensure-branch: appended cwd warning to ${progressFile}`);
+}
+
 // Preferred: git worktree (literal arg array).
+let worktreeCreated = false;
 try {
   execFileSync('git', ['worktree', 'add', worktreePath, '-b', name], { ...GIT_OPTS, stdio: 'inherit' });
-  copyActiveChange(worktreePath);
-  console.log(`ensure-branch: created git worktree at ${worktreePath} on branch '${name}' with active change artifacts. Make all implementation edits there.`);
-  process.exit(0);
+  worktreeCreated = true;
 } catch (e) {
   console.error(`ensure-branch: worktree creation failed: ${(e.stderr || e.stdout || e.message || 'unknown').toString().trim()}`);
 }
+if (worktreeCreated) {
+  if (!initSubmodules(worktreePath)) {
+    process.exit(1);
+  }
+  writeProgressWarning(worktreePath);
+  copyActiveChange(worktreePath);
+  console.log(`ensure-branch: created git worktree at ${worktreePath} on branch '${name}' with active change artifacts. Make all implementation edits there.`);
+  process.exit(0);
+}
 
-// Fallback: local branch (literal arg array).
+// Fallback: local branch (literal arg arrays).
+let branchCreated = false;
 try {
   execFileSync('git', ['switch', '-c', name], { ...GIT_OPTS, stdio: 'inherit' });
+  branchCreated = true;
+} catch (e) {
+  // A failed `git worktree add -b <name>` may have already created the branch
+  // without materializing the worktree directory, so `git switch -c` collides
+  // with the existing name. Fall back to plain `git switch` onto that branch.
+  try {
+    execFileSync('git', ['switch', name], { ...GIT_OPTS, stdio: 'inherit' });
+    branchCreated = true;
+  } catch (e2) {
+    console.error(`ensure-branch: branch creation failed: ${(e2.stderr || e2.stdout || e2.message || 'unknown').toString().trim()}`);
+  }
+}
+if (branchCreated) {
+  if (!initSubmodules(repoRoot)) {
+    process.exit(1);
+  }
+  writeProgressWarning(repoRoot);
   console.log(`ensure-branch: created branch '${name}' via git switch -c. Make implementation edits there.`);
   process.exit(0);
-} catch (e) {
-  console.error(`ensure-branch: branch creation failed: ${(e.stderr || e.stdout || e.message || 'unknown').toString().trim()}`);
 }
 
 // Both failed → require explicit approval to edit in place.

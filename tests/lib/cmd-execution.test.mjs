@@ -1,15 +1,23 @@
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { getPlanScopedPaths } from '../../scripts/lib/sdd-overlay.mjs';
 import { run as runExecution } from '../../scripts/lib/cmd-execution.mjs';
 import { readState, writeState, rebuildState } from '../../scripts/lib/state-loader.mjs';
 import { computeArtifactsHash, computeContractHash } from '../../scripts/lib/hash.mjs';
 import { createGitSeedFixture } from '../helpers/git-seed-fixture.mjs';
 import { canCreateSymlink } from '../helpers/symlink-support.mjs';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = join(__dirname, '..', '..');
+const CLI = join(ROOT, 'scripts', 'spec-superflow.mjs');
+const ENSURE = join(ROOT, 'scripts', 'ensure-branch.mjs');
+
+const tempDirs = [];
 
 let changeDir;
 let gitRefs;
@@ -130,7 +138,57 @@ function createRepairCommit(label) {
   writeFileSync(marker, `${label}\n`);
   runGit(changeDir, ['add', marker]);
   runGit(changeDir, ['commit', '--quiet', '--message', `repair ${label}`]);
+  // R4: 让隔离分支跟随默认分支的新提交，使 head 始终被非 protected 分支包含
+  runGit(changeDir, ['branch', '-f', 'test-isolation', 'HEAD']);
   return runGit(changeDir, ['rev-parse', 'HEAD']);
+}
+
+function writeReviewReportIn(directory, name, content = 'Review completed without blocking findings.\n') {
+  const reportsDir = join(directory, '.superpowers', 'sdd', 'reviews');
+  mkdirSync(reportsDir, { recursive: true });
+  const reportPath = join(reportsDir, name);
+  writeFileSync(reportPath, content);
+  return reportPath;
+}
+
+// R5 fixture：主仓库 + changes/<name> change 目录（planning 产物被 /changes 忽略）。
+function makeRepo(dir) {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'README.md'), 'x');
+  writeFileSync(join(dir, '.gitignore'), '/changes\n');
+  runGit(dir, ['init', '-q']);
+  runGit(dir, ['config', 'user.email', 't@t']);
+  runGit(dir, ['config', 'user.name', 'test']);
+  runGit(dir, ['add', '-A']);
+  runGit(dir, ['commit', '-q', '-m', 'init']);
+}
+
+function createReviewPlan(directory) {
+  const result = runSsf(['execution', 'plan', directory, '--mode', 'sdd',
+    '--reason', 'full workflow default', '--wave', 'wave-1:serial:1.1']);
+  assert.equal(result.exitCode, 0, result.stderr);
+}
+
+function commitFileInWorktree(worktree, rel, content) {
+  const p = join(worktree, rel);
+  mkdirSync(dirname(p), { recursive: true });
+  writeFileSync(p, content);
+  runGit(worktree, ['add', '-A']);
+  runGit(worktree, ['commit', '-q', '-m', `add ${rel}`]);
+}
+
+function runReviewCli(directory, reviewArgs, cwd) {
+  const r = spawnSync(process.execPath, [CLI, 'execution', 'review', directory, ...reviewArgs], {
+    cwd,
+    encoding: 'utf8',
+    timeout: 60000,
+  });
+  return {
+    status: r.status,
+    stdout: r.stdout || '',
+    stderr: r.stderr || '',
+    all: `${r.stdout || ''}\n${r.stderr || ''}`,
+  };
 }
 
 before(() => {
@@ -154,10 +212,20 @@ beforeEach(() => {
     head: fixture.head,
     divergent: runGit(changeDir, ['commit-tree', `${fixture.head}^{tree}`, '-m', 'independent execution change']),
   };
+  // R4: head 须被至少一个非 protected 分支包含。seed 默认分支为 master
+  // （protected），既有 review 用例直接使用该分支上的 head；建立一个指向
+  // head 的非 protected 隔离分支，使分支校验放行，保持既有行为不变。
+  runGit(changeDir, ['branch', 'test-isolation', fixture.head]);
 });
 
 afterEach(() => {
   rmSync(changeDir, { recursive: true, force: true });
+});
+
+afterEach(() => {
+  while (tempDirs.length > 0) {
+    rmSync(tempDirs.pop(), { recursive: true, force: true });
+  }
 });
 
 after(() => {
@@ -801,5 +869,202 @@ describe('ssf execution', () => {
 
     assert.notEqual(result.exitCode, 0);
     assert.match(result.stderr, /acknowledge/i);
+  });
+
+  // plan-resync R2：resync 子命令的 CLI 级拒绝路径与成功路径
+  describe('ssf execution resync (plan-resync R2)', () => {
+    const planPath = () => join(changeDir, '.superpowers', 'sdd', 'execution-plan.json');
+
+    function createPlanSnapshot() {
+      const planned = runSsf(['execution', 'plan', changeDir, '--mode', 'sdd',
+        '--reason', 'full workflow default', '--wave', 'wave-1:serial:1.1']);
+      assert.equal(planned.exitCode, 0, planned.stderr);
+      return readFileSync(planPath(), 'utf8');
+    }
+
+    function makeStalePlan() {
+      const before = createPlanSnapshot();
+      // 非语义结构修正：修改 tasks.md 冻结内容，触发 artifacts_hash 变化 → plan stale
+      writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 First task refined\n- [ ] 1.2 Second task\n');
+      return before;
+    }
+
+    it('rejects resync without --confirm and writes nothing', () => {
+      makeStalePlan();
+      const before = readFileSync(planPath(), 'utf8');
+
+      const result = runSsf(['execution', 'resync', changeDir,
+        '--reason', 'format fix'], process.cwd(), { confirmPlan: false });
+
+      assert.notEqual(result.exitCode, 0);
+      assert.match(result.stderr, /confirm/i);
+      assert.equal(readFileSync(planPath(), 'utf8'), before, 'missing --confirm must not write');
+    });
+
+    it('rejects resync when the plan is not stale and leaves the plan byte-identical', () => {
+      const before = createPlanSnapshot();
+
+      const result = runSsf(['execution', 'resync', changeDir, '--confirm',
+        '--reason', 'nothing changed', '--json']);
+
+      assert.notEqual(result.exitCode, 0);
+      assert.match(result.stderr, /no need to resync|not stale|无需|不需要/is);
+      assert.equal(readFileSync(planPath(), 'utf8'), before, 'no-op rejection must not write');
+    });
+
+    it('rejects resync while a wave has a fail receipt, naming the wave id and writing nothing', () => {
+      const before = createPlanSnapshot();
+      const reviewed = runSsf(['execution', 'review', changeDir, '--wave', 'wave-1',
+        '--base', gitRefs.base, '--head', gitRefs.head, '--report', writeReviewReport('resync-cli-fail.md'), '--verdict', 'fail']);
+      assert.equal(reviewed.exitCode, 0, reviewed.stderr);
+      // plan 保持与录音 receipt 时一致的 artifacts_hash → 不 stale；
+      // 但 fail receipt 存在本身就是独立拒绝条件，无需 stale 前置
+      writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 First task refined\n- [ ] 1.2 Second task\n');
+      const reviewsBefore = readdirSync(join(changeDir, '.superpowers', 'sdd', 'reviews')).sort();
+
+      const result = runSsf(['execution', 'resync', changeDir, '--confirm',
+        '--reason', 'attempted while repair chain open', '--json']);
+
+      assert.notEqual(result.exitCode, 0);
+      assert.match(result.stderr, /wave-1/);
+      assert.equal(readFileSync(planPath(), 'utf8'), before, 'fail-receipt rejection must not write the plan');
+      assert.deepEqual(
+        readdirSync(join(changeDir, '.superpowers', 'sdd', 'reviews')).sort(),
+        reviewsBefore,
+        'fail-receipt rejection must not modify the root receipt store',
+      );
+    });
+
+    it('rejects resync without --reason with a message explaining its purpose', () => {
+      makeStalePlan();
+      const before = readFileSync(planPath(), 'utf8');
+
+      const result = runSsf(['execution', 'resync', changeDir, '--confirm']);
+
+      assert.notEqual(result.exitCode, 0);
+      assert.match(result.stderr, /--reason/i);
+      assert.match(result.stderr, /non-semantic planning-document correction/i,
+        `--reason error must explain its purpose, got: ${result.stderr}`);
+      assert.equal(readFileSync(planPath(), 'utf8'), before, 'missing --reason must not write');
+    });
+
+    it('resyncs a stale plan via the CLI and keeps validatePlan passing', () => {
+      makeStalePlan();
+
+      const result = runSsf(['execution', 'resync', changeDir, '--confirm',
+        '--reason', 'format fix', '--json']);
+
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.equal(result.json.ok, true);
+      const shown = runSsf(['execution', 'show', changeDir, '--json']);
+      assert.equal(shown.exitCode, 0, shown.stderr);
+      assert.equal(shown.json.valid, true, 'plan must be current after CLI resync');
+      assert.equal(shown.json.current, true);
+    });
+  });
+});
+
+describe('ssf execution review — cwd 越界 WARN（worktree-lifecycle R5）', () => {
+  it('change 存在隔离 worktree 且 cwd=主仓库（worktree 外）时输出含 worktree 路径的 WARN，命令正常完成', () => {
+    const tmpBase = mkdtempSync(join(tmpdir(), 'ssf-review-warn-outside-'));
+    tempDirs.push(tmpBase);
+    const main = join(tmpBase, 'main');
+    makeRepo(main);
+    const name = 'warn-outside';
+    const changePath = join(main, 'changes', name);
+    mkdirSync(changePath, { recursive: true });
+    writeChangeDirectory(changePath);
+    const gitBase = runGit(main, ['rev-parse', 'HEAD']);
+    createReviewPlan(changePath);
+
+    const r = spawnSync(process.execPath, [ENSURE, changePath, name], {
+      encoding: 'utf8',
+      timeout: 20000,
+      env: { ...process.env, GIT_ALLOW_PROTOCOL: 'file' },
+    });
+    assert.equal(r.status, 0, `${r.stdout}\n${r.stderr}`);
+    const worktree = join(tmpBase, `${basename(main)}-${name}`);
+    assert.equal(existsSync(worktree), true, `worktree must exist at ${worktree}`);
+    // 断言用规范化路径必须在 review 前捕获（防 worktree 被清理后 realpath
+    // 抛 ENOENT）。CI Windows 的 TEMP 是 8.3 短名（RUNNER~1），生产代码经
+    // native realpath 规范化输出，断言须用同形式。
+    const worktreeReal = realpathSync.native(worktree);
+    commitFileInWorktree(worktree, 'feature.txt', 'branch work\n');
+    const head = runGit(main, ['rev-parse', name]);
+    const reportPath = writeReviewReportIn(changePath, 'wave-1.md');
+
+    const reviewed = runReviewCli(changePath, [
+      '--wave', 'wave-1', '--base', gitBase, '--head', head,
+      '--report', reportPath, '--verdict', 'pass',
+    ], main);
+
+    assert.equal(reviewed.status, 0, reviewed.all);
+    assert.match(reviewed.all, /WARN/);
+    assert.ok(reviewed.stdout.includes(worktreeReal), `WARN must contain worktree path ${worktreeReal}`);
+    assert.match(reviewed.all, /worktree 内路径/);
+    assert.match(reviewed.stdout, /recorded: pass/);
+  });
+
+  it('cwd 位于 change 的 worktree 内时不输出 WARN', () => {
+    const tmpBase = mkdtempSync(join(tmpdir(), 'ssf-review-warn-inside-'));
+    tempDirs.push(tmpBase);
+    const main = join(tmpBase, 'main');
+    makeRepo(main);
+    const name = 'warn-inside';
+    const changePath = join(main, 'changes', name);
+    mkdirSync(changePath, { recursive: true });
+    writeChangeDirectory(changePath);
+    const gitBase = runGit(main, ['rev-parse', 'HEAD']);
+    createReviewPlan(changePath);
+
+    const r = spawnSync(process.execPath, [ENSURE, changePath, name], {
+      encoding: 'utf8',
+      timeout: 20000,
+      env: { ...process.env, GIT_ALLOW_PROTOCOL: 'file' },
+    });
+    assert.equal(r.status, 0, `${r.stdout}\n${r.stderr}`);
+    const worktree = join(tmpBase, `${basename(main)}-${name}`);
+    assert.equal(existsSync(worktree), true, `worktree must exist at ${worktree}`);
+    commitFileInWorktree(worktree, 'feature.txt', 'branch work\n');
+    const head = runGit(main, ['rev-parse', name]);
+    const reportPath = writeReviewReportIn(changePath, 'wave-1.md');
+
+    const reviewed = runReviewCli(changePath, [
+      '--wave', 'wave-1', '--base', gitBase, '--head', head,
+      '--report', reportPath, '--verdict', 'pass',
+    ], worktree);
+
+    assert.equal(reviewed.status, 0, reviewed.all);
+    assert.doesNotMatch(reviewed.all, /WARN/);
+    assert.match(reviewed.stdout, /recorded: pass/);
+  });
+
+  it('无隔离 worktree 的 change 不输出 WARN', () => {
+    const tmpBase = mkdtempSync(join(tmpdir(), 'ssf-review-warn-none-'));
+    tempDirs.push(tmpBase);
+    const main = join(tmpBase, 'main');
+    makeRepo(main);
+    const name = 'warn-none';
+    const changePath = join(main, 'changes', name);
+    mkdirSync(changePath, { recursive: true });
+    writeChangeDirectory(changePath);
+    // 在默认分支上创建一个提交并建立非 protected 分支，满足 R4 分支校验
+    writeFileSync(join(main, 'feature.txt'), 'feature\n');
+    runGit(main, ['add', '-A']);
+    runGit(main, ['commit', '-q', '-m', 'feature commit']);
+    const gitBase = runGit(main, ['rev-parse', 'HEAD~1']);
+    const head = runGit(main, ['rev-parse', 'HEAD']);
+    runGit(main, ['branch', 'feature', head]);
+    createReviewPlan(changePath);
+    const reportPath = writeReviewReportIn(changePath, 'wave-1.md');
+
+    const reviewed = runReviewCli(changePath, [
+      '--wave', 'wave-1', '--base', gitBase, '--head', head,
+      '--report', reportPath, '--verdict', 'pass',
+    ], main);
+
+    assert.equal(reviewed.status, 0, reviewed.all);
+    assert.doesNotMatch(reviewed.all, /WARN/);
+    assert.match(reviewed.stdout, /recorded: pass/);
   });
 });

@@ -8,6 +8,7 @@ import { realpathSync } from 'node:fs';
 import { checkArtifactsExist } from './checks/artifacts-exist.mjs';
 import { checkSchemaValid } from './checks/schema-valid.mjs';
 import { checkTasksComplete } from './checks/tasks-complete.mjs';
+import { checkTasksCheckboxFormat } from './checks/tasks-checkbox-format.mjs';
 import { checkTestsPassing } from './checks/tests-passing.mjs';
 import { checkContractFresh } from './checks/contract-fresh.mjs';
 import { check as checkDpGate } from './checks/dp-gate-passed.mjs';
@@ -29,7 +30,7 @@ const TRANSITION_CHECKS = {
   'exploring:specifying':           [],
   'specifying:bridging':            ['artifacts-exist', 'schema-valid'],
   'bridging:approved-for-build':    ['artifacts-exist', 'schema-valid', 'contract-fresh', 'dp-gate-passed'],
-  'approved-for-build:executing':   ['artifacts-exist', 'contract-fresh', 'dp-gate-passed', 'execution-plan-ready'],
+  'approved-for-build:executing':   ['artifacts-exist', 'contract-fresh', 'dp-gate-passed', 'execution-plan-ready', 'tasks-checkbox-format'],
   'executing:closing':              ['tasks-complete', 'tests-passing', 'specs-merged', 'execution-plan-ready', 'execution-reviews-passed'],
 
   // Debugging side-path
@@ -61,22 +62,70 @@ const WORKFLOW_TRANSITION_CHECKS = {
   hotfix: {
     'exploring:bridging': [],
     'bridging:approved-for-build': ['contract-current', 'dp3-approved'],
+    // hotfix 可能没有完整 tasks.md（review-findings-fix R2）：tasks-checkbox-format 仅挂 full 主表。
     'approved-for-build:executing': ['contract-current', 'dp3-approved', 'execution-plan-ready'],
     'executing:closing': ['tests-passing', 'specs-merged', 'execution-plan-ready', 'execution-reviews-passed'],
+    // rewind/abandon（workflow-aware-guard B2）：legacy hotfix 行为不变，显式列出避免依赖 full fallback。
+    'specifying:exploring': [],
+    'bridging:specifying': [],
+    'approved-for-build:specifying': [],
+    'approved-for-build:bridging': [],
+    'executing:specifying': [],
+    'executing:bridging': [],
+    'exploring:abandoned': [],
+    'specifying:abandoned': [],
+    'bridging:abandoned': [],
+    'approved-for-build:abandoned': [],
+    'executing:abandoned': [],
+    'debugging:abandoned': [],
   },
   tweak: {
     'exploring:approved-for-build': [],
     'approved-for-build:executing': [],
     'executing:closing': ['direct-test-result'],
     'debugging:executing': [],
+    // rewind/abandon（workflow-aware-guard B2）：纠正路径与退出路径保留，维度为空。
+    'specifying:approved-for-build': [],
+    'specifying:exploring': [],
+    'bridging:specifying': [],
+    'approved-for-build:specifying': [],
+    'executing:specifying': [],
+    'exploring:abandoned': [],
+    'specifying:abandoned': [],
+    'approved-for-build:abandoned': [],
+    'executing:abandoned': [],
+    'debugging:abandoned': [],
   },
+};
+
+// fast-path workflow（quick/lightweight/tweak/direct hotfix）不经过规划阶段：
+// 命中此表的转换一律拒绝，并提示正确的 fast-path 入口（workflow-aware-guard B1）。
+const FAST_PATH_REJECTED_TRANSITIONS = {
+  'exploring:specifying':
+    'this workflow does not include the planning phase; use exploring -> approved-for-build instead (or rewind to exploring first)',
+  'specifying:bridging':
+    'this workflow does not include the planning phase; use exploring -> approved-for-build instead (or rewind to exploring first)',
 };
 
 const DIRECT_SHORT_PATH_CHECKS = {
   'exploring:approved-for-build': ['direct-short-path'],
+  // 回退跳级纠正（workflow-aware-guard B2，design 决策 3）：receipt 有效性已由 workflow
+  // select/accept 把关，此 key 只提供"误入 specifying 后少走一步回退"的合法纠正路径。
+  'specifying:approved-for-build': [],
   'approved-for-build:executing': ['direct-short-path'],
   'executing:closing': ['direct-short-path', 'direct-test-result'],
   'debugging:executing': ['direct-short-path'],
+  // rewind/abandon（workflow-aware-guard B2）：行为与现状一致（放行）。
+  'specifying:exploring': [],
+  'bridging:specifying': [],
+  'approved-for-build:specifying': [],
+  'executing:specifying': [],
+  'exploring:abandoned': [],
+  'specifying:abandoned': [],
+  'bridging:abandoned': [],
+  'approved-for-build:abandoned': [],
+  'executing:abandoned': [],
+  'debugging:abandoned': [],
 };
 
 const LIGHTWEIGHT_SHORT_PATH_CHECKS = {
@@ -102,16 +151,81 @@ function checkWorkflowAllowed(key, workflow) {
   };
 }
 
+// 导出表引用供测试断言维度归属（review-findings-fix R2）。
+export function getTransitionCheckTables() {
+  return {
+    full: TRANSITION_CHECKS,
+    hotfix: WORKFLOW_TRANSITION_CHECKS.hotfix,
+    tweak: WORKFLOW_TRANSITION_CHECKS.tweak,
+    directShortPath: DIRECT_SHORT_PATH_CHECKS,
+    lightweightShortPath: LIGHTWEIGHT_SHORT_PATH_CHECKS,
+    fastPathRejected: FAST_PATH_REJECTED_TRANSITIONS,
+  };
+}
+
+// fast-path workflow 拒绝规划阶段转换（workflow-aware-guard B1）。返回形状与
+// checkWorkflowAllowed 一致：{ pass: false, checks: [...] } 或 null（不适用）。
+function checkFastPathRejected(key) {
+  const reason = FAST_PATH_REJECTED_TRANSITIONS[key];
+  if (!reason) return null;
+  return {
+    pass: false,
+    checks: [{
+      dimension: 'workflow-mode',
+      pass: false,
+      failures: [`${key.replace(':', ' -> ')} is rejected for this fast-path workflow: ${reason}`],
+    }],
+  };
+}
+
+// fast-path workflow 的转换解析不回退 full 主表（workflow-aware-guard B2，design 决策 2）。
+function unknownTransitionFailure(key, workflow) {
+  return {
+    pass: false,
+    checks: [{
+      dimension: 'workflow-transition-unknown',
+      pass: false,
+      failures: [`transition '${key}' is not defined for workflow '${workflow}'; this workflow does not fall back to the full transition table`],
+    }],
+  };
+}
+
 function resolveDimensions(key, workflow, directShortPath) {
-  if (workflow === 'quick') return DIRECT_SHORT_PATH_CHECKS[key] ?? TRANSITION_CHECKS[key];
-  if (workflow === 'lightweight') return LIGHTWEIGHT_SHORT_PATH_CHECKS[key] ?? TRANSITION_CHECKS[key];
-  if (workflow === 'hotfix' && key === 'exploring:approved-for-build') {
-    return DIRECT_SHORT_PATH_CHECKS[key];
+  if (workflow === 'quick') {
+    const fastPathRejection = checkFastPathRejected(key);
+    if (fastPathRejection) return fastPathRejection;
+    const dimensions = DIRECT_SHORT_PATH_CHECKS[key];
+    if (!dimensions) return unknownTransitionFailure(key, workflow);
+    return dimensions;
   }
-  if (workflow === 'hotfix' && directShortPath) {
-    return DIRECT_SHORT_PATH_CHECKS[key] ?? WORKFLOW_TRANSITION_CHECKS.hotfix[key] ?? TRANSITION_CHECKS[key];
+  if (workflow === 'lightweight') {
+    const fastPathRejection = checkFastPathRejected(key);
+    if (fastPathRejection) return fastPathRejection;
+    const dimensions = LIGHTWEIGHT_SHORT_PATH_CHECKS[key];
+    if (!dimensions) return unknownTransitionFailure(key, workflow);
+    return dimensions;
   }
-  return WORKFLOW_TRANSITION_CHECKS[workflow]?.[key] ?? TRANSITION_CHECKS[key];
+  if (workflow === 'tweak') {
+    const fastPathRejection = checkFastPathRejected(key);
+    if (fastPathRejection) return fastPathRejection;
+    const dimensions = WORKFLOW_TRANSITION_CHECKS.tweak[key];
+    if (!dimensions) return unknownTransitionFailure(key, workflow);
+    return dimensions;
+  }
+  // legacy hotfix 保留专用表 + full fallback 链（约束：行为完全不变），但
+  // fast-path 拒绝表优先——hotfix 不经过 specifying，规划阶段转换同样拒绝。
+  if (workflow === 'hotfix') {
+    const fastPathRejection = checkFastPathRejected(key);
+    if (fastPathRejection) return fastPathRejection;
+    if (key === 'exploring:approved-for-build') {
+      return DIRECT_SHORT_PATH_CHECKS[key];
+    }
+    if (directShortPath) {
+      return DIRECT_SHORT_PATH_CHECKS[key] ?? WORKFLOW_TRANSITION_CHECKS.hotfix[key] ?? TRANSITION_CHECKS[key];
+    }
+    return WORKFLOW_TRANSITION_CHECKS.hotfix[key] ?? TRANSITION_CHECKS[key];
+  }
+  return TRANSITION_CHECKS[key];
 }
 
 export function isDirectShortPath(record, state) {
@@ -137,7 +251,7 @@ function directTestResultCheck(changeDir) {
   }
   return {
     pass: false,
-      failures: ['fast-path closing requires test_result starting with pass; DP-6 is not a substitute'],
+    failures: ['fast-path closing requires test_result starting with pass; DP-6 is not a substitute. Fix: run `ssf state set <change-dir> test_result "pass: <verification summary>"` before transitioning to closing'],
   };
 }
 
@@ -200,6 +314,21 @@ export function runGuard(args, {
     return { exitCode: 1 };
   }
 
+  // workflow-aware 拒绝（workflow-mode / workflow-transition-unknown）：resolveDimensions
+  // 返回失败形状而非维度数组，直接输出（workflow-aware-guard B1/B2）。
+  if (!Array.isArray(dimensions)) {
+    if (useJson) stdout.write(`${JSON.stringify(dimensions, null, 2)}\n`);
+    else {
+      stderr.write('Guard checks failed:\n');
+      for (const c of dimensions.checks) {
+        for (const f of c.failures) {
+          stderr.write(`  [FAIL] ${c.dimension}: ${f}\n`);
+        }
+      }
+    }
+    return { exitCode: 1 };
+  }
+
   const workflowCheck = checkWorkflowAllowed(key, workflow);
   if (!workflowCheck.pass) {
     if (useJson) {
@@ -228,6 +357,7 @@ export function runGuard(args, {
     'contract-fresh': (dir) => checkContractFresh(dir),
     'contract-current': (dir) => checkContractCurrent(dir),
     'tasks-complete': (dir) => checkTasksComplete(dir),
+    'tasks-checkbox-format': (dir) => checkTasksCheckboxFormat(dir),
     'tests-passing': (dir) => checkTestsPassing(dir),
     'specs-merged': (dir) => checkSpecsMerged(dir),
     'dp-gate-passed': (dir) => checkDpGate(dir, fromState, toState),

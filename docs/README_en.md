@@ -135,6 +135,8 @@ npm install -g spec-superflow
 | `ssf handoff list <dir>` | List handoff lifecycle status |
 | `ssf handoff finish <dir> <id>` | Validate a handoff result |
 | `ssf handoff resolve <dir> <id> --decision <decision>` | Record an explicit handoff decision |
+| `ssf isolate <dir>` | Enforce git isolation before implementation: creates a worktree (with recursive submodule init) or branch when on main/master, and appends a cwd-persistence warning to the progress ledger |
+| `ssf finish <dir> [--test-cmd <command>]` | One-command close-out: merge --no-ff back to the trunk, verify sync, run a verification command on the trunk (default `npm test`, 10-minute timeout), and remove the worktree and isolation branch only after verification passes; on failure the worktree is kept for rework |
 | `ssf install-cursor` | Deploy to `.cursor/` directory |
 | `ssf install-workbuddy` | Deploy to WorkBuddy marketplace and enable skills |
 | `ssf install-codebuddy` | Deploy to `~/.codebuddy/` (CodeBuddy Code CLI) |

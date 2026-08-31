@@ -160,6 +160,48 @@ describe('infer-workflow: inferMode()', () => {
     assert.equal(result.mode, 'full');
   });
 
+  it('counts numbered-heading tasks (### N.) as tasks instead of no-artifacts', () => {
+    const dir = mkdtempSync(join(tempDir, 'heading-only-'));
+    writeFileSync(join(dir, '.spec-superflow.yaml'), 'state: exploring\nworkflow: auto');
+    // No filename references anywhere → fileCount=0. Old behavior (headings not
+    // counted) hit "no planning artifacts → full"; new behavior counts 2 tasks
+    // and routes to tweak — the assertion below distinguishes the two.
+    writeFileSync(join(dir, 'proposal.md'), '# Proposal\n更新计划说明文档与相关注释');
+    writeFileSync(join(dir, 'tasks.md'), '### 1. 任务一\n### 2. 任务二');
+
+    const result = inferMode(dir);
+    assert.notEqual(result.reason.includes('no planning artifacts'), true,
+      `Expected numbered headings to count as tasks but got: ${result.reason}`);
+    assert.equal(result.mode, 'tweak', `Expected tweak but got ${result.mode}: ${result.reason}`);
+  });
+
+  it('counts mixed checkbox and numbered-heading tasks without double counting', () => {
+    const dir = mkdtempSync(join(tempDir, 'mixed-format-'));
+    writeFileSync(join(dir, '.spec-superflow.yaml'), 'state: exploring\nworkflow: auto');
+    writeFileSync(join(dir, 'proposal.md'), '# Proposal\nModify src/a.ts src/b.ts src/c.ts');
+    writeFileSync(join(dir, 'tasks.md'),
+      '- [ ] Update src/a.ts\n- [ ] Update src/b.ts\n- [ ] Update src/c.ts\n### 4. 验证与收尾\n### 5. 补充回归');
+
+    const result = inferMode(dir);
+    // 5 tasks total → too many for quick(≤3) → full
+    assert.equal(result.mode, 'full', `Expected full (5 mixed tasks) but got ${result.mode}: ${result.reason}`);
+    assert.ok(result.reason.startsWith('5 tasks'),
+      `Expected taskCount=5 in reason but got: ${result.reason}`);
+  });
+
+  it('does not count plain headings without numeric prefix as tasks', () => {
+    const dir = mkdtempSync(join(tempDir, 'plain-heading-'));
+    writeFileSync(join(dir, '.spec-superflow.yaml'), 'state: exploring\nworkflow: auto');
+    writeFileSync(join(dir, 'proposal.md'), '# Proposal\nModify src/a.ts');
+    writeFileSync(join(dir, 'tasks.md'), '### 设计说明\n### 注意事项\n- [ ] Fix null check in src/a.ts');
+
+    const result = inferMode(dir);
+    // Only the checkbox line counts (1 task, ≤3 files) → quick; plain headings add nothing
+    assert.equal(result.mode, 'quick', `Expected quick (plain headings ignored) but got ${result.mode}: ${result.reason}`);
+    assert.equal(result.reason.includes('6 tasks'), false,
+      `Plain headings should not inflate task count: ${result.reason}`);
+  });
+
   it('returns reason string for all modes', () => {
     const result = inferMode(tempDir);
     assert.ok(typeof result.reason === 'string');

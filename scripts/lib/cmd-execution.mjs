@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util';
-import { adjudicateWave, createPlan, describeWaves, EXECUTION_MODES, readPlan, recordReview, validatePlan, writePlan } from './execution-plan.mjs';
+import { adjudicateWave, createPlan, describeWaves, EXECUTION_MODES, readPlan, recordReview, resyncPlan, validatePlan, writePlan } from './execution-plan.mjs';
 import {
   createRecommendationReceipt,
   readCurrentRecommendationReceipt,
@@ -7,7 +7,7 @@ import {
 } from './execution-recommendation.mjs';
 import { readState, writeState } from './state-loader.mjs';
 
-const SUBCOMMANDS = ['recommend', 'plan', 'show', 'revise', 'review', 'adjudicate'];
+const SUBCOMMANDS = ['recommend', 'plan', 'show', 'revise', 'review', 'adjudicate', 'resync'];
 
 export function run(args, io = { stdout: process.stdout, stderr: process.stderr }) {
   const { positionals, values } = parseArgs({
@@ -55,6 +55,9 @@ export function run(args, io = { stdout: process.stdout, stderr: process.stderr 
       return { exitCode: 0 };
     case 'adjudicate':
       adjudicateAndPrint(changeDir, values, io);
+      return { exitCode: 0 };
+    case 'resync':
+      resyncAndPrint(changeDir, values, io);
       return { exitCode: 0 };
   }
 }
@@ -170,6 +173,19 @@ function recordAndPrintReview(changeDir, values, io) {
   print(values.json, { ok: true, wave: values.wave[0], receipt }, `Review for ${values.wave[0]} recorded: ${receipt.status}.`, io);
 }
 
+function resyncAndPrint(changeDir, values, io) {
+  if (!values.confirm) {
+    throw new Error('Resync overwrites the frozen execution plan hash references and requires explicit --confirm');
+  }
+  if (!values.reason) {
+    throw new Error('--reason is required: describe the non-semantic planning-document correction that made the plan stale');
+  }
+  requireOption(values.reason, '--reason');
+  requireSafeReason(values.reason);
+  const plan = resyncPlan(changeDir, { reason: values.reason });
+  print(values.json, { ok: true, plan }, `Plan resynced to the current artifacts snapshot (revision ${plan.revision} unchanged).`, io);
+}
+
 function writeExecutionSummary(changeDir, plan) {
   const summary = `${plan.mode}: plan revision ${plan.revision}; ${plan.source}; ${plan.rationale}`;
   const state = readState(changeDir);
@@ -232,5 +248,6 @@ function printHelp(io) {
   ssf execution show <dir> [--json]
   ssf execution revise <dir> --mode sdd --confirm --reason <text> --wave <id>:<strategy>:<task,...>[:<depends-on,...>] [--acknowledge-recommendation]
   ssf execution review <dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict pass|fail
-  ssf execution adjudicate <dir> --wave <id> --decision allow-review --confirm --reason <text>\n`);
+  ssf execution adjudicate <dir> --wave <id> --decision allow-review --confirm --reason <text>
+  ssf execution resync <dir> --confirm --reason <text>\n`);
 }
