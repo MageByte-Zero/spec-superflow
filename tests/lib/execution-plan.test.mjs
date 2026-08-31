@@ -973,7 +973,9 @@ describe('execution plan data contract', () => {
       'A different individually valid report must not replace the consumed review.\n',
     );
     const swappedReview = structuredClone(validLedger);
-    swappedReview.adjudications[0].review.report = '.superpowers/sdd/reviews/consumed-ledger-alternate-valid.md';
+    swappedReview.adjudications[0].review.report = join(
+      '.superpowers', 'sdd', 'reviews', 'consumed-ledger-alternate-valid.md',
+    );
     swappedReview.adjudications[0].review.report_sha256 = `sha256:${createHash('sha256')
       .update(readFileSync(alternateReport)).digest('hex')}`;
     writeFileSync(evidencePath, `${JSON.stringify(swappedReview, null, 2)}\n`);
