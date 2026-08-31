@@ -1,6 +1,7 @@
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, cpSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -949,6 +950,34 @@ describe('execution plan data contract', () => {
     delete missingReviewBinding.adjudications[0].review.wave_id;
     writeFileSync(evidencePath, `${JSON.stringify(missingReviewBinding, null, 2)}\n`);
     assert.throws(() => describeWaves(changeDir, plan), /consumed review.*audit evidence/i);
+
+    const wrongFailureCount = structuredClone(validLedger);
+    wrongFailureCount.adjudications[0].failure_count = 999;
+    writeFileSync(evidencePath, `${JSON.stringify(wrongFailureCount, null, 2)}\n`);
+    assert.throws(() => describeWaves(changeDir, plan), /failure count.*repair chain|failed receipt.*repair chain/i);
+
+    const repairStatePath = join(
+      getPlanScopedPaths(changeDir, plan).repairState,
+      `${Buffer.from('wave-1').toString('base64url')}.json`,
+    );
+    const repairState = JSON.parse(readFileSync(repairStatePath, 'utf8'));
+    const swappedFailure = structuredClone(validLedger);
+    swappedFailure.adjudications[0].failed_receipt = structuredClone(repairState.failures[0]);
+    swappedFailure.adjudications[0].previous_head = repairState.failures[0].head;
+    swappedFailure.adjudications[0].previous_report = repairState.failures[0].report;
+    writeFileSync(evidencePath, `${JSON.stringify(swappedFailure, null, 2)}\n`);
+    assert.throws(() => describeWaves(changeDir, plan), /failed receipt.*repair chain/i);
+
+    const alternateReport = writeReviewReport(
+      'consumed-ledger-alternate-valid.md',
+      'A different individually valid report must not replace the consumed review.\n',
+    );
+    const swappedReview = structuredClone(validLedger);
+    swappedReview.adjudications[0].review.report = '.superpowers/sdd/reviews/consumed-ledger-alternate-valid.md';
+    swappedReview.adjudications[0].review.report_sha256 = `sha256:${createHash('sha256')
+      .update(readFileSync(alternateReport)).digest('hex')}`;
+    writeFileSync(evidencePath, `${JSON.stringify(swappedReview, null, 2)}\n`);
+    assert.throws(() => describeWaves(changeDir, plan), /consumed review.*repair chain/i);
   });
 
   it('cleans only the current plan workspace after a repaired pass while retaining its receipt and repair evidence', () => {
@@ -1503,6 +1532,35 @@ describe('execution plan resync (plan-resync R1)', () => {
     resyncPlan(changeDir, { reason: 'retry after entry-move rollback' });
     assert.equal(validatePlan(changeDir, readPlan(changeDir)).valid, true);
     assert.equal(existsSync(join(migratedCheckpoints, '1.1.md')), true, 'the retry must migrate the checkpoint onto the new identity');
+  });
+
+  it('rejects a target collision before moving any plan-scoped directory entry', () => {
+    const plan = createPlan(changeDir, {
+      mode: 'sdd', source: 'default', rationale: 'target collisions must be non-destructive',
+      waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
+    });
+    writePlan(changeDir, plan);
+    saveCheckpoint(changeDir, { taskId: '1.1', next: 'first source checkpoint' });
+    saveCheckpoint(changeDir, { taskId: '1.2', next: 'second source checkpoint' });
+    writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 First task refined\n- [ ] 1.2 Second task\n');
+
+    const oldPaths = getPlanScopedPaths(changeDir, plan);
+    const target = join(changeDir, '.superpowers', 'sdd', 'plans', resyncPreviewIdentity(changeDir), 'checkpoints');
+    mkdirSync(target, { recursive: true });
+    writeFileSync(join(target, 'sentinel.txt'), 'pre-existing sentinel\n');
+    writeFileSync(join(target, '1.2.md'), 'pre-existing colliding checkpoint\n');
+    const sourceBefore = readAllReceiptContents(oldPaths.checkpoints);
+    const targetBefore = readAllReceiptContents(target);
+
+    assert.throws(
+      () => resyncPlan(changeDir, { reason: 'collision must fail before moving the first entry' }),
+      /target.*already contains|collision/i,
+    );
+    assert.deepEqual(readAllReceiptContents(oldPaths.checkpoints), sourceBefore,
+      'the old identity must retain every source entry byte-for-byte');
+    assert.deepEqual(readAllReceiptContents(target), targetBefore,
+      'the target identity must retain every pre-existing entry byte-for-byte');
+    assert.equal(readPlan(changeDir).hash, plan.hash, 'the plan identity must stay unchanged');
   });
 
   it('refreshes the recommendation overlay artifacts_hash and reseals it during resync (P3)', () => {

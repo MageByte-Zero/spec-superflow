@@ -340,19 +340,21 @@ export function resyncPlan(changeDir, { reason } = {}) {
       plan,
       previousPlan.hash,
     );
-    migratePlanScopedEvidenceDirectoryWithUndo(
-      previousIdentity.repairState,
-      migratedIdentity.repairState,
-      writeWithUndo,
-      undoLog,
-      record => migrateRepairStateRecord(changeDir, record, previousPlan, plan),
-    );
+    // Validate and migrate adjudications while their referenced repair-state
+    // chain is still available under the previous plan identity.
     migratePlanScopedEvidenceDirectoryWithUndo(
       previousIdentity.adjudications,
       migratedIdentity.adjudications,
       writeWithUndo,
       undoLog,
       record => migrateAdjudicationLedgerRecord(changeDir, record, previousPlan, plan),
+    );
+    migratePlanScopedEvidenceDirectoryWithUndo(
+      previousIdentity.repairState,
+      migratedIdentity.repairState,
+      writeWithUndo,
+      undoLog,
+      record => migrateRepairStateRecord(changeDir, record, previousPlan, plan),
     );
 
     // Checkpoints, handoffs, and the workspace carry no plan_hash field of
@@ -504,24 +506,29 @@ function migrateAdjudicationLedgerRecord(changeDir, record, previousPlan, nextPl
 function migratePlanScopedDirectoryWithUndo(source, target, undoLog) {
   if (!existsSync(source)) return;
   if (existsSync(target)) {
-    const movedEntries = [];
-    for (const entry of readdirSync(source, { withFileTypes: true })) {
-      const destination = join(target, entry.name);
-      rmSync(destination, { recursive: true, force: true });
-      renameSync(join(source, entry.name), destination);
-      movedEntries.push({ from: destination, to: join(source, entry.name) });
+    const entries = readdirSync(source, { withFileTypes: true });
+    const collision = entries.find(entry => existsSync(join(target, entry.name)));
+    if (collision) {
+      throw new Error(`Plan-scoped migration target already contains '${collision.name}'; refusing a destructive collision`);
     }
+    const movedEntries = [];
+    // Register rollback before the first move. If any later rename fails, the
+    // catch-side replay can restore every entry that was already moved.
     undoLog.push({
       path: target,
       previousContent: null,
       restore: () => {
-        // I1：旧身份父目录可能已被 removeDirIfEmpty 清掉，逆序搬回前先 mkdir 兜底。
         mkdirSync(source, { recursive: true });
         for (const moved of [...movedEntries].reverse()) {
-          renameSync(moved.from, moved.to);
+          if (existsSync(moved.from)) renameSync(moved.from, moved.to);
         }
       },
     });
+    for (const entry of entries) {
+      const destination = join(target, entry.name);
+      renameSync(join(source, entry.name), destination);
+      movedEntries.push({ from: destination, to: join(source, entry.name) });
+    }
   } else {
     mkdirSync(dirname(target), { recursive: true });
     renameSync(source, target);
@@ -869,7 +876,12 @@ function validateAdjudicationLedgerEvidence(changeDir, plan, waveId, ledger) {
   if (!Array.isArray(ledger?.adjudications) || ledger.adjudications.length === 0) {
     throw new Error('adjudication ledger must contain at least one audit entry');
   }
+  const repair = readRepairState(changeDir, plan, waveId);
+  if (!repair || !Array.isArray(repair.failures) || repair.failures.length === 0) {
+    throw new Error('adjudication ledger has no repair chain to bind its entries');
+  }
   const ids = new Set();
+  let previousFailureCount = 0;
   for (const [index, entry] of ledger.adjudications.entries()) {
     const label = `Adjudication entry ${index + 1}`;
     if (!isNonEmptyText(entry?.id) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(entry.id)) {
@@ -885,6 +897,10 @@ function validateAdjudicationLedgerEvidence(changeDir, plan, waveId, ledger) {
       || !isNonEmptyText(entry.previous_head) || !isNonEmptyText(entry.previous_report)) {
       throw new Error(`${label} audit evidence is malformed`);
     }
+    if (entry.failure_count <= previousFailureCount) {
+      throw new Error(`${label} failure count must advance through the repair chain`);
+    }
+    previousFailureCount = entry.failure_count;
     validateStoredReviewEvidence(changeDir, plan, waveId, entry.failed_receipt, {
       expectedStatuses: new Set(['fail']),
       label: `${label} failed receipt`,
@@ -893,9 +909,19 @@ function validateAdjudicationLedgerEvidence(changeDir, plan, waveId, ledger) {
       || entry.previous_report !== entry.failed_receipt.report) {
       throw new Error(`${label} repair identity does not match its failed receipt`);
     }
+    const adjudicatedFailure = repair.failures[entry.failure_count - 1];
+    if (!adjudicatedFailure) {
+      throw new Error(`${label} failure count does not identify an existing repair chain failure`);
+    }
+    if (!sameReviewEvidence(entry.failed_receipt, adjudicatedFailure, plan, waveId)) {
+      throw new Error(`${label} failed receipt does not match the identified repair chain failure`);
+    }
     if (entry.status === 'authorized') {
       if (entry.consumed_at !== undefined || entry.review !== undefined) {
         throw new Error(`${label} authorized evidence must not contain consumed review fields`);
+      }
+      if (index !== ledger.adjudications.length - 1) {
+        throw new Error(`${label} authorized evidence must be the latest ledger entry`);
       }
       continue;
     }
@@ -908,6 +934,12 @@ function validateAdjudicationLedgerEvidence(changeDir, plan, waveId, ledger) {
     });
     if (entry.review.base !== entry.previous_head || entry.review.base === entry.review.head) {
       throw new Error(`${label} consumed review must be a non-empty range continuous from the adjudicated head`);
+    }
+    const expectedReview = entry.review.status === 'fail'
+      ? repair.failures[entry.failure_count]
+      : repair.resolution;
+    if (!expectedReview || !sameReviewEvidence(entry.review, expectedReview, plan, waveId)) {
+      throw new Error(`${label} consumed review does not match the next repair chain outcome`);
     }
   }
 }
