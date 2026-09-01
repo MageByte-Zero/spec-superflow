@@ -6,6 +6,8 @@ The format loosely follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-01
+
 ### Added
 
 - **SDD adjudication recovery (#108)**: add `ssf execution adjudicate` to persist a confirmed, plan-scoped human decision after the repair circuit breaker opens. One authorization permits exactly one non-empty continuous follow-up review, preserves and revalidates the complete failure evidence chain, and never synthesizes PASS or releases dependent waves before a real passing receipt.
