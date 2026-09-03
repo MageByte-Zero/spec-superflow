@@ -138,6 +138,15 @@ const TRANSITION_WORKFLOW_REQUIREMENTS = {
   'exploring:approved-for-build': ['tweak', 'quick', 'hotfix', 'lightweight'],
 };
 
+const VALID_WORKFLOWS = ['full', 'hotfix', 'tweak', 'quick', 'lightweight'];
+
+function resolveWorkflow(changeDir, requestedWorkflow) {
+  if (requestedWorkflow !== undefined) return requestedWorkflow;
+
+  const persistedWorkflow = readState(changeDir).workflow;
+  return VALID_WORKFLOWS.includes(persistedWorkflow) ? persistedWorkflow : 'full';
+}
+
 function checkWorkflowAllowed(key, workflow) {
   const allowed = TRANSITION_WORKFLOW_REQUIREMENTS[key];
   if (!allowed || allowed.includes(workflow)) return { pass: true, checks: [] };
@@ -274,7 +283,7 @@ export function runGuard(args, {
     args,
     options: {
       json: { type: 'boolean', default: false },
-      workflow: { type: 'string', default: 'full' },
+      workflow: { type: 'string' },
     },
     allowPositionals: true,
   });
@@ -289,9 +298,8 @@ export function runGuard(args, {
   const fromState = positionals[2];
   const toState = positionals[3];
   const useJson = values.json;
-  const workflow = values.workflow;
+  const workflow = resolveWorkflow(changeDir, values.workflow);
 
-  const VALID_WORKFLOWS = ['full', 'hotfix', 'tweak', 'quick', 'lightweight'];
   if (!VALID_WORKFLOWS.includes(workflow)) {
     stderr.write(`Invalid workflow: ${workflow}. Must be one of: ${VALID_WORKFLOWS.join(', ')}\n`);
     return { exitCode: 2 };
