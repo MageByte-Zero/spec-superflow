@@ -7,6 +7,7 @@ import { computeArtifactsHash, computeContractHash } from './hash.mjs';
 import { readPlan, validatePlan } from './execution-plan.mjs';
 import { getOverlayPaths, getPlanScopedPaths } from './sdd-overlay.mjs';
 import { readState, writeState } from './state-loader.mjs';
+import { isDirectWorkflowReceipt, readWorkflowSelection } from './workflow-recommendation.mjs';
 
 const LEDGER_VERSION = 1;
 const MINIMUM_FAILED_ATTEMPTS = 3;
@@ -149,7 +150,8 @@ function buildContext(changeDir, state, requireDebugging, requirePlan) {
   const plan = readPlan(changeDir);
   const hasPlanSummary = !isEmpty(state.execution_plan_hash)
     || !isEmpty(state.execution_plan_revision);
-  if (requirePlan && !plan) {
+  const planlessReceipt = plan ? null : readPlanlessDebugReceipt(changeDir, state);
+  if (requirePlan && !plan && !planlessReceipt) {
     throw new Error('Current execution plan is required for debugging attempts and DP-5 escalation');
   }
   if (hasPlanSummary || plan) {
@@ -167,9 +169,29 @@ function buildContext(changeDir, state, requireDebugging, requirePlan) {
       contract_hash: computeContractHash(changeDir),
       execution_plan_hash: plan?.hash ?? null,
       execution_plan_revision: plan?.revision ?? null,
+      workflow_authorization_id: planlessReceipt
+        ? planlessReceipt.selection?.authorization_id ?? planlessReceipt.selection?.selected_at ?? null
+        : null,
     },
     plan,
   };
+}
+
+function readPlanlessDebugReceipt(changeDir, state) {
+  const loaded = readWorkflowSelection(changeDir);
+  if (!loaded.valid) return null;
+  if (isDirectWorkflowReceipt(loaded.record, state)) return loaded.record;
+
+  const selection = loaded.record?.selection;
+  const validTweak = state.workflow === 'tweak'
+    && loaded.record?.status === 'ready'
+    && loaded.record?.recommendation?.mode === 'tweak'
+    && selection?.mode === 'tweak'
+    && selection.accepted_automatically === false
+    && selection.followed_recommendation === true
+    && typeof selection.confirmed_at === 'string'
+    && Number.isFinite(Date.parse(selection.confirmed_at));
+  return validTweak ? loaded.record : null;
 }
 
 function ledgerPath(changeDir, plan) {
@@ -267,7 +289,8 @@ function sameContext(left, right) {
     && left?.artifacts_hash === right.artifacts_hash
     && left?.contract_hash === right.contract_hash
     && left?.execution_plan_hash === right.execution_plan_hash
-    && left?.execution_plan_revision === right.execution_plan_revision;
+    && left?.execution_plan_revision === right.execution_plan_revision
+    && (left?.workflow_authorization_id ?? null) === right.workflow_authorization_id;
 }
 
 function requireSafeText(value, field) {

@@ -207,8 +207,8 @@ describe('runtime version synchronization', () => {
           `Run \`${SOURCE_RUNTIME_COMMAND} ${name}\`.\n`,
         );
       }
-      writeFileSync(join(target, 'README.md'), '当前版本：`v0.10.0`\n');
-      writeFileSync(join(target, 'INSTALL.md'), '当前发布版本：**v0.10.0**。\n');
+      writeFileSync(join(target, 'README.md'), '当前版本：`v0.10.0`\ncodex plugin marketplace add MageByte-Zero/spec-superflow --ref v0.10.0\n');
+      writeFileSync(join(target, 'INSTALL.md'), '当前发布版本：**v0.10.0**。\ncodex plugin marketplace add MageByte-Zero/spec-superflow --ref v0.10.0\n');
       writeFileSync(join(target, 'docs', 'README_en.md'), 'Current: `v0.10.0`\n');
       writeFileSync(join(target, 'hooks', 'session-start'), '# v0.10.0: conditional injection\n');
       writeFileSync(join(target, 'llms.txt'), 'Current version: v0.10.0.\n');
@@ -221,8 +221,8 @@ describe('runtime version synchronization', () => {
       const lock = JSON.parse(readFileSync(join(target, 'package-lock.json'), 'utf8'));
       assert.equal(lock.version, '1.0.0');
       assert.equal(lock.packages[''].version, '1.0.0');
-      assert.equal(readFileSync(join(target, 'README.md'), 'utf8'), '当前版本：`v1.0.0`\n');
-      assert.equal(readFileSync(join(target, 'INSTALL.md'), 'utf8'), '当前发布版本：**v1.0.0**。\n');
+      assert.equal(readFileSync(join(target, 'README.md'), 'utf8'), '当前版本：`v1.0.0`\ncodex plugin marketplace add MageByte-Zero/spec-superflow --ref v1.0.0\n');
+      assert.equal(readFileSync(join(target, 'INSTALL.md'), 'utf8'), '当前发布版本：**v1.0.0**。\ncodex plugin marketplace add MageByte-Zero/spec-superflow --ref v1.0.0\n');
       assert.equal(readFileSync(join(target, 'docs', 'README_en.md'), 'utf8'), 'Current: `v1.0.0`\n');
       assert.equal(readFileSync(join(target, 'hooks', 'session-start'), 'utf8'), '# v1.0.0: conditional injection\n');
       assert.equal(readFileSync(join(target, 'llms.txt'), 'utf8'), 'Current version: v1.0.0.\n');

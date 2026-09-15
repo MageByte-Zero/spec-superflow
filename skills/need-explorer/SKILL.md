@@ -38,7 +38,7 @@ Restate what you heard: "Here's what I'm hearing: [problem, scope, non-goals, su
 After user confirms the summary:
 ```bash
 ssf state set <change-dir> dp_1_result "confirmed: <one-line summary>"
-ssf state set <change-dir> dp_1_timestamp $(date -u +%Y-%m-%dT%H:%M:%SZ)
+ssf state set <change-dir> dp_1_timestamp now
 ```
 DP-1 confirms scope, non-goals, and success criteria before artifact creation.
 

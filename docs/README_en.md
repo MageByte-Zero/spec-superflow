@@ -75,6 +75,8 @@ codex plugin add spec-superflow@spec-superflow
 
 In the Codex app, open **Plugins** and install or enable `spec-superflow`. If installed from the CLI, restart the app and enable it in the Plugins panel.
 
+> Codex loads the plugin's declared skills, but this plugin does not enable SessionStart hooks; invoke `workflow-start` explicitly in each new session.
+
 ### GitHub Copilot CLI
 
 ```bash
@@ -270,7 +272,7 @@ You: "add authorization to the API"
 
 **Path selection:** Quick, direct Hotfix, and Tweak remain lightweight: record the boundary and verification only. Full and legacy Hotfix require an execution contract, execution plan, and review receipt. Risks are explained for the user to choose from; they do not silently upgrade a path.
 
-**DP-5 debugging gate:** Record every failed fix with `ssf debug attempt record` and distinct, verifiable evidence. Every workflow path must have a current, valid execution plan before it records an attempt. Wave Review failures do not count as debugging attempts. DP-5 is persisted only after at least three failed attempts in that plan context and an explicit `ssf debug escalate ... --confirm`; generic `state set` cannot write or inject `dp_5_*`.
+**DP-5 debugging gate:** Record every failed fix with `ssf debug attempt record` and distinct, verifiable evidence. Full/legacy Hotfix requires a current execution plan; Quick, direct Hotfix, Tweak, and lightweight use a valid workflow receipt matching the current selection, with the ledger bound to its stable authorization identity. Wave Review failures do not count as debugging attempts. DP-5 is persisted only after at least three failed attempts in that execution context and an explicit `ssf debug escalate ... --confirm`; generic `state set` cannot write or inject `dp_5_*`.
 
 ### Guarded execution plans
 
@@ -284,7 +286,7 @@ user records a choice with `--confirm`; `plan` and `revise` require a receipt ma
 artifacts, contract, and waves. A non-recommended choice also requires
 `--acknowledge-recommendation`. Batch Inline remains serial and never claims
 parallel work.
-Quick, direct Hotfix, and Tweak are exempt from contract, execution-plan, and review-receipt gates during their normal bounded path; they persist `test_result: pass` after verification. If they reach DP-5 debugging escalation, they must first establish a current execution plan before recording attempts or persisting DP-5.
+Quick, direct Hotfix, and Tweak are exempt from contract, execution-plan, and review-receipt gates during their normal bounded path; they persist `test_result: pass` after verification. If Quick, direct Hotfix, Tweak, or lightweight reaches DP-5 debugging, a valid workflow receipt authorizes planless attempts and binds the ledger to the selection's stable authorization identity. Full/legacy Hotfix continues to require a current execution plan.
 
 ```bash
 ssf execution recommend changes/my-change \

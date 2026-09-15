@@ -48,7 +48,7 @@ Must make obvious: approved behavior, out-of-scope, constraints, batches, test o
 After drafting: summarize handoff rules, identify ambiguity, flag unmapped requirements, ask user to approve explicitly. After approval:
 ```bash
 ssf state set <change-dir> dp_3_result "approved: <summary>"
-ssf state set <change-dir> dp_3_timestamp $(date -u +%Y-%m-%dT%H:%M:%SZ)
+ssf state set <change-dir> dp_3_timestamp now
 ```
 
 Advance the state after approval:
