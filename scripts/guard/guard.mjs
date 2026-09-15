@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // scripts/guard/guard.mjs — dimension-based phase transition guard
-// Usage: node guard.mjs check <change-dir> <from-state> <to-state> [--json]
+// Usage: node guard.mjs check <change-dir> <from-state> <to-state> [--workflow <mode>] [--json]
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
@@ -290,7 +290,7 @@ export function runGuard(args, {
 
   const subcommand = positionals[0];
   if (subcommand !== 'check') {
-    stderr.write('Usage: guard.mjs check <change-dir> <from-state> <to-state> [--json] [--workflow <mode>]\n');
+    stderr.write('Usage: guard.mjs check <change-dir> <from-state> <to-state> [--workflow <mode>] [--json]\n');
     return { exitCode: 2 };
   }
 
@@ -298,15 +298,16 @@ export function runGuard(args, {
   const fromState = positionals[2];
   const toState = positionals[3];
   const useJson = values.json;
+
+  if (!changeDir || !fromState || !toState) {
+    stderr.write('Usage: guard.mjs check <change-dir> <from-state> <to-state> [--workflow <mode>] [--json]\n');
+    return { exitCode: 2 };
+  }
+
   const workflow = resolveWorkflow(changeDir, values.workflow);
 
   if (!VALID_WORKFLOWS.includes(workflow)) {
     stderr.write(`Invalid workflow: ${workflow}. Must be one of: ${VALID_WORKFLOWS.join(', ')}\n`);
-    return { exitCode: 2 };
-  }
-
-  if (!changeDir || !fromState || !toState) {
-    stderr.write('Usage: guard.mjs check <change-dir> <from-state> <to-state> [--json]\n');
     return { exitCode: 2 };
   }
 
