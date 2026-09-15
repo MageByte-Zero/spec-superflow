@@ -148,6 +148,8 @@ cp /path/to/spec-superflow/hooks/hooks-cursor.json .cursor/hooks.json
 
 Codex CLI 的主流方式是打开 `/plugins` 插件目录安装；自动化或社区分发场景使用 `codex plugin marketplace add`。
 
+> Codex CLI / App 当前加载插件声明的 skills，但本插件通过 `.codex-plugin/plugin.json` 中的 `"hooks": {}` 明确不启用 SessionStart hooks。新会话中请显式调用 `workflow-start`。
+
 ### 安装（推荐：插件目录）
 
 ```bash
@@ -169,7 +171,7 @@ codex plugin add spec-superflow@awesome-codex-plugins
 当社区 marketplace 镜像尚未同步时，可直接指定本仓库的 release tag：
 
 ```bash
-codex plugin marketplace add MageByte-Zero/spec-superflow --ref v1.0.0
+codex plugin marketplace add MageByte-Zero/spec-superflow --ref v1.2.0
 codex plugin add spec-superflow@spec-superflow
 ```
 

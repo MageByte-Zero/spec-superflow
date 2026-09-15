@@ -6,6 +6,13 @@ The format loosely follows Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Windows-compatible decision-point timestamps (#117)**: `ssf state set <change-dir> dp_N_timestamp now` now generates the UTC ISO timestamp inside the Node.js CLI, and all skills use that cross-platform form instead of POSIX `date` command substitution.
+- **Planless debugging for lightweight paths (#117)**: Quick, Tweak, lightweight, and direct Hotfix may record evidence-backed debug attempts and DP-5 escalation without an execution plan when their workflow receipt is valid; the ledger is sealed to the receipt's stable authorization identity, while Full and legacy Hotfix retain the current-plan requirement.
+- **Accurate Codex hook guidance (#117)**: the platform matrix and installation docs now match the Codex manifest's explicit `hooks: {}` suppression and tell users to invoke `workflow-start` in new sessions.
+- **Current Codex release pin (#117)**: direct marketplace examples now use v1.2.0, and `ssf version` keeps those `--ref` pins synchronized during future releases.
+
 ## [1.2.0] - 2026-09-01
 
 ### Added

@@ -64,7 +64,7 @@ When DP-0 has made the scope clear, generate the configured planning pack (propo
 Present a concise summary of all 4 artifacts, then ask one DP-2 question for material adjustments. For Full changes, run one independent five-question blind reader check (problem, command boundary, invalidation boundary, continuation boundary, and document flow) before recording approval; repair only answers the reader cannot derive. After approval:
 ```bash
 ssf state set <change-dir> dp_2_result "approved: <summary>"
-ssf state set <change-dir> dp_2_timestamp $(date -u +%Y-%m-%dT%H:%M:%SZ)
+ssf state set <change-dir> dp_2_timestamp now
 ```
 
 After the artifacts are done and DP-2 is recorded, advance the state:

@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync,
+  existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { canCreateSymlink } from '../helpers/symlink-support.mjs';
 import { computeArtifactsHash, computeContractHash } from '../../scripts/lib/hash.mjs';
+import { getOverlayPaths } from '../../scripts/lib/sdd-overlay.mjs';
+import { inspectDebugEscalation } from '../../scripts/lib/debug-attempts.mjs';
 import { readState, rebuildState, writeState } from '../../scripts/lib/state-loader.mjs';
 
 const CLI_PATH = join(process.cwd(), 'scripts/spec-superflow.mjs');
@@ -55,6 +57,45 @@ function prepareCurrentPlan() {
   const plannedState = readState(changeDir);
   plannedState.state = 'debugging';
   writeState(changeDir, plannedState);
+}
+
+function preparePlanlessWorkflow(mode) {
+  const initialState = readState(changeDir);
+  initialState.state = 'exploring';
+  initialState.workflow = 'auto';
+  writeState(changeDir, initialState);
+
+  const recommendation = ssf([
+    'workflow', 'recommend', changeDir,
+    '--task-count', '2', '--file-count', '2',
+    '--config-doc-only', mode === 'tweak' ? 'yes' : 'no',
+    '--schema-api-change', 'no', '--new-module', 'no',
+    '--behavioral-constraint-change', 'no', '--cross-module-change', 'no',
+    '--uncertainty', 'low',
+    ...(mode === 'hotfix' ? ['--request-kind', 'incident'] : []),
+    ...(mode === 'lightweight' ? [
+      '--affected-path', 'tests/lib/cmd-debug.test.mjs',
+      '--production-behavior', 'no', '--public-boundary', 'no', '--installer', 'no',
+      '--state-machine', 'no', '--external-side-effect', 'no',
+      '--data-permission-config-semantics', 'no', '--expected-behavior-clear', 'yes',
+      '--verification-reproducible', 'yes', '--impact-paths-complete', 'yes',
+    ] : []),
+    '--json',
+  ]);
+  assert.equal(recommendation.exitCode, 0, recommendation.stderr);
+  assert.equal(JSON.parse(recommendation.stdout).recommendation.mode, mode);
+
+  const selection = ['tweak', 'lightweight'].includes(mode)
+    ? ssf([
+      'workflow', 'select', changeDir, '--mode', mode, '--confirm', '--reason', 'Bounded planless correction',
+      ...(mode === 'lightweight' ? ['--scope-confirmation', 'Affected test paths and exclusions reviewed', '--verification', 'tdd'] : []),
+    ])
+    : ssf(['workflow', 'accept', changeDir, '--source', 'direct-request', '--verification', 'tdd']);
+  assert.equal(selection.exitCode, 0, selection.stderr);
+
+  const state = readState(changeDir);
+  state.state = 'debugging';
+  writeState(changeDir, state);
 }
 
 function evidence(name, content = name) {
@@ -107,6 +148,127 @@ describe('ssf debug', () => {
     assert.match(escalation.stderr, /execution plan/i);
     assert.equal(existsSync(join(changeDir, '.superpowers', 'sdd', 'debug-attempts.json')), false);
     assert.equal(readState(changeDir).dp_5_result, null);
+  });
+
+  it('records a Quick debugging attempt with a valid direct receipt and no execution plan', () => {
+    preparePlanlessWorkflow('quick');
+
+    const result = record('attempt-1');
+
+    assert.equal(result.exitCode, 0, result.stderr);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.context.execution_plan_hash, null);
+    assert.match(payload.context.workflow_authorization_id, /^[0-9a-f-]{36}$/);
+    assert.equal(existsSync(join(changeDir, '.superpowers', 'sdd', 'debug-attempts.json')), true);
+  });
+
+  it('persists direct Quick DP-5 escalation without an execution plan after three attempts', () => {
+    preparePlanlessWorkflow('quick');
+    for (const id of ['attempt-1', 'attempt-2', 'attempt-3']) {
+      assert.equal(record(id).exitCode, 0);
+    }
+
+    const result = escalate(['--confirm']);
+
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.match(readState(changeDir).dp_5_result, /^continue:/);
+  });
+
+  it('records a direct Hotfix debugging attempt with a valid receipt and no execution plan', () => {
+    preparePlanlessWorkflow('hotfix');
+
+    const result = record('attempt-1');
+
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).context.execution_plan_hash, null);
+  });
+
+  it('records a Tweak debugging attempt with a confirmed selection and no execution plan', () => {
+    preparePlanlessWorkflow('tweak');
+
+    const result = record('attempt-1');
+
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).context.execution_plan_hash, null);
+  });
+
+  it('records a lightweight debugging attempt with a confirmed receipt and no execution plan', () => {
+    preparePlanlessWorkflow('lightweight');
+
+    const result = record('attempt-1');
+
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).context.execution_plan_hash, null);
+  });
+
+  it('keeps lightweight DP-5 supported after completion evidence updates the receipt', () => {
+    preparePlanlessWorkflow('lightweight');
+    for (const id of ['attempt-1', 'attempt-2', 'attempt-3']) {
+      assert.equal(record(id).exitCode, 0);
+    }
+    assert.equal(escalate(['--confirm']).exitCode, 0);
+
+    const completion = ssf([
+      'workflow', 'evidence', changeDir,
+      '--focused-review', 'No scope expansion found',
+      '--verification-command', 'node --test tests/lib/cmd-debug.test.mjs',
+      '--verification-result', 'pass',
+    ]);
+    assert.equal(completion.exitCode, 0, completion.stderr);
+
+    const inspection = inspectDebugEscalation(changeDir);
+    assert.equal(inspection.supported, true, inspection.reason);
+  });
+
+  it('rejects prior planless attempts after the workflow receipt is replaced', () => {
+    preparePlanlessWorkflow('quick');
+    assert.equal(record('attempt-1').exitCode, 0);
+
+    const state = readState(changeDir);
+    state.state = 'exploring';
+    state.workflow = 'auto';
+    writeState(changeDir, state);
+    preparePlanlessWorkflow('quick');
+
+    const result = record('attempt-2');
+
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /stale|context/i);
+  });
+
+  it('rejects a tampered Quick receipt when no execution plan exists', () => {
+    preparePlanlessWorkflow('quick');
+    const receiptPath = getOverlayPaths(changeDir).workflowSelection;
+    const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
+    receipt.selection.verification_strategy = 'bounded';
+    writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
+
+    const result = record('attempt-1');
+
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /execution plan/i);
+  });
+
+  it('keeps Full debugging dependent on a current execution plan', () => {
+    const state = readState(changeDir);
+    state.workflow = 'full';
+    writeState(changeDir, state);
+
+    const result = record('attempt-1');
+
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /execution plan/i);
+  });
+
+  it('keeps legacy Hotfix debugging dependent on a current execution plan', () => {
+    const state = readState(changeDir);
+    state.workflow = 'hotfix';
+    writeState(changeDir, state);
+
+    const result = record('attempt-1');
+
+    assert.equal(result.exitCode, 1);
+    assert.match(result.stderr, /execution plan/i);
   });
 
   it('rejects attempt recording outside debugging state', () => {

@@ -82,7 +82,7 @@ Check for files modified outside scope fence, new dependencies not in design. Un
 ### DP-6 (Verification Outcome, Full/legacy Hotfix)
 ```bash
 ssf state set <change-dir> dp_6_result "<pass|conditional|fail>: <summary>"
-ssf state set <change-dir> dp_6_timestamp $(date -u +%Y-%m-%dT%H:%M:%SZ)
+ssf state set <change-dir> dp_6_timestamp now
 ```
 If FAIL, do NOT proceed to DP-7. Route back or ask about abandonment.
 
@@ -96,7 +96,7 @@ ssf state set <change-dir> test_result pass
 ### DP-7 (Archive Confirmation, Full/legacy Hotfix)
 ```bash
 ssf state set <change-dir> dp_7_result "confirmed: <archive summary>"
-ssf state set <change-dir> dp_7_timestamp $(date -u +%Y-%m-%dT%H:%M:%SZ)
+ssf state set <change-dir> dp_7_timestamp now
 ```
 Verify DP-0 through DP-6 are recorded before DP-7.
 

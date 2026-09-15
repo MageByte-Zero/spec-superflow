@@ -12,8 +12,8 @@ spec-superflow 共支持 **19 个** AI 编程平台。每个平台按三层接�
 |---|------|:------:|----------------------|:-----:|
 | 1 | Claude Code | ✅ | `.claude/rules/` · md | ✅ SessionStart |
 | 2 | Cursor | ✅ | `.cursor/rules/` · mdc | ✅ sessionStart |
-| 3 | OpenAI Codex CLI | ✅ | marketplace · md | ✅ |
-| 4 | OpenAI Codex App | ✅ | marketplace · md | ✅ |
+| 3 | OpenAI Codex CLI | ✅ | marketplace · md | — |
+| 4 | OpenAI Codex App | ✅ | marketplace · md | — |
 | 5 | GitHub Copilot CLI | ✅ | `.github/instructions/` · copilot | ✅ |
 | 6 | Gemini CLI | ✅ | `GEMINI.md`（无 rules 目录） | ✅ |
 | 7 | OpenCode | ✅ | `.opencode/` · md | — |
@@ -31,6 +31,8 @@ spec-superflow 共支持 **19 个** AI 编程平台。每个平台按三层接�
 | 19 | Qoder | ✅ | `.qoder/rules/` · md | — |
 
 > ¹ Kiro / Windsurf / Qwen / Amazon Q 平台原生支持 hooks（comet 源码确认 hookFormat 分别为 kiro / windsurf / qwen / claude-code），但 spec-superflow 的 SessionStart 钩子在这些平台的可用性尚未逐一验证，故 v0.8.13 暂不写入 hook 配置，避免塞入失效配置。上下文注入由 phase-guard 规则（平台自动加载）承担。后续版本将逐平台验证后补齐。
+
+Codex manifest 通过 `"hooks": {}` 抑制 `hooks/hooks.json` 自动发现，因此 CLI / App 只加载 skills，不会自动注入 SessionStart 上下文；新会话需显式调用 `workflow-start`。
 
 ## 路径来源
 

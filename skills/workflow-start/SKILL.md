@@ -129,7 +129,7 @@ After that combined confirmation:
 ssf state set <change-dir> dp_0_decisions "<combined summary preserving scope, artifact_language, and workflow_path>"
 ssf state set <change-dir> dp_0_result confirmed
 ssf state set <change-dir> dp_0_confirmed true
-ssf state set <change-dir> dp_0_timestamp $(date -u +%Y-%m-%dT%H:%M:%SZ)
+ssf state set <change-dir> dp_0_timestamp now
 ```
 
 At this point the change sits in `exploring`; all later state advancement is owned by downstream skills — do not run `state transition` here.
