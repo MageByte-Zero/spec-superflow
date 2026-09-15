@@ -53,7 +53,7 @@ Scientific method: form a single hypothesis ("I think X is the root cause becaus
 
 After every failed fix, preserve its failure output in a physical file inside the change directory, then record the distinct attempt:
 
-Before this command, every workflow path (including Quick/direct Hotfix/Tweak) must have a current, valid execution plan. If it does not, establish and confirm one with `ssf execution recommend` and `ssf execution plan` before recording the attempt; the debug command rejects a missing or stale plan.
+Full and legacy Hotfix require a current, valid execution plan before this command; establish one with `ssf execution recommend` and `ssf execution plan` if needed. Quick, Tweak, lightweight, and direct Hotfix keep their planless contract: their valid workflow receipt authorizes debugging, and the ledger binds attempts to that receipt plus the current workflow, artifact, and contract hashes. The debug command rejects a missing or replaced receipt or a stale required plan.
 
 ```bash
 ssf debug attempt record <change-dir> \

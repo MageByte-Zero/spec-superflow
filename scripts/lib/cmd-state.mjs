@@ -223,15 +223,18 @@ export async function run(args) {
         console.error(`⛔ Field '${field}' is not settable (use 'transition' for state, or check SETTABLE_FIELDS)`);
         process.exit(1);
       }
-      if (/[\p{Cc}\p{Zl}\p{Zp}]/u.test(value)) {
+      const resolvedValue = /^dp_[0-7]_timestamp$/.test(field) && value === 'now'
+        ? new Date().toISOString()
+        : value;
+      if (/[\p{Cc}\p{Zl}\p{Zp}]/u.test(resolvedValue)) {
         console.error('State field values must not contain control characters or line separators');
         process.exit(1);
       }
-      updateField(changeDir, field, value);
+      updateField(changeDir, field, resolvedValue);
       if (values.json) {
-        console.log(JSON.stringify({ ok: true, field, value }));
+        console.log(JSON.stringify({ ok: true, field, value: resolvedValue }));
       } else {
-        console.log(`✅ Set ${field} = ${value}`);
+        console.log(`✅ Set ${field} = ${resolvedValue}`);
       }
       break;
     }

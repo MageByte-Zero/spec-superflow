@@ -50,6 +50,24 @@ describe('execution control plane instructions', () => {
       assert.match(content, /test_result.*pass/is, `${path} requires a persisted short-path verification result`);
     }
   });
+
+  it('documents receipt-bound planless debugging for every direct workflow path', () => {
+    for (const path of [
+      'README.md',
+      'docs/README_en.md',
+      'docs/state-machine.md',
+      'docs/decision-points.md',
+    ]) {
+      const content = read(path);
+      assert.match(content, /Full\/legacy Hotfix.*(?:current|当前).*execution plan/is,
+        `${path} keeps the execution-plan gate on Full and legacy Hotfix`);
+      assert.match(content, /(?:Quick.*Tweak|Tweak.*Quick).*workflow receipt/is,
+        `${path} permits direct paths to debug with a valid workflow receipt`);
+      assert.match(content, /(?:stable authorization identity|稳定.*authorization identity|authorization_id)/is,
+        `${path} binds planless debug evidence to a stable authorization identity`);
+    }
+  });
+
   it('publishes direct-path semantics in user documentation', () => {
     for (const path of ['README.md', 'INSTALL.md', 'docs/README_en.md', 'docs/state-machine.md', 'docs/artifact-contract.md', 'docs/decision-points.md']) {
       const content = read(path);

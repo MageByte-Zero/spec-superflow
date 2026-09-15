@@ -399,6 +399,17 @@ describe('cmd-state: set', () => {
     assert.ok(get.stdout.includes('confirmed: csv export'));
   });
 
+  it('generates a UTC ISO timestamp when a DP timestamp is set to now', () => {
+    ssf(`state init ${tempDir}`);
+
+    const result = ssf(`state set ${tempDir} dp_1_timestamp now --json`);
+
+    assert.equal(result.exitCode, 0, result.stderr);
+    const payload = JSON.parse(result.stdout);
+    assert.match(payload.value, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    assert.equal(ssf(`state get ${tempDir} dp_1_timestamp`).stdout, payload.value);
+  });
+
   it('rejects non-settable fields', () => {
     ssf(`state init ${tempDir}`);
     const result = ssf(`state set ${tempDir} state executing`);

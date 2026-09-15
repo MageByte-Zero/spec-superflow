@@ -22,7 +22,9 @@ const MANIFESTS = [
 // Note: CLAUDE.md is intentionally gitignored (project-local AI instructions).
 const TEXT_FILES = [
   { file: 'README.md',              pattern: /(当前版本：`v?)\d+\.\d+\.\d+(`?)/g },
+  { file: 'README.md',              pattern: /(codex plugin marketplace add MageByte-Zero\/spec-superflow --ref v)\d+\.\d+\.\d+(\b)/g },
   { file: 'INSTALL.md',             pattern: /(当前发布版本：\*\*v)\d+\.\d+\.\d+(\*\*)/g },
+  { file: 'INSTALL.md',             pattern: /(codex plugin marketplace add MageByte-Zero\/spec-superflow --ref v)\d+\.\d+\.\d+(\b)/g },
   { file: 'docs/README_en.md',      pattern: /(Current: `v)\d+\.\d+\.\d+(`)/g },
   { file: 'hooks/session-start',    pattern: /(# v)\d+\.\d+\.\d+(: conditional injection)/g },
   { file: 'llms.txt',               pattern: /(Current version: v)\d+\.\d+\.\d+(\.)/g },

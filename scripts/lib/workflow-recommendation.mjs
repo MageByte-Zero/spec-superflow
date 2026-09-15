@@ -172,6 +172,7 @@ export function recordWorkflowSelection(changeDir, {
   const selected = withHash({
     ...withoutHash(loaded.record),
     selection: {
+      authorization_id: randomUUID(),
       mode,
       reason,
       followed_recommendation: followed,
@@ -297,6 +298,7 @@ export function acceptWorkflowRecommendation(changeDir, { source, verificationSt
   const accepted = withHash({
     ...withoutHash(loaded.record),
     selection: {
+      authorization_id: randomUUID(),
       mode: recommendation.mode,
       source,
       followed_recommendation: true,
