@@ -76,7 +76,7 @@ function usage(message) {
   console.error(`Usage:
   ssf runtime check-update
   ssf runtime infer <change-dir>
-  ssf runtime guard check <change-dir> <from-state> <to-state> [--json]
+  ssf runtime guard check <change-dir> <from-state> <to-state> [--workflow <mode>] [--json]
   ssf runtime config [--get <path>|--resolve-model <profile>]
   ssf runtime asset read <allowed-relative-path>`);
   process.exitCode = 2;

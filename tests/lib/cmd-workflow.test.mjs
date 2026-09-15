@@ -198,6 +198,22 @@ describe('ssf workflow', () => {
     assert.equal(guard.json.pass, true);
   });
 
+  it('infers a persisted Quick workflow when runtime guard omits --workflow', () => {
+    const recommended = recommend();
+    assert.equal(recommended.exitCode, 0, recommended.stderr);
+
+    const accepted = runSsf(['workflow', 'accept', changeDir,
+      '--source', 'direct-request', '--verification', 'new-test', '--json']);
+    assert.equal(accepted.exitCode, 0, accepted.stderr);
+    assert.equal(readState(changeDir).workflow, 'quick');
+
+    const guard = runSsf(['runtime', 'guard', 'check', changeDir,
+      'exploring', 'approved-for-build', '--json']);
+    assert.equal(guard.exitCode, 0, guard.stderr);
+    assert.equal(guard.json.pass, true);
+    assert.deepEqual(guard.json.checks.map(check => check.dimension), ['direct-short-path']);
+  });
+
   it('recommends hotfix for an incident and accepts it without a planning approval', () => {
     const recommended = recommend(['--request-kind', 'incident']);
     assert.equal(recommended.exitCode, 0, recommended.stderr);
