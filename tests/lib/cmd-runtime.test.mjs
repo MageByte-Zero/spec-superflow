@@ -52,6 +52,33 @@ describe('ssf runtime', () => {
     assert.equal(JSON.parse(guard.stdout).pass, true);
   });
 
+  for (const [name, args] of [
+    ['all required positionals are missing', []],
+    ['from-state and to-state are missing', ['docs/examples/add-dark-mode']],
+    ['to-state is missing', ['docs/examples/add-dark-mode', 'exploring']],
+    ['required positionals are missing with an invalid workflow', ['--workflow', 'invalid']],
+  ]) {
+    it(`reports guard usage with exit code 2 when ${name}`, () => {
+      const result = runRuntime(['guard', 'check', ...args]);
+
+      assert.equal(result.status, 2, result.stderr);
+      assert.match(result.stderr, /Usage: guard\.mjs check <change-dir> <from-state> <to-state>/);
+      assert.match(result.stderr, /\[--workflow <mode>\]/);
+      assert.match(result.stderr, /\[--json\]/);
+      assert.equal(result.stdout, '');
+    });
+  }
+
+  it('reports guard usage with the workflow option for an invalid subcommand', () => {
+    const result = runRuntime(['guard', 'invalid']);
+
+    assert.equal(result.status, 2, result.stderr);
+    assert.match(result.stderr, /Usage: guard\.mjs check <change-dir> <from-state> <to-state>/);
+    assert.match(result.stderr, /\[--workflow <mode>\]/);
+    assert.match(result.stderr, /\[--json\]/);
+    assert.equal(result.stdout, '');
+  });
+
   it('provides read-only config and rejects config writes', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'ssf-runtime-config-'));
     tempDirs.push(tempDir);
