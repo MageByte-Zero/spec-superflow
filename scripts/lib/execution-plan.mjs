@@ -50,6 +50,26 @@ export function readPlan(changeDir) {
   }
 }
 
+export function resolveRecommendationPlanRevision(changeDir) {
+  const state = readState(changeDir);
+  if (state.execution_plan_revision !== null) return state.execution_plan_revision;
+
+  const plan = readPlan(changeDir);
+  if (!plan) return null;
+  const failures = validateStructure(plan);
+  const actualHash = tryHashPlan(plan);
+  if (actualHash === null) failures.push('execution plan content cannot be hashed');
+  else if (plan?.hash !== actualHash) failures.push('execution plan content hash mismatch');
+  if (state.revision !== null || state.execution_plan_hash !== null) {
+    failures.push('execution plan summary is only partially cleared');
+  }
+  if (plan?.workflow !== state.workflow) failures.push('execution plan workflow does not match state');
+  if (failures.length > 0) {
+    throw new Error(`Cannot recover execution plan revision for recommendation: ${failures.join('; ')}`);
+  }
+  return plan.revision;
+}
+
 export function writePlan(changeDir, plan) {
   const failures = validateStructure(plan);
   const expectedHash = tryHashPlan(plan);

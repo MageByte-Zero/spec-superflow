@@ -76,7 +76,7 @@ export function recommendExecutionModesForChange(changeDir, waves = []) {
   });
 }
 
-export function createRecommendationReceipt(changeDir, waves = []) {
+export function createRecommendationReceipt(changeDir, waves = [], executionPlanRevision = undefined) {
   const state = readState(changeDir);
   const receipt = {
     recommendation: recommendExecutionModesForChange(changeDir, waves),
@@ -84,7 +84,9 @@ export function createRecommendationReceipt(changeDir, waves = []) {
     artifacts_hash: computeArtifactsHash(changeDir),
     contract_hash: computeContractHash(changeDir),
     workflow: state.workflow,
-    execution_plan_revision_at_recommendation: state.execution_plan_revision ?? null,
+    execution_plan_revision_at_recommendation: executionPlanRevision === undefined
+      ? state.execution_plan_revision ?? null
+      : executionPlanRevision,
     created_at: new Date().toISOString(),
   };
   receipt.hash = hashReceipt(receipt);
