@@ -63,6 +63,7 @@ export async function runRecoveryCommand(command, args, { requireTarget = false 
       next_action: summary.next_action,
       continuation: summary.continuation,
     });
+    if (!summary.ok) process.exitCode = 1;
   } catch (error) {
     printRecoveryError(command, error, values.json);
   }

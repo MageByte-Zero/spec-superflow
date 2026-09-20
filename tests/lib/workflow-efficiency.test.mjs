@@ -93,3 +93,10 @@ test('invalid Quick receipt requests receipt recovery, never a Full plan', t => 
   assert.equal(summary.blockers[0].code, 'WORKFLOW_RECEIPT_REQUIRED');
   assert.equal(summary.execution.required, false);
 });
+test('debugging with lost short-path evidence repairs the receipt before diagnosis', t => {
+  const dir = fixture(t, 'tweak', 'debugging');
+  const summary = createRecoverySummary(dir);
+  assert.equal(summary.blockers[0].code, 'WORKFLOW_RECEIPT_REQUIRED');
+  assert.equal(summary.next_action.skill, 'workflow-start');
+  assert.equal(summary.continuation.kind, 'blocked');
+});

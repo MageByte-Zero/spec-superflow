@@ -181,6 +181,16 @@ describe('BUG/#15: ensure-branch enforces isolation', () => {
       assert.equal(r.ok, true, r.out);
       assert.equal(existsSync(join(worktree, 'changes', 'planned-change', 'proposal.md')), true);
       assert.equal(existsSync(join(worktree, 'changes', 'planned-change', 'README.md')), false);
+
+      writeFileSync(join(worktree, 'changes', 'planned-change', 'proposal.md'), 'Newer worktree evidence.');
+      const repeated = run(`"${changeDir}" planned-change`);
+      assert.equal(repeated.ok, true, repeated.out);
+      assert.match(repeated.out, /existing git worktree .* is ready/i);
+      assert.equal(
+        readFileSync(join(worktree, 'changes', 'planned-change', 'proposal.md'), 'utf8'),
+        'Newer worktree evidence.',
+        're-running isolation must not overwrite worktree-side evidence',
+      );
     } finally {
       if (existsSync(worktree)) git(repoDir, 'worktree', 'remove', '--force', worktree);
     }
@@ -251,6 +261,30 @@ describe('worktree-lifecycle R1/R2: submodule init + progress cwd warning', () =
 
       assert.equal(r.ok, false, `expected non-zero exit, got: ${r.out}`);
       assert.match(r.out, /submodule initialization failed/i);
+    } finally {
+      rmRetry(base);
+    }
+  });
+
+  it('R1 SHALL resume the recorded worktree after a submodule failure is repaired', () => {
+    const base = mkdtempSync(join(tmpdir(), 'ssf-ensure-sub-retry-'));
+    try {
+      const { main } = makeSubmoduleFixtureSafe(base);
+      addBogusSubmodule(main, 'subX', pathToFileURL(join(base, 'does-not-exist')).href);
+      const changeDir = join(main, 'changes', 'retry-change');
+      mkdirSync(changeDir, { recursive: true });
+
+      const first = run(`"${changeDir}" retry-change`);
+      const worktree = join(base, 'main-retry-change');
+      assert.equal(first.ok, false, first.out);
+      assert.equal(existsSync(worktree), true, 'failed initialization keeps the recorded worktree');
+
+      git(worktree, 'config', '-f', '.gitmodules', 'submodule.subX.url', submoduleSourceUrl(main));
+      const retried = run(`"${changeDir}" retry-change`);
+      assert.equal(retried.ok, true, retried.out);
+      assert.match(retried.out, /resumed existing git worktree/i);
+      assert.equal(existsSync(join(worktree, 'subX', 'm.txt')), true);
+      assert.equal(git(worktree, 'submodule', 'status').includes('subX'), true);
     } finally {
       rmRetry(base);
     }

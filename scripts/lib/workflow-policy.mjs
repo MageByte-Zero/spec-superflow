@@ -6,10 +6,15 @@ import { isDirectWorkflowReceipt, readWorkflowSelection } from './workflow-recom
 export function workflowPolicy(changeDir, state = readState(changeDir)) {
   const receipt = readWorkflowSelection(changeDir);
   const directShortPath = receipt.valid && isDirectWorkflowReceipt(receipt.record, state);
+  const missingDebugReceipt = state.state === 'debugging'
+    && ['tweak', 'quick', 'lightweight'].includes(state.workflow)
+    && !readPlanlessDebugReceipt(changeDir, state);
   return {
     directShortPath,
     requiresExecutionPlan: !['tweak', 'quick', 'lightweight'].includes(state.workflow) && !directShortPath,
-    missingDirectReceipt: ['quick', 'lightweight'].includes(state.workflow) && !directShortPath,
+    missingDirectReceipt: (['quick', 'lightweight'].includes(state.workflow) && !directShortPath)
+      || missingDebugReceipt,
+    missingDebugReceipt,
   };
 }
 

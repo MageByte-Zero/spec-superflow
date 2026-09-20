@@ -46,7 +46,11 @@ export function createRecoverySummary(changeDir) {
   const execution = inspectExecution(changeDir, state);
   const blockers = terminal ? [] : buildBlockers(changeDir, handoffs, execution);
   if (!terminal && workflowPolicy(changeDir, state).missingDirectReceipt) {
-    blockers.unshift({ code: 'WORKFLOW_RECEIPT_REQUIRED', message: 'Restore a valid workflow receipt before continuing', command: `ssf workflow show ${changeDir} --json` });
+    blockers.unshift({
+      code: 'WORKFLOW_RECEIPT_REQUIRED',
+      message: `Workflow evidence for '${state.workflow}' is missing or invalid. Re-observe the facts, run workflow recommend, then accept/select the same persisted mode`,
+      command: null,
+    });
   }
 
   const nextAction = selectNextAction(changeDir, state, terminal, checkpoints[0], blockers);
@@ -150,15 +154,15 @@ function selectNextAction(changeDir, state, terminal, checkpoint, blockers) {
   if (terminal) {
     return { skill: 'none', command: null, reason: 'Change is terminal' };
   }
-  if (state.state === 'debugging') {
-    return { skill: 'bug-investigator', command: null, reason: 'Diagnose the failure before resuming implementation' };
-  }
   if (['HANDOFF_REVIEW_REQUIRED', 'WORKFLOW_RECEIPT_REQUIRED'].includes(blockers[0]?.code)) {
     return {
       skill: 'workflow-start',
       command: blockers[0].command,
       reason: blockers[0].message,
     };
+  }
+  if (state.state === 'debugging') {
+    return { skill: 'bug-investigator', command: null, reason: 'Diagnose the failure before resuming implementation' };
   }
   if (blockers[0]?.code === 'EXECUTION_PLAN_REQUIRED' || blockers[0]?.code === 'EXECUTION_PLAN_STALE') {
     return {
@@ -174,7 +178,7 @@ function selectNextAction(changeDir, state, terminal, checkpoint, blockers) {
     const waves = describeWaves(changeDir, plan);
     if (plan.review_policy === 'final' && waves.every(wave => wave.completed)) {
       const reviewed = readCurrentReview(changeDir, 'final', plan)?.status === 'pass';
-      return { skill: reviewed ? 'release-archivist' : 'code-reviewer', command: null, reason: reviewed ? 'Final review passed; close out the change' : 'Implementation completed; final independent review required' };
+      return { skill: reviewed ? 'release-archivist' : 'code-reviewer', command: null, reason: reviewed ? 'Final review passed; close out the change' : 'Implementation completed; final whole-range review required' };
     }
     const eligibleWave = waves.find(wave => wave.eligible);
     if (eligibleWave) {

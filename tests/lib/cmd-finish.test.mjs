@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import { basename, dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { run as finishRun } from '../../scripts/lib/cmd-finish.mjs';
+import { run as finishRun, verificationEnvironmentFingerprint } from '../../scripts/lib/cmd-finish.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
@@ -21,6 +21,18 @@ afterEach(() => {
   while (tempDirs.length > 0) {
     rmSync(tempDirs.pop(), { recursive: true, force: true });
   }
+});
+
+describe('finish verification cache fingerprint', () => {
+  it('ignores agent session metadata but invalidates verification-relevant environment changes', () => {
+    const first = verificationEnvironmentFingerprint({ PATH: '/bin', NODE_OPTIONS: '', CODEX_THREAD_ID: 'one', DATABASE_URL: 'db-a' });
+    const nextSession = verificationEnvironmentFingerprint({ PATH: '/bin', NODE_OPTIONS: '', CODEX_THREAD_ID: 'two', DATABASE_URL: 'db-a' });
+    const changedRuntime = verificationEnvironmentFingerprint({ PATH: '/bin', NODE_OPTIONS: '--conditions=test', CODEX_THREAD_ID: 'two', DATABASE_URL: 'db-a' });
+    const changedDependency = verificationEnvironmentFingerprint({ PATH: '/bin', NODE_OPTIONS: '', CODEX_THREAD_ID: 'two', DATABASE_URL: 'db-b' });
+    assert.equal(first, nextSession);
+    assert.notEqual(first, changedRuntime);
+    assert.notEqual(first, changedDependency);
+  });
 });
 
 // 全部 git 调用走无 shell 的 spawnSync；注入 GIT_ALLOW_PROTOCOL=file 与

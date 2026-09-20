@@ -138,7 +138,7 @@ npm install -g spec-superflow
 | `ssf handoff finish <dir> <id>` | Validate a handoff result |
 | `ssf handoff resolve <dir> <id> --decision <decision>` | Record an explicit handoff decision |
 | `ssf isolate <dir>` | Enforce git isolation before implementation: creates a worktree (with recursive submodule init) or branch when on main/master, and appends a cwd-persistence warning to the progress ledger |
-| `ssf finish <dir> [--test-cmd <command>]` | One-command close-out: merge --no-ff back to the trunk, verify sync, run a verification command on the trunk (default `npm test`, 10-minute timeout), and remove the worktree and isolation branch only after verification passes; on failure the worktree is kept for rework |
+| `ssf finish <dir> [--test-cmd <command>]` | Merge and verify on the recorded target; worktree isolation removes the worktree and branch, while branch-only isolation removes only the branch; failures preserve the isolation context |
 | `ssf install-cursor` | Deploy to `.cursor/` directory |
 | `ssf install-workbuddy` | Deploy to WorkBuddy marketplace and enable skills |
 | `ssf install-codebuddy` | Deploy to `~/.codebuddy/` (CodeBuddy Code CLI) |
@@ -311,7 +311,7 @@ ssf execution adjudicate changes/my-change --wave foundation --decision allow-re
 
 The `--report` path is resolved relative to `<change>` and must remain under
 `<change>/.superpowers/sdd/reviews/`. `--base` and `--head` must be real commits
-in the `<change>` Git worktree, and `base` must be an ancestor of `head`.
+in the `<change>` Git worktree, and `base` must be an ancestor of `head`. A passing receipt requires a non-empty range. Final review uses the merge-base of the target branch and HEAD, never `HEAD~1`.
 The `<change>/.superpowers/sdd/reviews/` directory hierarchy must be physical,
 non-symlink directories. The report itself must be a regular, non-empty,
 non-symlink file.

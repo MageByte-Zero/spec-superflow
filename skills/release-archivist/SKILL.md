@@ -15,7 +15,7 @@ Quick/direct Hotfix/Tweak record changed files, focused command and result, pers
 
 1. Verify the final code snapshot with required build/test/validation commands. Reuse fresh results only when the code, environment and command are identical; don't rerun the same full suite just because the skill changed.
 2. Check contract coverage, design consistency, scope and unresolved findings against the actual diff. Cite commands/results; do not infer success from edits or unchecked claims.
-3. Require the current plan's review policy: one final independent review for Native `final`, or the required wave receipts for `wave`/legacy plans. Do not request a duplicate review of unchanged evidence.
+3. Require the current plan's review policy: one final whole-range review for Native `final`, or the required wave receipts for `wave`/legacy plans. Do not request a duplicate review of unchanged evidence.
 4. Synchronize actual delta specs using spec-merger while executing. If specs were explicitly omitted and no delta exists, don't recreate them.
 5. Run `ssf audit <dir>` and record verification outcome (`dp_6_result`, timestamp and `test_result`). Record DP-7 only with the user's archive authorization already obtained or explicitly requested. Do not fabricate missing decisions.
 6. With blockers resolved, run `ssf state transition <dir> closing`. This is logical closure; it does not claim merge or cleanup succeeded.

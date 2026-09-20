@@ -21,6 +21,11 @@ describe('token-baseline: measurement', () => {
     assert.ok(typeof c.lines === 'number' && c.lines > 0, 'lines should be positive');
     assert.ok(typeof c.chars === 'number' && c.chars > 0, 'chars should be positive');
     assert.ok(typeof c.estimatedTokens === 'number' && c.estimatedTokens > 0, 'estimatedTokens should be positive');
+    assert.equal(c.measurement, 'shell-message', 'the hook must measure injected context, not Bash source');
+    assert.match(c.label, /inactive sessions inject 0/i);
+    assert.ok(c.chars < readFileSync(join(process.cwd(), 'hooks/session-start'), 'utf8').length);
+    assert.match(data.note, /not a runtime session/i);
+    assert.match(data.note, /inactive hook sessions emit no context/i);
     assert.ok(typeof data.totals === 'object', 'totals should be an object');
     assert.ok(data.totals.estimatedTokens > 0, 'total estimatedTokens should be positive');
   });

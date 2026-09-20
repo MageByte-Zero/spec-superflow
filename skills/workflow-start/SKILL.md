@@ -1,6 +1,6 @@
 ---
 name: workflow-start
-description: Primary entry point for the spec-superflow state-machine workflow. Invoke when the user is inside an active spec-superflow change directory (look for .spec-superflow.yaml, changes/<name>/, proposal.md, specs/, design.md, tasks.md, or execution-contract.md) and asks to start, continue, resume, implement, plan, or figure out the next workflow step. Also invoke when the user explicitly asks to start a new spec-superflow change or route through the spec-superflow workflow. Do not invoke for unrelated coding tasks that happen to use words like start, continue, implement, or plan.
+description: Primary entry point for the spec-superflow state-machine workflow. Invoke only when the user explicitly requests spec-superflow or an active change contains .spec-superflow.yaml and the user asks to continue that change. Generic proposal, specs, design, task, or contract files are not activation signals.
 ---
 
 # Workflow Start

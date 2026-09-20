@@ -1,15 +1,3 @@
-# Phase Guard
+# spec-superflow — opt-in
 
-**当前阶段**: exploring | **工作流**: auto
-
-## ✅ 允许操作
-- 澄清需求、比较方案
-- 与用户讨论 scope 和 capabilities
-
-## ⛔ 禁止操作
-- 创建规划工件（proposal.md, specs/, design.md, tasks.md）
-- 执行实现代码
-- 修改 execution-contract.md
-
-## 🔔 决策点
-- DP-1: 需求确认 — 进入 specifying 前需用户确认 scope
+仅当用户明确要求 spec-superflow，或当前活动 change 含 `.spec-superflow.yaml` 时使用 `workflow-start`。否则正常处理任务，不应用 spec-superflow 门禁。通用 proposal、spec、design、tasks、contract 文件不是触发信号。

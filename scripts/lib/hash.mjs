@@ -56,17 +56,19 @@ export function computeContractHash(changeDir) {
   return `sha256:${hash.digest('hex')}`;
 }
 
-// Fast staleness check: compare stored artifacts_hash against current.
-export function isContractFresh(changeDir, stateLoader) {
+// Fast staleness check: both the planning inputs and approved contract body
+// must still match the hashes recorded in workflow state.
+export function isContractFresh(changeDir) {
   const stateFile = path.join(changeDir, '.spec-superflow.yaml');
   if (!fs.existsSync(stateFile)) return false;
 
   const raw = fs.readFileSync(stateFile, 'utf-8');
-  const storedHash = extractYamlField(raw, 'artifacts_hash');
-  if (!storedHash || storedHash === 'null') return false;
+  const storedArtifactsHash = extractYamlField(raw, 'artifacts_hash');
+  const storedContractHash = extractYamlField(raw, 'contract_hash');
+  if (!storedArtifactsHash || !storedContractHash) return false;
 
-  const currentHash = computeArtifactsHash(changeDir);
-  return storedHash === currentHash;
+  return storedArtifactsHash === computeArtifactsHash(changeDir)
+    && storedContractHash === computeContractHash(changeDir);
 }
 
 function extractYamlField(content, field) {

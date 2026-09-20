@@ -721,7 +721,7 @@ describe('execution plan data contract', () => {
     assert.throws(() => recordReview(changeDir, 'wave-1', {
       status: 'pass', base: head, head,
       report: writeReviewReport('unauthorized-pass.md'),
-    }), /requires adjudication/i);
+    }), /requires adjudication|non-empty|must differ/i);
 
     adjudicateWave(changeDir, 'wave-1', {
       decision: 'allow-review', confirmed: true,
@@ -1733,6 +1733,15 @@ describe('revision evidence continuity', () => {
 
 import { checkExecutionReviewsPassed } from '../../scripts/guard/checks/execution-reviews-passed.mjs';
 describe('final review binds the delivered code', () => {
+  it('never accepts a zero-diff final review receipt', () => {
+    const plan = createPlan(changeDir, { mode: 'inline', reviewPolicy: 'final', source: 'user-confirmed', rationale: 'review real changes', waves: [{ id: 'w1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }] });
+    writePlan(changeDir, plan);
+    assert.throws(() => recordReview(changeDir, 'final', {
+      status: 'pass', base: gitRefs.head, head: gitRefs.head, report: writeReviewReport('empty-final.md'),
+    }), /non-empty|must differ/i);
+    assert.equal(checkExecutionReviewsPassed(changeDir).pass, false);
+  });
+
   it('rejects uncommitted additions and invalidates a final pass after HEAD changes', () => {
     const plan = createPlan(changeDir, { mode: 'inline', reviewPolicy: 'final', source: 'user-confirmed', rationale: 'final code', waves: [{ id: 'w1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }] });
     writePlan(changeDir, plan);

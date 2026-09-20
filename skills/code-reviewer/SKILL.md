@@ -5,20 +5,20 @@ description: Review completed implementation batches for spec compliance and cod
 
 # Code Reviewer
 
-Two responsibilities: requesting review (dispatching a reviewer subagent) and receiving review (acting on feedback with technical rigor). Review according to the persisted policy; verify feedback before implementing it.
+Two responsibilities: reviewing the recorded Git range and acting on findings with technical rigor. Review according to the persisted policy; verify feedback before implementing it.
 
 ## Part 1: Requesting Review
 
-**Mandatory**: one final independent review for Native `final`; one review per planned wave for `wave` and legacy plans. Avoid redundant per-task or final reviews of unchanged evidence.
+**Mandatory**: one whole-range review for Native `final`; one review per planned wave for `wave` and legacy plans. Avoid redundant per-task or final reviews of unchanged evidence.
 **Optional**: when stuck, before refactoring, after fixing complex bugs.
 
 ### Procedure
-1. Get SHAs: `BASE_SHA=$(git rev-parse HEAD~1)` and `HEAD_SHA=$(git rev-parse HEAD)`
-2. Dispatch `general-purpose` subagent using template at `skills/code-reviewer/code-reviewer-prompt.md`
-3. Fill placeholders: `[DESCRIPTION]` (what was built), `[PLAN_OR_REQUIREMENTS]` (contract/spec reference), `[BASE_SHA]`, `[HEAD_SHA]`, `[WAVE_ID]`, and a distinct `[REVIEW_REPORT_FILE]`.
-4. Require the reviewer to write a non-empty persisted review report at `.superpowers/sdd/reviews/<wave-id>.md`, then record that exact in-overlay path in the wave receipt with `ssf execution review <change-dir> --wave <wave-id> --base <base-sha> --head <head-sha> --report .superpowers/sdd/reviews/<wave-id>.md --verdict <pass|fail>`. The execution plan initializes this directory; paths outside it are rejected for audit safety.
-5. Act on feedback: Critical/Important findings require a `fail` receipt, focused repair, re-review, and replacement `pass` receipt before a dependent wave or closing can proceed. Note Minor for later, push back with reasoning if reviewer is wrong.
-6. At `adjudication-required`, wait for a human to run `ssf execution adjudicate <change-dir> --wave <id> --decision allow-review --confirm --reason <text>` before another review. It authorizes one review and never substitutes for `pass`.
+1. Get the review range from recorded execution evidence. For final review use `BASE_SHA=$(git merge-base <target-branch> HEAD)` and `HEAD_SHA=$(git rev-parse HEAD)`. For a wave review use the recorded wave-start base. Never substitute `HEAD~1`; it misses earlier commits in multi-commit work.
+2. For Native `final`, the current executor reviews the complete diff locally and writes the report; do not dispatch a reviewer subagent. For user-authorized SDD with `wave` review, dispatch at most one reviewer for that wave using `skills/code-reviewer/code-reviewer-prompt.md`. If dispatch is unavailable, review locally.
+3. When dispatching, fill only `[DESCRIPTION]`, `[PLAN_OR_REQUIREMENTS]`, `[BASE_SHA]`, `[HEAD_SHA]`, `[WAVE_ID]`, and `[REVIEW_REPORT_FILE]`. Do not send the whole planning bundle.
+4. Write a non-empty report at `.superpowers/sdd/reviews/<wave-id>.md`, then record that path with `ssf execution review <change-dir> --wave <wave-id> --base <base-sha> --head <head-sha> --report .superpowers/sdd/reviews/<wave-id>.md --verdict <pass|fail>`.
+5. Critical/Important findings require a `fail` receipt, focused repair, one focused re-review, and replacement `pass`. Note Minor for later.
+6. At `adjudication-required`, wait for human authorization before another review.
 
 ### Minimality And Scope
 

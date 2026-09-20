@@ -94,7 +94,7 @@ Quick, direct Hotfix, and Tweak are exempt from execution-plan and review-receip
 
 For Full/legacy Hotfix, the plan names ordered execution waves, dependencies,
 and parallel/serial strategy. `ssf execution show <change-dir> --json` reports
-which current waves are eligible. Native defaults to `inline` and `review_policy: final`: task dependencies permit continuous implementation, with one independent final review. SDD defaults to `wave`; omitted policy preserves legacy wave receipt gates. `ssf execution revise` may retain or switch any confirmed mode. Mode-only revisions preserve applicable evidence; scope changes invalidate passing evidence conservatively and retain unresolved failures. Recovery, switching, and
+which current waves are eligible. Native defaults to `inline` and `review_policy: final`: task dependencies permit continuous implementation, with one local whole-range review and no reviewer subagent. SDD defaults to `wave`; omitted policy preserves legacy wave receipt gates. `ssf execution revise` may retain or switch any confirmed mode. Mode-only revisions preserve applicable evidence; scope changes invalidate passing evidence conservatively and retain unresolved failures. Recovery, switching, and
 manual save are a control-plane overlay; they do not create a ninth workflow
 state.
 

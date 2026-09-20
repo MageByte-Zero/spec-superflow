@@ -1,94 +1,107 @@
 {
-  "timestamp": "2026-09-20T09:52:30.761Z",
+  "timestamp": "2026-09-20T10:34:48.613Z",
+  "note": "Catalog estimate only. Inactive hook sessions emit no context; the hook component measures its active-state message. Other components are loaded conditionally. This is not a runtime session, repeated-read, subagent, latency, or cost benchmark.",
   "components": [
     {
       "path": "hooks/session-start",
-      "label": "hooks/session-start",
-      "lines": 21,
-      "chars": 1473,
-      "estimatedTokens": 369
+      "label": "hook active context (inactive sessions inject 0)",
+      "lines": 1,
+      "chars": 70,
+      "estimatedTokens": 18,
+      "measurement": "shell-message"
     },
     {
       "path": ".claude/always/phase-guard.md",
       "label": "phase-guard (claude)",
-      "lines": 4,
-      "chars": 160,
-      "estimatedTokens": 57
+      "lines": 3,
+      "chars": 177,
+      "estimatedTokens": 61,
+      "measurement": "file-source"
     },
     {
       "path": "GEMINI.md",
       "label": "phase-guard (gemini)",
-      "lines": 15,
-      "chars": 709,
-      "estimatedTokens": 194
+      "lines": 13,
+      "chars": 712,
+      "estimatedTokens": 178,
+      "measurement": "file-source"
     },
     {
       "path": "skills/workflow-start/SKILL.md",
       "label": "skill: workflow-start",
       "lines": 64,
-      "chars": 5180,
-      "estimatedTokens": 1295
+      "chars": 4904,
+      "estimatedTokens": 1226,
+      "measurement": "file-source"
     },
     {
       "path": "skills/need-explorer/SKILL.md",
       "label": "skill: need-explorer",
       "lines": 74,
       "chars": 2955,
-      "estimatedTokens": 739
+      "estimatedTokens": 739,
+      "measurement": "file-source"
     },
     {
       "path": "skills/spec-writer/SKILL.md",
       "label": "skill: spec-writer",
       "lines": 84,
       "chars": 4947,
-      "estimatedTokens": 1237
+      "estimatedTokens": 1237,
+      "measurement": "file-source"
     },
     {
       "path": "skills/contract-builder/SKILL.md",
       "label": "skill: contract-builder",
       "lines": 90,
       "chars": 4402,
-      "estimatedTokens": 1101
+      "estimatedTokens": 1101,
+      "measurement": "file-source"
     },
     {
       "path": "skills/build-executor/SKILL.md",
       "label": "skill: build-executor",
-      "lines": 73,
-      "chars": 7159,
-      "estimatedTokens": 1790
+      "lines": 72,
+      "chars": 7052,
+      "estimatedTokens": 1763,
+      "measurement": "file-source"
     },
     {
       "path": "skills/bug-investigator/SKILL.md",
       "label": "skill: bug-investigator",
       "lines": 102,
       "chars": 5743,
-      "estimatedTokens": 1436
+      "estimatedTokens": 1436,
+      "measurement": "file-source"
     },
     {
       "path": "skills/code-reviewer/SKILL.md",
       "label": "skill: code-reviewer",
       "lines": 86,
-      "chars": 5146,
-      "estimatedTokens": 1287
+      "chars": 5089,
+      "estimatedTokens": 1273,
+      "measurement": "file-source"
     },
     {
       "path": "skills/release-archivist/SKILL.md",
       "label": "skill: release-archivist",
       "lines": 34,
       "chars": 3356,
-      "estimatedTokens": 839
+      "estimatedTokens": 839,
+      "measurement": "file-source"
     },
     {
       "path": "skills/spec-merger/SKILL.md",
       "label": "skill: spec-merger",
       "lines": 74,
       "chars": 4508,
-      "estimatedTokens": 1127
+      "estimatedTokens": 1127,
+      "measurement": "file-source"
     }
   ],
   "totals": {
-    "lines": 721,
-    "chars": 45738,
-    "estimatedTokens": 11471
+    "lines": 697,
+    "chars": 43915,
+    "estimatedTokens": 10998
   }
 }

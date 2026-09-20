@@ -92,7 +92,7 @@ exploring → specifying → bridging → approved-for-build → executing → c
 
 ### Hooks (`hooks/`)
 
-- `hooks/session-start` — Detects platform and injects `workflow-start/SKILL.md` as session context.
+- `hooks/session-start` — Emits a short resume pointer only when the current project/change directory contains `.spec-superflow.yaml`; inactive sessions receive no injected context.
 - `hooks/hooks.json` — Claude Code hook config (SessionStart).
 - `hooks/hooks-cursor.json` — Cursor equivalent.
 

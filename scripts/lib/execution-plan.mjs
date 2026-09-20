@@ -161,6 +161,9 @@ export function recordReview(changeDir, waveId, receipt, options = {}) {
   mkdirSync(planPaths.reviews, { recursive: true });
   const reportEvidence = validateReviewReportEvidence(changeDir, receipt?.report);
   const { base, head } = validateReviewRange(changeDir, receipt.base, receipt.head);
+  if (receipt.status === 'pass' && base === head) {
+    throw new Error('Passing review receipt must cover a non-empty Git range; base and head must differ');
+  }
   warnIfCwdOutsideIsolation(changeDir);
   assertReviewHeadBranch(changeDir, head, options.runGit);
   const currentReview = readCurrentReviewEvidence(changeDir, waveId, plan);
@@ -624,6 +627,7 @@ function readCurrentReviewEvidence(changeDir, waveId, plan = readPlan(changeDir)
     if (receipt?.plan_hash !== plan.hash || receipt?.plan_revision !== plan.revision) return { receipt: null, blocker: null };
     const range = validateReviewRange(changeDir, receipt?.base, receipt?.head);
     if (receipt.base !== range.base || receipt.head !== range.head) return { receipt: null, blocker: null };
+    if (receipt.status === 'pass' && receipt.base === receipt.head) return { receipt: null, blocker: null };
     // Reports remain evidence only while their safety and content identity can
     // be re-established. A missing hash is accepted for legacy receipts, but
     // all newly written receipts bind the report body to the review result.
@@ -1013,6 +1017,9 @@ function validateStoredReviewEvidence(changeDir, plan, waveId, evidence, { expec
   const range = validateReviewRange(changeDir, evidence.base, evidence.head);
   if (evidence.base !== range.base || evidence.head !== range.head) {
     throw new Error(`${label} must use immutable Git commit IDs`);
+  }
+  if (evidence.status === 'pass' && evidence.base === evidence.head) {
+    throw new Error(`${label} pass must cover a non-empty Git range`);
   }
   const report = validateReviewReportEvidence(changeDir, evidence.report);
   if (evidence.report !== report.path || evidence.report_sha256 !== report.sha256) {

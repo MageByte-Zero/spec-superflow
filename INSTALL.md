@@ -415,7 +415,7 @@ npx spec-superflow@latest install-codebuddy
 - 在 `~/.codebuddy/spec-superflow/bin/` 生成 `ssf`（POSIX）、`ssf.cmd` / `ssf.ps1`（Windows）命令 shim，指向已部署的 `scripts/spec-superflow.mjs`；
 - 默认把 `bin/` 目录加入用户 PATH（幂等，重复安装不会产生重复条目），**新开终端**后即可像 `npm install -g spec-superflow` 一样直接使用 `ssf` 命令。
 
-> **Windows 前置依赖**：SessionStart hook 通过 `bash "<path>"` 执行（`hooks/session-start` 是 bash 脚本），因此 Windows 上需要 `bash` 在 PATH 中——请先安装 **Git for Windows**（自带 Git Bash）或启用 **WSL**，否则 session-start hook 无法运行，`workflow-start` skill 不会被注入。
+> **Windows 前置依赖**：SessionStart hook 通过 `bash "<path>"` 执行（`hooks/session-start` 是 bash 脚本），因此 Windows 上需要 `bash` 在 PATH 中——请先安装 **Git for Windows**（自带 Git Bash）或启用 **WSL**。普通目录中 hook 不注入内容；仅当当前目录存在 `.spec-superflow.yaml` 时注入恢复提示。
 
 如果不想修改用户 PATH，用 `--no-path` 跳过（shim 仍会生成，可手动把 `bin/` 加入 PATH）：
 
@@ -873,6 +873,7 @@ ssf finish changes/my-change
 `--report` 相对于 `<change>` 解析，且必须位于
 `<change>/.superpowers/sdd/reviews/` 之下。`--base` 和 `--head` 必须是该
 `<change>` Git 工作树中的真实 commit，且 `base` 必须是 `head` 的祖先。
+`pass` 回执要求 `base` 与 `head` 不同；final review 使用目标分支与 HEAD 的 merge-base，不能用 `HEAD~1`。
 `<change>/.superpowers/sdd/reviews/` 的目录层级必须是物理、非符号链接目录；
 report 本身必须为普通、非空、非符号链接文件。
 
@@ -881,7 +882,7 @@ report 本身必须为普通、非空、非符号链接文件。
 `ssf execution review` 在记录 receipt 前校验 head 必须被至少一个非 `main`/`master`
 分支包含——head 只落在主干上会被拒绝且不写 receipt。全部 wave 通过后，
 `ssf finish <change-dir>` 一条命令完成收尾：`merge --no-ff` 回主干、验证主干包含
-隔离分支全部提交、删除 worktree 与隔离分支；`finish` 与 `review` 在 cwd 位于
+隔离分支全部提交；worktree 模式删除 worktree 与分支，branch 模式只删除隔离分支。`finish` 与 `review` 在 cwd 位于
 worktree 之外时会输出含 worktree 绝对路径的 WARN（不阻断执行）。
 
 每一个 wave 均须有当前 `pass` review receipt，才可启动依赖 wave 或进入 closing；

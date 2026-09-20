@@ -88,7 +88,6 @@ function runStateInProcess(args) {
 }
 
 function requiresAcknowledgement(args) {
-  if (args[1] === 'revise') return false;
   const mode = args[args.indexOf('--mode') + 1];
   return mode !== 'inline';
 }
@@ -590,7 +589,7 @@ describe('ssf execution', () => {
     assert.equal(runSsf(['state', 'get', changeDir, 'execution_plan_revision', '--json']).json.value, 2);
   });
 
-  it('requires confirmation but not acknowledgement when revising to sdd', () => {
+  it('requires confirmation and acknowledgement when revising away from the recommendation', () => {
     const initial = runSsf(['execution', 'plan', changeDir, '--mode', 'sdd',
       '--reason', 'parallel work needs review', '--wave', 'wave-1:parallel:1.1,1.2']);
     assert.equal(initial.exitCode, 0, initial.stderr);
@@ -607,13 +606,17 @@ describe('ssf execution', () => {
     assert.notEqual(missingConfirm.exitCode, 0);
     assert.match(missingConfirm.stderr, /confirm/i);
 
-    // The revise path only permits sdd (a controlled upgrade), so it no longer
-    // requires --acknowledge-recommendation even when the recommendation differs.
-    const revised = runSsf(['execution', 'revise', changeDir, '--mode', 'sdd', '--confirm',
+    const rejected = runSsf(['execution', 'revise', changeDir, '--mode', 'sdd', '--confirm',
       '--reason', 'retain SDD for the revised work', '--wave', 'wave-1:serial:1.1', '--json'], process.cwd(), {
       acknowledgePlan: false,
       prepareRecommendation: false,
     });
+    assert.notEqual(rejected.exitCode, 0);
+    assert.match(rejected.stderr, /acknowledge/i);
+
+    const revised = runSsf(['execution', 'revise', changeDir, '--mode', 'sdd', '--confirm',
+      '--acknowledge-recommendation', '--reason', 'retain SDD for the revised work',
+      '--wave', 'wave-1:serial:1.1', '--json'], process.cwd(), { prepareRecommendation: false });
     assert.equal(revised.exitCode, 0, revised.stderr);
     assert.equal(revised.json.plan.selection.confirmed, true);
     assert.equal(revised.json.plan.selection.followed_recommendation, false);
@@ -975,28 +978,30 @@ describe('ssf execution', () => {
     assert.equal(invalidRevision.exitCode, 0, invalidRevision.stderr);
   });
 
-  it('allows revise to sdd without acknowledge-recommendation even when recommendation differs', () => {
+  it('requires acknowledgement when a revision differs from the recommendation', () => {
     // First create a batch-inline plan
     const initial = runSsf(['execution', 'plan', changeDir, '--mode', 'batch-inline', '--confirm', '--acknowledge-recommendation',
       '--reason', 'operator requested a batch', '--wave', 'wave-1:serial:1.1']);
     assert.equal(initial.exitCode, 0, initial.stderr);
 
-    // Revise to sdd: the single serial task recommends inline (differs from sdd),
-    // but the revise path no longer requires --acknowledge-recommendation.
     const revised = runSsf(['execution', 'revise', changeDir, '--mode', 'sdd',
       '--reason', 'risk requires independent review', '--wave', 'wave-1:serial:1.1', '--json'], process.cwd(), {
       acknowledgePlan: false, // Do NOT auto-add --acknowledge-recommendation
     });
 
+    assert.notEqual(revised.exitCode, 0);
+    assert.match(revised.stderr, /acknowledge/i);
+  });
+
+  it('switches SDD revisions to Native final review by default', () => {
+    const initial = runSsf(['execution', 'plan', changeDir, '--mode', 'sdd',
+      '--reason', 'parallel work', '--wave', 'wave-1:parallel:1.1,1.2']);
+    assert.equal(initial.exitCode, 0, initial.stderr);
+
+    const revised = runSsf(['execution', 'revise', changeDir, '--mode', 'inline',
+      '--reason', 'continue locally', '--wave', 'wave-1:serial:1.1', '--json']);
     assert.equal(revised.exitCode, 0, revised.stderr);
-    assert.equal(revised.json.plan.mode, 'sdd');
-    assert.equal(revised.json.plan.revision, 2);
-    // The selection records an informed departure: --confirm plus the forced
-    // sdd upgrade counts as the acknowledgement, not the (absent) flag.
-    assert.equal(revised.json.plan.source, 'user-confirmed-revision');
-    assert.equal(revised.json.plan.selection.confirmed, true);
-    assert.equal(revised.json.plan.selection.followed_recommendation, false);
-    assert.equal(revised.json.plan.selection.acknowledged_non_recommendation, true);
+    assert.equal(revised.json.plan.review_policy, 'final');
   });
 
   it('requires acknowledge-recommendation for non-recommended mode selection on plan', () => {

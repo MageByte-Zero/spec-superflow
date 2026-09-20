@@ -24,7 +24,7 @@ ssf execution plan <dir> --mode inline --review-policy final --confirm --reason 
 
 Reuse the user's existing mode choice. For a nonrecommended choice add `--acknowledge-recommendation`. New Native plans default to `final` review; SDD defaults to `wave`. `--review-policy wave` is available for explicit risk boundaries. Old plans with no policy retain wave review obligations. Mode and review granularity are separate.
 
-Use `ssf execution show <dir> --json` to resolve uncertainty, interruptions and repair status, not as a ritual before every edit. A Native wave's dependencies are completed tasks; checked tasks never substitute for the final independent review.
+Use `ssf execution show <dir> --json` to resolve uncertainty, interruptions and repair status, not as a ritual before every edit. A Native wave's dependencies are completed tasks; checked tasks never substitute for the final whole-range review.
 
 ## Implementation loop
 
@@ -39,23 +39,22 @@ Read `ssf runtime asset read skills/build-executor/writing-good-tests.md` when s
 
 ## Reviews
 
-For Native `final`, perform one independent code review after implementation and required tests, covering both spec compliance and code quality. Commit the code and bind the report to its actual Git range. Record through:
+For Native `final`, the current executor performs one whole-range review after implementation and required tests, covering spec compliance and code quality. Do not start a reviewer subagent. Commit the code and bind the report to its actual Git range. Record through:
 
 ```bash
 ssf execution review <dir> --wave final --base <base-sha> --head <head-sha> --report .superpowers/sdd/reviews/final.md --verdict <pass|fail>
 ```
 
-For `wave`, review once per planned wave, using its ID instead of `final`; dependencies require a current passing receipt. Do not add per-task and final duplicates unless an uncovered risk or new change warrants them. Reports must come from actual independent review, not implementation self-certification. Critical/Important findings require fail → focused repair → focused re-review → pass. The CLI saves immutable report snapshots, so a working report filename may be reused.
+For `wave`, review once per planned wave, using its ID instead of `final`; dependencies require a current passing receipt. SDD may use one reviewer subagent per wave because the user authorized delegation. Do not add per-task and final duplicates. Critical/Important findings require fail → focused repair → one focused re-review → pass.
 
 Read the CLI repair status before a retry. Never edit repair-state files. The third unresolved failure requires human adjudication; `ssf execution adjudicate <dir> --wave <id> --decision allow-review --confirm --reason <text>` authorizes one further review, never a pass. Preserve the prior review head so repair ranges remain continuous. For a final review, re-review the original complete range plus fixes when needed to certify the final snapshot.
 
 ## Optional SDD
 
-Only load dispatch material when SDD is selected:
+Only load dispatch material when SDD is selected. Load the reviewer prompt only when a wave reaches review:
 
 - `ssf runtime asset read skills/build-executor/implementer-prompt.md`
-- `ssf runtime asset read skills/build-executor/task-reviewer-prompt.md`
-- `ssf runtime asset read skills/build-executor/re-review-prompt.md`
+- `ssf runtime asset read skills/code-reviewer/code-reviewer-prompt.md`
 
 Send only the task's objective, bounded files, interfaces, relevant requirement IDs and test command. Reuse an implementer for its focused repair; no nested delegation or repeated full planning packs. Batch closely related small tasks. Dispatch concurrently only for independent work with platform support; otherwise report the limitation and execute serially.
 

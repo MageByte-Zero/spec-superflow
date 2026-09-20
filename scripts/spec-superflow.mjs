@@ -81,14 +81,14 @@ Commands:
                         Validate a handoff result
   handoff resolve <change-dir> <id> --decision <accept|reject|defer>
                         Record the explicit handoff decision
-  ssf finish <change-dir>   Merge the isolated branch back to the trunk (--no-ff), verify sync, clean up worktree/branch
+  ssf finish <change-dir>   Merge the isolated branch to its recorded target, verify, and clean up recorded isolation
   execution recommend <change-dir> [--wave <id>:<strategy>:<task,...>]
                         List execution modes and an evidence-based recommendation
   execution plan <change-dir> --mode <mode> [--review-policy final|wave] --confirm --reason <text> --wave <id>:<strategy>:<task,...> [--acknowledge-recommendation]
                         Record a user-confirmed guarded execution plan
   execution show <change-dir> [--json]
                         Show and validate the current execution plan
-  execution revise <change-dir> --mode <mode> --confirm --reason <text> --wave <id>:<strategy>:<task,...> [--acknowledge-recommendation]
+  execution revise <change-dir> --mode <mode> [--review-policy final|wave] --confirm --reason <text> --wave <id>:<strategy>:<task,...> [--acknowledge-recommendation]
                         Retain or switch execution mode; preserve applicable evidence in a new revision
   execution review <change-dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict pass|fail
                         Record a review receipt for a planned wave or final review

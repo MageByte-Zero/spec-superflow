@@ -95,10 +95,13 @@ export async function run(args) {
     requireStateFile(changeDir);
     const state = readState(changeDir);
 
-    if (subcommand === 'accept' && isExplicitWorkflow(state.workflow)) {
+    if (subcommand === 'accept' && isExplicitWorkflow(state.workflow)
+      && !canRepairWorkflowSelection(changeDir, state, subcommand, values)) {
       return fail('workflow is already explicitly selected', 1);
     }
-    if (subcommand === 'select' && isExplicitWorkflow(state.workflow) && !canEscalateToFull(state, values)) {
+    if (subcommand === 'select' && isExplicitWorkflow(state.workflow)
+      && !canEscalateToFull(state, values)
+      && !canRepairWorkflowSelection(changeDir, state, subcommand, values)) {
       return fail('workflow is already explicitly selected', 1);
     }
     if (subcommand === 'recommend' && state.workflow === 'full') {
@@ -139,6 +142,14 @@ function select(changeDir, state, values) {
 
 function canEscalateToFull(state, values) {
   return values.mode === 'full' && ['quick', 'hotfix', 'tweak'].includes(state.workflow);
+}
+
+function canRepairWorkflowSelection(changeDir, state, subcommand, values) {
+  const loaded = readWorkflowSelection(changeDir);
+  if (!loaded.valid || loaded.record.status !== 'ready' || loaded.record.selection) return false;
+  if (loaded.record.recommendation?.mode !== state.workflow) return false;
+  if (subcommand === 'accept') return ['quick', 'hotfix'].includes(state.workflow);
+  return subcommand === 'select' && values.mode === state.workflow;
 }
 
 function accept(changeDir, state, values) {

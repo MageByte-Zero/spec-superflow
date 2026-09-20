@@ -39,7 +39,7 @@
 
 ## Review Gates
 
-- **final**：完成后一次独立审查，`ssf execution review --wave final` 绑定实际 Git range。
+- **final**：完成后由当前执行者做一次全量审查，`ssf execution review --wave final` 绑定实际 Git range；不启动 reviewer 子代理。
 - **wave**：每个 wave 一次审查，依赖以通过回执为门禁。
 - Critical/Important：失败回执 → 修复 → 聚焦复审 → 通过。不可用任务勾选替代审查。
 

@@ -8,7 +8,7 @@ import { resolve } from 'node:path';
 const REPO_ROOT = resolve(import.meta.dirname, '..');
 
 const TARGETS = [
-  { path: 'hooks/session-start', label: 'hooks/session-start' },
+  { path: 'hooks/session-start', label: 'hook active context (inactive sessions inject 0)', measurement: 'shell-message' },
   { path: '.claude/always/phase-guard.md', label: 'phase-guard (claude)' },
   { path: 'GEMINI.md', label: 'phase-guard (gemini)' },
   { path: 'skills/workflow-start/SKILL.md', label: 'skill: workflow-start' },
@@ -49,7 +49,8 @@ function measureFile(target) {
     return { path: target.path, label: target.label, lines: 0, chars: 0, estimatedTokens: 0, error: 'file not found' };
   }
   try {
-    const content = readFileSync(fullPath, 'utf-8');
+    const source = readFileSync(fullPath, 'utf-8');
+    const content = target.measurement === 'shell-message' ? extractShellMessage(source) : source;
     const lines = content.split('\n').length;
     const chars = content.length;
     return {
@@ -58,10 +59,21 @@ function measureFile(target) {
       lines,
       chars,
       estimatedTokens: estimateTokens(content),
+      measurement: target.measurement ?? 'file-source',
     };
   } catch (e) {
     return { path: target.path, label: target.label, lines: 0, chars: 0, estimatedTokens: 0, error: e.message };
   }
+}
+
+function extractShellMessage(source) {
+  const match = source.match(/^msg="(.*)"\s*$/m);
+  if (!match) throw new Error('msg shell variable not found');
+  return match[1]
+    .replace(/\\n/g, '\n')
+    .replace(/\\`/g, '`')
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, '\\');
 }
 
 /**
@@ -86,6 +98,7 @@ export function measureAll(options = {}) {
 
   return {
     timestamp: new Date().toISOString(),
+    note: 'Catalog estimate only. Inactive hook sessions emit no context; the hook component measures its active-state message. Other components are loaded conditionally. This is not a runtime session, repeated-read, subagent, latency, or cost benchmark.',
     components,
     totals,
   };

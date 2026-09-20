@@ -36,6 +36,19 @@ function git(root, args, io, runGit) {
   }
 }
 
+export function verificationEnvironmentFingerprint(env = process.env) {
+  const volatile = /^(?:GIT_|PWD$|OLDPWD$|SHLVL$|_$|TERM_SESSION_ID$|ITERM_|LC_TERMINAL|SSH_|XPC_|VSCODE_|CURSOR_|CLAUDE_|CODEX_|SESSION_ID$)/i;
+  const stableEnvironment = Object.fromEntries(
+    Object.entries(env).filter(([key]) => !volatile.test(key)).sort(([left], [right]) => left.localeCompare(right)),
+  );
+  return createHash('sha256').update(JSON.stringify({
+    node: process.version,
+    platform: process.platform,
+    arch: process.arch,
+    env: stableEnvironment,
+  })).digest('hex');
+}
+
 // 规范化路径：realpath 解析 8.3 短名/junction，失败时退化为 resolve。
 // 必须用 native 版本：JS 版 realpathSync 无法解析 8.3 短名组件（组件名
 // 与 readdir 结果不匹配 → ENOENT → 保留短形式），CI Windows runner 的
@@ -142,8 +155,7 @@ export function run(args, io = { stdout: process.stdout, stderr: process.stderr 
     git(mainRoot, ['merge-base', '--is-ancestor', isoHead, 'HEAD'], io, runGit);
     const mainHead = git(mainRoot, ['rev-parse', 'HEAD'], io, runGit);
     const verifyCmd = values['test-cmd'] || 'npm test';
-    const environment = createHash('sha256').update(JSON.stringify({ node: process.version, platform: process.platform, arch: process.arch,
-      env: Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(GIT_|PWD$|OLDPWD$|SHLVL$|_$)/.test(key)).sort()) })).digest('hex');
+    const environment = verificationEnvironmentFingerprint();
     if (context.verified_head !== mainHead || context.verified_command !== verifyCmd || context.verified_environment !== environment) {
       context.finish_status = 'verify-pending';
       persist();

@@ -2,7 +2,7 @@
 
 ## 改动与收益边界
 
-Native（持久化值 `inline`）成为执行推荐默认值；任务数、文件数、wave 数不再触发 SDD。新 Native 计划默认一次 `final` 独立审查，SDD 默认 `wave`。没有 `review_policy` 的旧计划保留原 wave 门禁，避免已有执行记录被静默放宽。
+Native（持久化值 `inline`）成为执行推荐默认值；任务数、文件数、wave 数不再触发 SDD。新 Native 计划默认一次本地主会话的 `final` 全范围审查，不启动 reviewer 子代理；SDD 默认 `wave`。没有 `review_policy` 的旧计划保留原 wave 门禁，避免已有执行记录被静默放宽。
 
 恢复入口合并为一次 `ssf resume`：调试优先，短路径不补 Full 执行计划，无效短路径凭据回到凭据恢复。Full 可从 debugging 回退 specifying/bridging；规划和契约技能先进入对应状态再写文件，恢复时跳过自转换。
 
@@ -14,9 +14,7 @@ Native（持久化值 `inline`）成为执行推荐默认值；任务数、文�
 
 ## 成本变化
 
-以仓库 `scripts/token-baseline.mjs` 的同一静态估算口径比较，审计时为 **20,731 estimated tokens**。本次移除九个技能重复交接模板，缩短 workflow-start/build-executor/release-archivist，并让 SDD 子提示按需读取；当前为 **11,471 estimated tokens，减少 44.7%**；完整数值见 `token-baseline.json`。
-
-这衡量的是静态指令体积，不是生产会话 token 或端到端时长。用户截图中等待答复占 43.4%，模型/子代理运行占 40.7%；主线程工具时间未包含子代理工具调用，不能据此断言全部测试执行只占 0.67%。实际收益需用同任务、同模型、同环境的会话追踪比较。
+按原文件源码估算口径，目标文件从 **20,731** 降到 **11,471 estimated tokens（44.7%）**；这只表示目录文本缩短。现在 `scripts/token-baseline.mjs` 对 session hook 只计实际注入消息，并明确 catalog 总量不是运行时基准。用户截图的主线程工具统计也未包含子代理内部工具调用。实际 token、延迟和费用仍需用同任务、同模型、同环境的会话追踪比较。
 
 任务级运行受影响测试；集成/最终验证在相应边界执行，代码、环境或命令变化后重新验证。未配置模型时继承宿主；更新检查缓存 24 小时且不阻断恢复；isolate 外层超时覆盖子模块初始化。
 

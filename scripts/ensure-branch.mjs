@@ -10,7 +10,7 @@
 // ('git') and a LITERAL argument array (no shell, no variable args array) —
 // the same form proven safe by install-cursor.mjs / install.mjs. There is no
 // string-form shell command, no variable command, and no dynamic args array.
-import { writeIsolationContext } from './lib/isolation-context.mjs';
+import { readIsolationContext, writeIsolationContext } from './lib/isolation-context.mjs';
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, cpSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -44,12 +44,9 @@ try {
   process.exit(1);
 }
 
-if (!PROTECTED.includes(branch)) {
-  console.log(`ensure-branch: already isolated on branch '${branch}'. Proceed with implementation edits.`);
-  process.exit(0);
+if (PROTECTED.includes(branch)) {
+  console.error(`ensure-branch: on protected branch '${branch}'. Creating an isolated implementation context...`);
 }
-
-console.error(`ensure-branch: on protected branch '${branch}'. Creating an isolated implementation context...`);
 
 let repoRoot;
 try {
@@ -110,6 +107,7 @@ function initSubmodules(contextDir) {
     // A hard timeout: on Windows, `git submodule update` against an unreachable
     // file:// URL can block for minutes instead of failing fast. Cap it so a
     // broken submodule stops the agent promptly rather than hanging isolate.
+    execFileSync('git', ['-C', contextDir, 'submodule', 'sync', '--recursive'], { ...GIT_OPTS, cwd: contextDir, timeout: 120000 });
     execFileSync('git', ['-C', contextDir, 'submodule', 'update', '--init', '--recursive'], { ...GIT_OPTS, cwd: contextDir, timeout: 120000 });
     return true;
   } catch (e) {
@@ -140,6 +138,55 @@ function writeProgressWarning(contextDir) {
   console.log(`ensure-branch: appended cwd warning to ${progressFile}`);
 }
 
+const existingContext = readIsolationContext(changeDir);
+if (!PROTECTED.includes(branch)) {
+  if (existingContext?.kind === 'branch'
+    && existingContext.finish_status !== 'complete'
+    && existingContext.isolation_branch === branch) {
+    if (existingContext.setup_status === 'initializing') {
+      if (!initSubmodules(repoRoot)) process.exit(1);
+      writeProgressWarning(repoRoot);
+      writeIsolationContext(changeDir, { ...existingContext, setup_status: 'ready' });
+      console.log(`ensure-branch: resumed existing isolated branch '${branch}'.`);
+    } else {
+      console.log(`ensure-branch: already isolated on branch '${branch}'. Proceed with implementation edits.`);
+    }
+    process.exit(0);
+  }
+  console.log(`ensure-branch: already isolated on branch '${branch}'. Proceed with implementation edits.`);
+  process.exit(0);
+}
+
+if (existingContext?.kind === 'worktree'
+  && existingContext.finish_status !== 'complete'
+  && resolve(existingContext.target_root) === repoRoot
+  && existingContext.target_branch === branch
+  && existingContext.isolation_branch === name
+  && resolve(existingContext.isolation_root) === resolve(worktreePath)
+  && existsSync(worktreePath)) {
+  let existingBranch = '';
+  try {
+    existingBranch = (execFileSync('git', ['-C', worktreePath, 'branch', '--show-current'], GIT_OPTS) || '').trim();
+  } catch {
+    console.error('ensure-branch: recorded isolation worktree is not usable.');
+    process.exit(1);
+  }
+  if (existingBranch !== name) {
+    console.error('ensure-branch: recorded isolation worktree branch no longer matches its context.');
+    process.exit(1);
+  }
+  if (existingContext.setup_status === 'initializing') {
+    if (!initSubmodules(worktreePath)) process.exit(1);
+    writeProgressWarning(worktreePath);
+    copyActiveChange(worktreePath);
+    writeIsolationContext(changeDir, { ...existingContext, setup_status: 'ready' });
+    console.log(`ensure-branch: resumed existing git worktree at ${worktreePath} on branch '${name}'.`);
+  } else {
+    console.log(`ensure-branch: existing git worktree at ${worktreePath} is ready. Proceed with implementation edits there.`);
+  }
+  process.exit(0);
+}
+
 // Preferred: git worktree (literal arg array).
 let worktreeCreated = false;
 try {
@@ -149,12 +196,14 @@ try {
   console.error(`ensure-branch: worktree creation failed: ${(e.stderr || e.stdout || e.message || 'unknown').toString().trim()}`);
 }
 if (worktreeCreated) {
-  writeIsolationContext(changeDir, { change_name: basename(sourceChangeDir), change_relative_path: changeRelativePath, target_root: repoRoot, target_branch: branch, isolation_root: worktreePath, isolation_branch: name, kind: 'worktree', finish_status: 'pending' });
+  const context = { change_name: basename(sourceChangeDir), change_relative_path: changeRelativePath, target_root: repoRoot, target_branch: branch, isolation_root: worktreePath, isolation_branch: name, kind: 'worktree', finish_status: 'pending', setup_status: 'initializing' };
+  writeIsolationContext(changeDir, context);
   if (!initSubmodules(worktreePath)) {
     process.exit(1);
   }
   writeProgressWarning(worktreePath);
   copyActiveChange(worktreePath);
+  writeIsolationContext(changeDir, { ...context, setup_status: 'ready' });
   console.log(`ensure-branch: created git worktree at ${worktreePath} on branch '${name}' with active change artifacts. Make all implementation edits there.`);
   process.exit(0);
 }
@@ -176,11 +225,13 @@ try {
   }
 }
 if (branchCreated) {
-  writeIsolationContext(changeDir, { change_name: basename(sourceChangeDir), change_relative_path: changeRelativePath, target_root: repoRoot, target_branch: branch, isolation_root: repoRoot, isolation_branch: name, kind: 'branch', finish_status: 'pending' });
+  const context = { change_name: basename(sourceChangeDir), change_relative_path: changeRelativePath, target_root: repoRoot, target_branch: branch, isolation_root: repoRoot, isolation_branch: name, kind: 'branch', finish_status: 'pending', setup_status: 'initializing' };
+  writeIsolationContext(changeDir, context);
   if (!initSubmodules(repoRoot)) {
     process.exit(1);
   }
   writeProgressWarning(repoRoot);
+  writeIsolationContext(changeDir, { ...context, setup_status: 'ready' });
   console.log(`ensure-branch: created branch '${name}' via git switch -c. Make implementation edits there.`);
   process.exit(0);
 }

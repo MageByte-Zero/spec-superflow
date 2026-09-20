@@ -48,4 +48,4 @@ Cursor: `npx spec-superflow@latest install-cursor`
 WorkBuddy: `npx spec-superflow@latest install-workbuddy`
 
 ## Usage
-Start from workflow-start. The workflow inspects current artifacts and routes to the correct stage automatically.
+For an explicit spec-superflow request or an active change containing `.spec-superflow.yaml`, start from workflow-start. Ordinary tasks do not activate the workflow.

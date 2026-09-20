@@ -290,7 +290,7 @@ describe('execution control plane instructions', () => {
 
   });
 
-  it('gives every packaged installer the same planned-execution gate', () => {
+  it('gives every packaged installer the same opt-in activation gate', () => {
     for (const path of [
       'scripts/lib/install.mjs',
       'scripts/lib/cmd-install-workbuddy.mjs',
@@ -298,9 +298,9 @@ describe('execution control plane instructions', () => {
       'scripts/install-zcode.mjs',
     ]) {
       const content = read(path);
-      assert.match(content, /Full.*legacy Hotfix/is);
-      assert.match(content, /Quick.*direct Hotfix.*tweak/is);
-      assert.match(content, /test_result: pass/);
+      assert.match(content, /phase-guard-content\.mjs/);
+      assert.match(content, /createPhaseGuardContent/);
+      assert.doesNotMatch(content, /所有工作必须/);
     }
   });
 
