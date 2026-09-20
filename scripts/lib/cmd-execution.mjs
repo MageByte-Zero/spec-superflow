@@ -136,7 +136,9 @@ function createAndPrintPlan(changeDir, values, revise, io) {
 function recommendAndPrint(changeDir, values, io) {
   const waves = values.wave?.length ? parseWaves(values.wave) : [];
   const priorPlanRevision = resolveRecommendationPlanRevision(changeDir);
-  const receipt = writeRecommendationReceipt(changeDir, createRecommendationReceipt(changeDir, waves, priorPlanRevision));
+  const receipt = writeRecommendationReceipt(changeDir, createRecommendationReceipt(changeDir, waves, {
+    executionPlanRevision: priorPlanRevision,
+  }));
   const recommendation = receipt.recommendation;
   const lines = [
     'Available execution modes:',

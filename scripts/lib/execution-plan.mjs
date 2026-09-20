@@ -1260,6 +1260,7 @@ function blockedDependencies(changeDir, plan, wave) {
 function validateStructure(plan) {
   const failures = [];
   if (!isObject(plan)) return ['execution plan must be an object'];
+  if (!Number.isInteger(plan.revision) || plan.revision < 1) failures.push('execution plan revision is invalid');
   if (!EXECUTION_MODES.includes(plan.mode)) failures.push('execution plan mode is invalid');
   if (typeof plan.source !== 'string' || !plan.source.trim()) failures.push('execution plan source is required');
   if (!isNonEmptyText(plan.rationale)) failures.push('execution plan rationale is required');
