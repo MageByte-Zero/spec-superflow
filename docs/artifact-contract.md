@@ -74,11 +74,8 @@ waves. The user confirms the selected mode with `--confirm`; a non-recommended m
 `ssf execution plan` writes
 the persisted execution plan to `<change>/.superpowers/sdd/execution-plan.json`.
 That JSON records each wave's dependencies and parallel/serial strategy; it is
-not stored in `execution-contract.md`. A current `pass` review receipt is
-required for every wave before dependent work or closing proceeds. Quick, direct Hotfix, and Tweak are exempt from execution-plan and review-receipt gates and persist `test_result: pass` after bounded verification. `ssf execution revise`
-retains or upgrades an existing plan as `sdd`, requires fresh confirmation,
-creates a new revision, and
-clears prior review receipts; it never permits a downgrade.
+not stored in `execution-contract.md`. Native uses `review_policy: final`; SDD and legacy plans use wave review gates. Task/file/wave counts alone never require SDD. Quick, direct Hotfix, and Tweak are exempt from execution-plan and review-receipt gates and persist `test_result: pass` after bounded verification. `ssf execution revise`
+may retain or switch any confirmed mode. Applicable evidence survives mode-only revisions; scope changes invalidate passing evidence conservatively and preserve open failures.
 
 ### Recovery control-plane overlay
 
@@ -112,4 +109,6 @@ For Full/legacy Hotfix, implementation starts only after:
 - the user approves the execution contract
 - Full/legacy Hotfix have a current `ssf execution plan` with a user-confirmed mode and
   persisted recommendation evidence
-- every completed wave records a current `pass` review receipt before closing
+- closing requires a current `pass` under the final/wave policy; checked tasks alone do not certify code
+
+Execution efficiency: Native = `inline`, default review policy `final`; SDD = optional delegation with `wave` review. `execution revise` may retain or change mode. Reports are immutable snapshots. `closing` is logical completion; recorded pending physical finish remains resumable. `finish` uses the recorded target and never force-removes work.

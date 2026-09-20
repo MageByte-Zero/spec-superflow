@@ -1,6 +1,8 @@
+import { readIsolationContext } from './isolation-context.mjs';
+import { workflowPolicy } from './workflow-policy.mjs';
 import fs from 'node:fs';
 import { basename, join, resolve } from 'node:path';
-import { describeWaves, readPlan, validatePlan } from './execution-plan.mjs';
+import { describeWaves, readCurrentReview, readPlan, validatePlan } from './execution-plan.mjs';
 import { listCheckpoints, listHandoffs } from './sdd-overlay.mjs';
 import { readState } from './state-loader.mjs';
 
@@ -24,7 +26,8 @@ export function resolveChangeTarget(input, cwd = process.cwd()) {
   if (hasText(input)) return inspectExplicitTarget(input, cwd);
 
   const candidates = listRecognizableChanges(join(cwd, 'changes'))
-    .filter(change => !['closing', 'abandoned'].includes(change.state));
+    .filter(change => !['closing', 'abandoned'].includes(change.state)
+      || (change.state === 'closing' && ['pending', 'verify-pending', 'cleanup-pending'].includes(readIsolationContext(change.path)?.finish_status)));
   if (candidates.length === 1) return { ...candidates[0], selection: 'only-active' };
   if (candidates.length === 0) {
     throw new RecoveryError('NO_ACTIVE_CHANGE', 'No active change found', { candidates: [] });
@@ -40,8 +43,11 @@ export function createRecoverySummary(changeDir) {
   const checkpoints = listCheckpoints(changeDir)
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
   const handoffs = partitionHandoffs(listHandoffs(changeDir));
-  const execution = inspectExecution(changeDir, state.state);
+  const execution = inspectExecution(changeDir, state);
   const blockers = terminal ? [] : buildBlockers(changeDir, handoffs, execution);
+  if (!terminal && workflowPolicy(changeDir, state).missingDirectReceipt) {
+    blockers.unshift({ code: 'WORKFLOW_RECEIPT_REQUIRED', message: 'Restore a valid workflow receipt before continuing', command: `ssf workflow show ${changeDir} --json` });
+  }
 
   const nextAction = selectNextAction(changeDir, state, terminal, checkpoints[0], blockers);
   return {
@@ -75,7 +81,8 @@ function partitionHandoffs(records) {
 }
 
 function inspectExecution(changeDir, state) {
-  const required = ['approved-for-build', 'executing', 'debugging'].includes(state);
+  const required = ['approved-for-build', 'executing', 'debugging'].includes(state.state)
+    && workflowPolicy(changeDir, state).requiresExecutionPlan;
   let plan = null;
   try {
     plan = readPlan(changeDir);
@@ -134,10 +141,19 @@ function buildBlockers(changeDir, handoffs, execution) {
 }
 
 function selectNextAction(changeDir, state, terminal, checkpoint, blockers) {
+  if (terminal && state.state === 'closing') {
+    const isolation = readIsolationContext(changeDir);
+    if (isolation && isolation.finish_status !== 'complete') {
+      return { skill: 'release-archivist', command: `ssf finish ${changeDir}`, reason: `Physical finish is ${isolation.finish_status}` };
+    }
+  }
   if (terminal) {
     return { skill: 'none', command: null, reason: 'Change is terminal' };
   }
-  if (blockers[0]?.code === 'HANDOFF_REVIEW_REQUIRED') {
+  if (state.state === 'debugging') {
+    return { skill: 'bug-investigator', command: null, reason: 'Diagnose the failure before resuming implementation' };
+  }
+  if (['HANDOFF_REVIEW_REQUIRED', 'WORKFLOW_RECEIPT_REQUIRED'].includes(blockers[0]?.code)) {
     return {
       skill: 'workflow-start',
       command: blockers[0].command,
@@ -152,9 +168,14 @@ function selectNextAction(changeDir, state, terminal, checkpoint, blockers) {
     };
   }
 
-  const execution = inspectExecution(changeDir, state.state);
+  const execution = inspectExecution(changeDir, state);
   if (execution.present && execution.current) {
-    const waves = describeWaves(changeDir, readPlan(changeDir));
+    const plan = readPlan(changeDir);
+    const waves = describeWaves(changeDir, plan);
+    if (plan.review_policy === 'final' && waves.every(wave => wave.completed)) {
+      const reviewed = readCurrentReview(changeDir, 'final', plan)?.status === 'pass';
+      return { skill: reviewed ? 'release-archivist' : 'code-reviewer', command: null, reason: reviewed ? 'Final review passed; close out the change' : 'Implementation completed; final independent review required' };
+    }
     const eligibleWave = waves.find(wave => wave.eligible);
     if (eligibleWave) {
       return {
@@ -194,7 +215,12 @@ function selectNextAction(changeDir, state, terminal, checkpoint, blockers) {
 
 function selectContinuation(terminal, blockers, execution, nextAction) {
   if (terminal) {
-    return { kind: 'terminal', wave: null, reason: 'Change is terminal' };
+    return nextAction.command
+      ? { kind: 'blocked', wave: null, command: nextAction.command, reason: nextAction.reason }
+      : { kind: 'terminal', wave: null, reason: 'Change is terminal' };
+  }
+  if (nextAction.skill === 'bug-investigator') {
+    return { kind: 'automatic', wave: null, reason: nextAction.reason };
   }
   if (blockers.length > 0) {
     const blocker = blockers[0];

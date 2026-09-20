@@ -94,12 +94,7 @@ Quick, direct Hotfix, and Tweak are exempt from execution-plan and review-receip
 
 For Full/legacy Hotfix, the plan names ordered execution waves, dependencies,
 and parallel/serial strategy. `ssf execution show <change-dir> --json` reports
-which current waves are eligible. Each completed Full/legacy wave must have a current
-`pass` review receipt, recorded with `ssf execution review`, before a dependent
-wave or `closing` can proceed. `ssf execution revise` retains or upgrades an
-existing plan as `sdd`; that new revision requires a fresh confirmation (and
-acknowledgement when it differs from the new recommendation), invalidates old
-review receipts, and does not permit a downgrade. Recovery, switching, and
+which current waves are eligible. Native defaults to `inline` and `review_policy: final`: task dependencies permit continuous implementation, with one independent final review. SDD defaults to `wave`; omitted policy preserves legacy wave receipt gates. `ssf execution revise` may retain or switch any confirmed mode. Mode-only revisions preserve applicable evidence; scope changes invalidate passing evidence conservatively and retain unresolved failures. Recovery, switching, and
 manual save are a control-plane overlay; they do not create a ninth workflow
 state.
 
@@ -113,9 +108,9 @@ state.
 ### `closing`
 
 - successful terminal state（成功终态）；验证、同步和审计证据已在 `executing` 完成
-- 没有 active skill，next skill 为 `none`
-- 进入后不运行 handoff、checkpoint 或 execution-control 恢复扫描，也不再路由 `release-archivist` 或 `spec-merger`
-- 不允许继续、恢复、交接或发生任何后续状态转换
+- 无后续核心状态转换；已完成物理收尾时 next skill 为 `none`。
+- 如 isolation 记录仍有 pending / verify-pending / cleanup-pending，resume 仅恢复 release-archivist 的物理收尾，不重复规划、同步或审计。
+- 合并仍需已有用户授权；branch-only 不删除 checkout。
 
 ### `abandoned`
 
@@ -126,7 +121,7 @@ state.
 
 ## Terminal States
 
-- `closing` — successful terminal completion；所有收尾动作均在 `executing` 完成后才可进入
+- `closing` — successful logical terminal completion；验证、同步、审计在 executing 完成，物理收尾独立记录
 - `abandoned` — change abandoned (no delta spec merge, no further transitions allowed)
 
 ## Recovery Overlays
@@ -210,3 +205,5 @@ If the contract changed, the artifacts changed.
 - **direct Hotfix** (incident, ≤2 files/tasks) and **Quick** (≤3 files/tasks) follow `exploring -> approved-for-build -> executing` with a valid direct receipt; no artifacts, contract, plan, review receipt, or DP approval. Direct Hotfix proves the original symptom; Quick runs focused verification.
 - **legacy Hotfix** follows `exploring -> bridging -> approved-for-build -> executing` and retains its minimal contract and DP-3.
 - **Tweak** (≤4 configuration/doc files) also jumps directly from `exploring` to `approved-for-build`.
+
+Execution efficiency: Native = `inline`, default review policy `final`; SDD = optional delegation with `wave` review. `execution revise` may retain or change mode. Reports are immutable snapshots. `closing` is logical completion; recorded pending physical finish remains resumable. `finish` uses the recorded target and never force-removes work.

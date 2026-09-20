@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { parseArgs } from 'node:util';
 import { readState } from './state-loader.mjs';
-import { isDirectWorkflowReceipt, readWorkflowSelection } from './workflow-recommendation.mjs';
+import { workflowPolicy } from './workflow-policy.mjs';
 
 const PHASE_TEMPLATES = {
   'exploring': `# Phase Guard: {{change_name}}
@@ -82,13 +82,13 @@ const PHASE_TEMPLATES = {
 - 按 execution-contract.md 和 current execution plan 的 wave 执行任务
 - 运行测试
 - 提交代码（按 batch 提交）
-- full/hotfix 每个完成 wave 后记录 wave review 的 review receipt（pass 或 fail）；tweak 免除此 plan/receipt gate
+- Full/legacy Hotfix 按 review_policy 记录审查：Native final 一次最终 review；wave/旧计划逐 wave review；短路径免除此 plan/receipt gate
 
 ## ⛔ 禁止操作
 - 修改 proposal.md, specs/, design.md（需先回退到 specifying）
 - 修改 execution-contract.md（需先回退到 bridging）
 - 跳过测试步骤
-- full/hotfix 不得跳过 wave review；没有所有 pass review receipts 不得进入 closing；tweak 免除此 plan/receipt gate
+- Full/legacy Hotfix 按 final/wave 策略要求 pass review receipts 后才能 closing；旧计划仍按 wave，短路径免除此门禁
 
 ## 🔔 决策点
 - DP-5: 调试升级 — 3+ 修复失败后需用户决定`,
@@ -332,10 +332,7 @@ export async function run(args) {
   const state = readState(changeDir);
 
   // Generate base phase-guard content
-  const receipt = readWorkflowSelection(changeDir);
-  const base = generatePhaseGuard(state, {
-    directShortPath: receipt.valid && isDirectWorkflowReceipt(receipt.record, state),
-  });
+  const base = generatePhaseGuard(state, workflowPolicy(changeDir, state));
   const outputs = [];
 
   for (const platform of requested) {

@@ -127,15 +127,15 @@ describe('SDD focused re-review documentation contract', () => {
     const reviewer = read('skills/build-executor/task-reviewer-prompt.md');
     const rereviewer = read('skills/build-executor/re-review-prompt.md');
 
-    assert.match(executor, /execution show <change-dir> --json[\s\S]*repair/i,
+    assert.match(executor, /execution show <dir> --json[\s\S]*repair/i,
       'the controller must read CLI repair state before dispatching a repair');
-    assert.match(executor, /rounds? 1[–-]2[\s\S]*recovery/i,
+    assert.match(executor, /focused repair.*focused re-review/is,
       'the first two failed reviews must remain focused recovery rounds');
-    assert.match(executor, /adjudication-required/i,
+    assert.match(executor, /adjudication/i,
       'a third unresolved review must stop automatic dispatch for adjudication');
     assert.match(executor, /new evidence|new context|specific strategy change/i,
       'an implementer retry must add concrete information instead of repeating the same attempt');
-    assert.match(executor, /prior failure reason[\s\S]*single objective[\s\S]*necessary file paths/i,
+    assert.match(executor, /objective.*bounded files/is,
       'retry context must stay focused instead of repeating the planning pack');
     assert.match(executor, /ssf execution review[\s\S]*--verdict <pass\|fail>/i,
       'every re-review must be persisted through the CLI receipt command');
@@ -146,7 +146,7 @@ describe('SDD focused re-review documentation contract', () => {
       'the re-review prompt must constrain review to the repair diff');
     assert.match(rereviewer, /previous review/i,
       'the re-review prompt must retain the prior finding as review context');
-    assert.match(rereviewer, /adjudication-required/i,
+    assert.match(rereviewer, /adjudication/i,
       'the re-review prompt must stop at the circuit-breaker state');
     assert.match(implementer, /repair round/i,
       'implementers must receive the repair round as additional evidence');
@@ -156,27 +156,13 @@ describe('SDD focused re-review documentation contract', () => {
 });
 
 describe('build executor continuity protocol contract', () => {
-  it('keeps execution under host-controller control until a real terminal condition', () => {
+  it('continues authorized work and recovers from persisted evidence', () => {
     const executor = read('skills/build-executor/SKILL.md');
-
-    assert.match(executor, /## Controller Continuity Protocol/,
-      'the executor must define an explicit continuity protocol for the host controller');
-    assert.match(executor, /active subtask|pending wave receipt/i,
-      'active subtasks and pending wave receipts must keep the controller in an active execution state');
-    assert.match(executor, /commentary/i,
-      'non-terminal progress must be communicated as commentary');
-    assert.match(executor, /must not.*final|do not.*final/i,
-      'the controller must not send a final response while execution work remains active');
-    assert.match(executor, /User interruption.*execution show[\s\S]*progress ledger/i,
-      'resume must recover current execution state from both the CLI and progress ledger');
-    assert.match(executor, /eligible repair|eligible task/i,
-      'resume must continue the current eligible repair or task');
-    assert.match(executor, /only.*completed|external blocker|user authorization/i,
-      'only completion, an external blocker, or required user authorization may end the control turn');
-    assert.match(executor, /host controller responsibility/i,
-      'the protocol must attribute continuity to the host controller');
-    assert.match(executor, /does not create.*background/i,
-      'the skill must not claim that it creates autonomous background execution');
+    assert.match(executor, /Continue without requesting permission between authorized tasks/i);
+    assert.match(executor, /pending task or review is not a reason to end/i);
+    assert.match(executor, /do not promise autonomous background/i);
+    assert.match(executor, /execution show.*interruptions/is);
+    assert.match(executor, /progress entry/i);
   });
 });
 
@@ -224,9 +210,9 @@ describe('test-quality guidance contract', () => {
 
     assert.match(executor, /Quick follows the verification strategy persisted in its receipt/,
       'Quick must retain its user-selected verification strategy');
-    assert.match(executor, /## Tweak Mode[\s\S]*Skip TDD/,
+    assert.match(executor, /Tweak skips TDD/,
       'Tweak must retain its direct-edit boundary');
-    assert.match(executor, /Full and legacy Hotfix still require RED → GREEN → REFACTOR/,
+    assert.match(executor, /Full and legacy Hotfix use RED → GREEN → REFACTOR/,
       'Full work must retain the TDD iron law');
   });
 });

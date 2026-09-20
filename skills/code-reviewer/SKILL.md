@@ -5,11 +5,11 @@ description: Review completed implementation batches for spec compliance and cod
 
 # Code Reviewer
 
-Two responsibilities: requesting review (dispatching a reviewer subagent) and receiving review (acting on feedback with technical rigor). **Review early, review often. Verify before implementing feedback.**
+Two responsibilities: requesting review (dispatching a reviewer subagent) and receiving review (acting on feedback with technical rigor). Review according to the persisted policy; verify feedback before implementing it.
 
 ## Part 1: Requesting Review
 
-**Mandatory after**: each task in SDD, each planned execution wave, each major feature, before merge.
+**Mandatory**: one final independent review for Native `final`; one review per planned wave for `wave` and legacy plans. Avoid redundant per-task or final reviews of unchanged evidence.
 **Optional**: when stuck, before refactoring, after fixing complex bugs.
 
 ### Procedure
@@ -83,36 +83,3 @@ Suggestion breaks existing functionality, reviewer lacks context, violates YAGNI
 - **Parse failures**: Report specific file, request regenerated review package
 - **Missing files**: Regenerate via `scripts/review-package`. Empty diff = nothing to review
 - **User interruption**: Re-read review report on resume, continue from next unreviewed batch
-
-## Standard User-Facing Handoff
-
-End every user-facing phase report with this concise handoff. Only a successfully
-persisted `closing` state and `abandoned` are terminal.
-
-### Normal report
-
-- Current stage: `<detected workflow stage>`.
-- Completed / blocker: `<completed work>`.
-- Next stage: `<next workflow stage or skill>`.
-- Entry condition: `<what must be true to enter it>`.
-
-### Blocked report
-
-- Current stage: `<detected workflow stage>`.
-- Completed / blocker: `<blocking fact or missing evidence>`.
-- Next stage: `<stage that resumes after the blocker>`.
-- Entry condition: `<the approval, artifact, validation, or fix required>`.
-
-### Approval-wait report
-
-- Current stage: `<detected workflow stage>`.
-- Completed / blocker: `<work ready for the named decision>`.
-- Next stage: `<stage that follows approval>`.
-- Entry condition: `<explicit user approval or recorded decision>`.
-
-### Successful terminal report
-
-- Current stage: successfully persisted `closing` or `abandoned`.
-- Completed / blocker: `<persisted terminal outcome>`.
-- Next stage: `none`.
-- Entry condition: no further transition exists.

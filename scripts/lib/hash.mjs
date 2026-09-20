@@ -1,3 +1,5 @@
+import { normalizeTaskCheckboxes } from './task-parser.mjs';
+export { normalizeTaskCheckboxes } from './task-parser.mjs';
 // scripts/lib/hash.mjs — SHA256 artifact hashing for fast staleness detection
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -43,9 +45,7 @@ export function computeArtifactsHash(changeDir) {
 // Task completion is execution progress, not planning scope. Normalize only
 // complete Markdown task lines; headings, prose, malformed lines, and task
 // text continue to participate in stale-plan detection unchanged.
-export function normalizeTaskCheckboxes(content) {
-  return content.replace(/^(- \[)[xX](\] .+)$/gm, '$1 $2');
-}
+
 
 // Compute SHA256 hash of execution-contract.md alone.
 export function computeContractHash(changeDir) {

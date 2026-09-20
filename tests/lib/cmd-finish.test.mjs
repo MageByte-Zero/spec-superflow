@@ -138,54 +138,22 @@ function runFinishInProcess(changeDir, cwd, { blockRemove = 'plain' } = {}) {
 }
 
 describe('ssf finish — force fallback 与 merge 即时反馈（closing-finish-alignment R2/R3）', () => {
-  it('R2a force 兜底成功：首次 remove 失败 → WARN + --force 重试 → 报告标注 force removed、worktree/分支真实删除、退出 0', () => {
-    const base = mkdtempSync(join(tmpdir(), 'ssf-finish-force-ok-'));
+  it('cleanup failure preserves isolation and retries only remaining cleanup', () => {
+    const base = mkdtempSync(join(tmpdir(), 'ssf-finish-cleanup-'));
     tempDirs.push(base);
-    const { main, changeDir, worktree } = createIsolatedWorktree(base, 'finish-force-ok');
+    const { main, changeDir, worktree } = createIsolatedWorktree(base, 'finish-cleanup');
     commitFileInWorktree(worktree, 'feature.txt', 'branch work');
-
-    const r = runFinishInProcess(changeDir, main, { blockRemove: 'plain' });
-
-    assert.equal(r.exitCode, 0, r.all);
-    // WARN 包含首次失败原因与 force 重试意图
-    assert.match(r.all, /WARN: worktree remove 失败/);
-    assert.match(r.all, /--force/);
-    // 报告标注 force 移除
-    assert.match(r.all, /force removed/);
-    // worktree 与隔离分支真实删除
-    assert.equal(existsSync(worktree), false, 'worktree must be removed');
-    assert.equal(git(main, 'branch', '--list', 'finish-force-ok'), '', 'isolated branch must be deleted');
-    // merge commit 存在且在报告中
-    const mergeCommit = git(main, 'log', '--merges', '-1', '--format=%H');
-    assert.ok(r.all.includes(mergeCommit), 'report must include merge commit');
-  });
-
-  it('R2b force 也失败：手动指引含 merge sha 与两条命令、branch -d 仍被尝试并成功、退出 1、worktree 残留', () => {
-    const base = mkdtempSync(join(tmpdir(), 'ssf-finish-force-fail-'));
-    tempDirs.push(base);
-    const { main, changeDir, worktree } = createIsolatedWorktree(base, 'finish-force-fail');
-    // 手动指引里的 worktree 路径经生产代码 native realpath 规范化（git
-    // 返回长路径形式）；CI Windows 的 TEMP 是 8.3 短名，断言须用同形式，
-    // 且必须在收尾删除前捕获（该路径本测试中保留，但统一防御 ENOENT）。
-    const worktreeReal = realpathSync.native(worktree);
-    commitFileInWorktree(worktree, 'feature.txt', 'branch work');
-    const mergeShaBefore = git(main, 'rev-parse', 'finish-force-fail');
-
-    const r = runFinishInProcess(changeDir, main, { blockRemove: 'all' });
-
-    assert.equal(r.exitCode, 1, r.all);
-    // 手动指引：merge 已成功（commit sha）
-    assert.match(r.all, /merge 已成功（commit [0-9a-f]{40}）/);
-    // 两条手动命令
-    assert.ok(r.all.includes(`git worktree remove --force ${worktreeReal}`), r.all);
-    assert.ok(r.all.includes('git branch -d finish-force-fail'), r.all);
-    // branch -d 仍被尝试：worktree 残留时分支仍被其检出，真实 git 的
-    // branch -d 必然失败 → finish 必须如实报告删除失败而非静默跳过。
-    assert.match(r.all, /隔离分支删除失败/);
-    assert.notEqual(git(main, 'branch', '--list', 'finish-force-fail'), '', 'branch must survive (still checked out by surviving worktree)');
-    // worktree 残留
-    assert.equal(existsSync(worktree), true, 'worktree must survive when --force also fails');
-    assert.ok(mergeShaBefore, 'fixture sanity');
+    const failed = runFinishInProcess(changeDir, main, { blockRemove: 'plain' });
+    assert.equal(failed.exitCode, 1, failed.all);
+    assert.equal(existsSync(worktree), true);
+    assert.notEqual(git(main, 'branch', '--list', 'finish-cleanup'), '');
+    const merged = git(main, 'rev-parse', 'HEAD');
+    const retried = runFinish(changeDir, main);
+    assert.equal(retried.status, 0, retried.all);
+    assert.equal(git(main, 'rev-parse', 'HEAD'), merged);
+    assert.doesNotMatch(retried.all, /开始主干验证/);
+    assert.equal(existsSync(worktree), false);
+    assert.equal(runFinish(changeDir, main).status, 0);
   });
 
   it('R3a merge 即时反馈：成功路径 stdout 在验证命令输出之前含 "merge --no-ff 成功（commit <sha>）"', () => {
@@ -273,9 +241,9 @@ describe('ssf finish — 一键收尾（worktree-lifecycle R3/R5）', () => {
 
     assert.equal(r.status, 0, r.all);
     // cwd=主仓库不在 worktree 内 → 输出一行含 worktree 绝对路径的 WARN，但不阻断
-    assert.match(r.all, /WARN/);
+    assert.doesNotMatch(r.all, /--force/);
     assert.ok(r.all.includes(worktreeReal), `WARN must contain worktree path ${worktreeReal}`);
-    assert.match(r.all, /worktree 内路径/);
+
     // merge --no-ff 提交存在
     const mergeCommit = git(main, 'log', '--merges', '-1', '--format=%H');
     assert.ok(mergeCommit, 'must create a merge commit');

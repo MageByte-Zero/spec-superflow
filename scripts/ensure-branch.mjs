@@ -10,6 +10,7 @@
 // ('git') and a LITERAL argument array (no shell, no variable args array) —
 // the same form proven safe by install-cursor.mjs / install.mjs. There is no
 // string-form shell command, no variable command, and no dynamic args array.
+import { writeIsolationContext } from './lib/isolation-context.mjs';
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, cpSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -148,6 +149,7 @@ try {
   console.error(`ensure-branch: worktree creation failed: ${(e.stderr || e.stdout || e.message || 'unknown').toString().trim()}`);
 }
 if (worktreeCreated) {
+  writeIsolationContext(changeDir, { change_name: basename(sourceChangeDir), change_relative_path: changeRelativePath, target_root: repoRoot, target_branch: branch, isolation_root: worktreePath, isolation_branch: name, kind: 'worktree', finish_status: 'pending' });
   if (!initSubmodules(worktreePath)) {
     process.exit(1);
   }
@@ -174,6 +176,7 @@ try {
   }
 }
 if (branchCreated) {
+  writeIsolationContext(changeDir, { change_name: basename(sourceChangeDir), change_relative_path: changeRelativePath, target_root: repoRoot, target_branch: branch, isolation_root: repoRoot, isolation_branch: name, kind: 'branch', finish_status: 'pending' });
   if (!initSubmodules(repoRoot)) {
     process.exit(1);
   }

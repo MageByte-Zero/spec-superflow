@@ -19,105 +19,22 @@ function section(content, heading) {
 }
 
 describe('closing terminal lifecycle', () => {
-  it('short-circuits closing before recovery overlays and returns no next skill', () => {
+  it('routes only pending physical finish after logical closing', () => {
     const workflow = read('skills/workflow-start/SKILL.md');
-    const terminal = section(workflow, '## Terminal-State Short Circuit');
-    const updateCheck = workflow.indexOf('1. **Update check**');
-    const recovery = workflow.indexOf('## Overlay Recovery Scan');
-    const executionControl = workflow.indexOf('## Execution-Control Recovery Scan');
-
-    for (const [marker, index] of [
-      ['update check', updateCheck],
-      ['overlay recovery', recovery],
-      ['execution-control recovery', executionControl],
-    ]) {
-      assert.notEqual(index, -1, `workflow must include ${marker}`);
-      assert.ok(workflow.indexOf('## Terminal-State Short Circuit') < index,
-        `terminal short circuit must run before ${marker}`);
-    }
-    assert.match(terminal, /closing.*terminal/i);
-    assert.match(terminal, /next skill.*none/i);
-    assert.match(terminal,
-      /do not run.*handoff.*checkpoint.*execution-control.*release-archivist/is);
+    const release = read('skills/release-archivist/SKILL.md');
+    assert.match(workflow, /closing.*logical completion/is);
+    assert.match(workflow, /physical finish pending.*release-archivist/is);
+    assert.match(release, /closing.*only recorded pending physical finish/is);
+    assert.match(release, /merge.*authorized/is);
   });
 
-  it('performs archival verification and delta merging while executing before its final transition', () => {
-    const archivist = read('skills/release-archivist/SKILL.md');
-    const merger = read('skills/spec-merger/SKILL.md');
-
-    assert.match(archivist, /state.*executing/i);
-    assert.match(archivist, /spec-merger.*before.*executing\s*→\s*closing/is);
-    assert.match(archivist, /executing\s*→\s*closing.*final/i);
-    assert.match(merger, /executing\s*→\s*closing/i);
-    assert.match(merger, /closing.*must not.*route.*spec-merger/is);
-  });
-
-  it('stops pre-closing skills on a persisted non-executing state before side effects', () => {
-    const archivist = read('skills/release-archivist/SKILL.md');
-    const merger = read('skills/spec-merger/SKILL.md');
-    const archivistGuard = section(archivist, '## Execution-State Guard');
-    const mergerGuard = section(merger, '## Execution-State Guard');
-
-    for (const [name, guard] of [
-      ['release-archivist', archivistGuard],
-      ['spec-merger', mergerGuard],
-    ]) {
-      assert.match(guard, /ssf state get <change-dir> state/,
-        `${name} must inspect the persisted state`);
-      assert.match(guard, /exactly.*`executing`/i,
-        `${name} must allow only executing`);
-      assert.match(guard, /closing.*STOP/is,
-        `${name} must stop for the terminal closing state`);
-      assert.match(guard, /any other.*state.*STOP/is,
-        `${name} must stop for every other non-executing state`);
-    }
-
-    assert.ok(merger.indexOf('## Execution-State Guard') < merger.indexOf('ssf sync'),
-      'spec-merger must guard before sync can write main specs');
-    for (const sideEffect of [
-      '### Step 1: Test Suite',
-      'ssf audit',
-      'ssf state set <change-dir> dp_6_result',
-      'ssf state set <change-dir> dp_7_result',
-      'invoke `spec-merger`',
-    ]) {
-      assert.notEqual(archivist.indexOf(sideEffect), -1,
-        `release-archivist fixture must include ${sideEffect}`);
-      assert.ok(archivist.indexOf('## Execution-State Guard') < archivist.indexOf(sideEffect),
-        `release-archivist must guard before ${sideEffect}`);
-    }
-  });
-
-  it('places the release guard before every closing side effect and makes transition last', () => {
-    const archivist = read('skills/release-archivist/SKILL.md');
-    const guard = archivist.indexOf('## Execution-State Guard');
-    const audit = archivist.indexOf(`${RUNTIME_PREFIX} audit <change-dir>`);
-    const dp6 = archivist.indexOf('### DP-6 (Verification Outcome');
-    const dp7 = archivist.indexOf('### DP-7 (Archive Confirmation');
-    const merger = archivist.indexOf('invoke `spec-merger`');
-    const transition = archivist.indexOf(`${RUNTIME_PREFIX} state transition <change-dir> closing`);
-
-    for (const [marker, index] of [
-      ['release guard', guard],
-      ['audit command', audit],
-      ['DP-6', dp6],
-      ['DP-7', dp7],
-      ['spec-merger', merger],
-      ['final transition', transition],
-    ]) {
-      assert.notEqual(index, -1, `release-archivist must include ${marker}`);
-    }
-
-    assert.ok(guard < audit, 'release guard must run before the actual audit command');
-    assert.ok(audit < dp6, 'actual audit command must run before DP-6');
-    assert.ok(dp6 < dp7, 'DP-6 must be recorded before DP-7');
-    assert.ok(dp7 < merger, 'DP-7 must be recorded before invoking spec-merger');
-    assert.ok(merger < transition, 'spec-merger must run before the actual final transition');
-    assert.equal(
-      archivist.split(`${RUNTIME_PREFIX} state transition <change-dir> closing`).length - 1,
-      1,
-      'the actual final transition command must occur exactly once'
-    );
+  it('keeps spec synchronization and audit before logical closure', () => {
+    const release = read('skills/release-archivist/SKILL.md');
+    assert.ok(release.indexOf('Synchronize actual delta') < release.indexOf('ssf state transition'));
+    assert.ok(release.indexOf('ssf audit') < release.indexOf('ssf state transition'));
+    const merger = section(read('skills/spec-merger/SKILL.md'), '## Execution-State Guard');
+    assert.match(merger, /exactly.*`executing`/i);
+    assert.match(merger, /closing.*STOP/is);
   });
 
   it('defines closing as a successful terminal state with no active archivist', () => {

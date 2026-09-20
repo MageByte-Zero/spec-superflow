@@ -292,16 +292,15 @@ Quick, direct Hotfix, and Tweak are exempt from contract, execution-plan, and re
 ssf execution recommend changes/my-change \
   --wave foundation:parallel:1.1,1.2 \
   --wave integration:serial:2.1:foundation --json
-ssf execution plan changes/my-change --mode sdd --confirm --reason "independent work" \
+ssf execution plan changes/my-change --mode sdd --confirm --acknowledge-recommendation --reason "independent work" \
   --wave foundation:parallel:1.1,1.2 \
   --wave integration:serial:2.1:foundation
 ssf execution show changes/my-change --json
-# Retains/upgrades an existing plan as sdd; it can replan waves and dependencies,
-# creates a new revision, and clears old review receipts. Downgrades are rejected.
+# Revisions may retain or switch modes, preserving applicable evidence and open failures.
 ssf execution recommend changes/my-change \
   --wave foundation:parallel:1.1,1.2 \
   --wave integration:serial:2.1:foundation --json
-ssf execution revise changes/my-change --mode sdd --confirm --reason "need parallel work" \
+ssf execution revise changes/my-change --mode sdd --confirm --acknowledge-recommendation --reason "need parallel work" \
   --wave foundation:parallel:1.1,1.2 \
   --wave integration:serial:2.1:foundation
 ssf execution review changes/my-change --wave foundation --base <sha> --head <sha> \
@@ -397,8 +396,7 @@ and SDD with evidence from the change, then recommends one. The user confirms a
 selection with `--confirm`; a different selection requires
 `--acknowledge-recommendation`. The saved execution plan at
 `<change>/.superpowers/sdd/execution-plan.json` names waves, dependencies, and
-strategies before dispatching implementers. Each wave gets a review report and a
-`pass`/`fail` receipt. Batch Inline remains serial, and the progress ledger
+strategies before dispatching implementers. Native defaults to `inline` with one `final` review; explicit `wave` and legacy plans require a report and receipt per wave. Batch Inline remains serial, and the progress ledger
 prevents session-compression loss.
 
 </details>
@@ -406,3 +404,5 @@ prevents session-compression loss.
 ---
 
 **Star the repo — find it when you need it.**
+
+Execution efficiency: Native = `inline`, default review policy `final`; SDD = optional delegation with `wave` review. `execution revise` may retain or change mode. Reports are immutable snapshots. `closing` is logical completion; recorded pending physical finish remains resumable. `finish` uses the recorded target and never force-removes work.

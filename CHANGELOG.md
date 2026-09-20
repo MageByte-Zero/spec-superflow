@@ -6,6 +6,11 @@ The format loosely follows Keep a Changelog.
 
 ## [Unreleased]
 
+- Native-first execution with explicit final/wave review policy; legacy plans retain wave semantics.
+- Fix debugging/recovery routing, state field persistence, template task parsing, report snapshots and repair-chain resync.
+- Record isolation targets and retryable physical finish; remove automatic force cleanup.
+- Shorten skill instructions and contract template; cache update checks and support host-model fallback.
+
 ### Fixed
 
 - **Windows-compatible decision-point timestamps (#117)**: `ssf state set <change-dir> dp_N_timestamp now` now generates the UTC ISO timestamp inside the Node.js CLI, and all skills use that cross-platform form instead of POSIX `date` command substitution.

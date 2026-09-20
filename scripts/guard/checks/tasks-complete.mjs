@@ -1,3 +1,4 @@
+import { parseTasks } from '../../lib/task-parser.mjs';
 // scripts/guard/checks/tasks-complete.mjs — verify all tasks in tasks.md are checked off
 import fs from 'node:fs';
 import path from 'node:path';
@@ -13,7 +14,8 @@ export function checkTasksComplete(changeDir) {
   }
 
   const content = fs.readFileSync(tasksPath, 'utf-8');
-  const unchecked = content.match(/^[ \t]*- \[ \]/gm);
+  const tasks = parseTasks(content);
+  const unchecked = tasks.filter(task => !task.complete);
 
   if (unchecked && unchecked.length > 0) {
     return {
@@ -22,7 +24,7 @@ export function checkTasksComplete(changeDir) {
     };
   }
 
-  const hasAny = content.match(/^[ \t]*- \[[xX]\]/gm);
+  const hasAny = tasks.some(task => task.complete);
   if (!hasAny) {
     return { pass: false, failures: ['tasks.md: no completed tasks found'] };
   }

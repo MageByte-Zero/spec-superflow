@@ -40,6 +40,8 @@ Must include a delivery/proof map and dependency-aware tasks. Each task names th
 
 ## Artifact Generation
 
+Enter `specifying` before creating or editing planning artifacts: run `ssf state transition <change-dir> specifying` only if not already there. On resume, continue incomplete artifacts; do not self-transition. Full planning may omit specs only for explicitly unchanged behavior, and may omit design by configuration. Full cannot skip tasks: correct this configuration before generating the pack.
+
 When DP-0 has made the scope clear, generate the configured planning pack (proposal, delta specs from `templates/spec.md`, design, and tasks) in order without pausing between individual artifacts. Validate the pack, then request one DP-2 review. Pause earlier only when the missing decision can change user-visible behavior, compatibility, security, delivery scope, or the selected design; or when artifacts state incompatible scope.
 
 ## Validation Checklist
@@ -67,10 +69,7 @@ ssf state set <change-dir> dp_2_result "approved: <summary>"
 ssf state set <change-dir> dp_2_timestamp now
 ```
 
-After the artifacts are done and DP-2 is recorded, advance the state:
-```bash
-ssf state transition <change-dir> specifying
-```
+After DP-2 is recorded, remain in `specifying` and continue to contract-builder.
 
 ## Handoff Rule
 
@@ -82,36 +81,3 @@ Do not start implementation after writing planning artifacts. Once stable, valid
 - **Missing templates**: Fall back to artifact structure defined in this skill
 - **User interruption**: Artifacts on disk are the recovery checkpoint; resume from first missing/incomplete one
 - **Validation failure**: Fix before handoff — do not hand off broken artifacts
-
-## Standard User-Facing Handoff
-
-End every user-facing phase report with this concise handoff. Only a successfully
-persisted `closing` state and `abandoned` are terminal.
-
-### Normal report
-
-- Current stage: `<detected workflow stage>`.
-- Completed / blocker: `<completed work>`.
-- Next stage: `<next workflow stage or skill>`.
-- Entry condition: `<what must be true to enter it>`.
-
-### Blocked report
-
-- Current stage: `<detected workflow stage>`.
-- Completed / blocker: `<blocking fact or missing evidence>`.
-- Next stage: `<stage that resumes after the blocker>`.
-- Entry condition: `<the approval, artifact, validation, or fix required>`.
-
-### Approval-wait report
-
-- Current stage: `<detected workflow stage>`.
-- Completed / blocker: `<work ready for the named decision>`.
-- Next stage: `<stage that follows approval>`.
-- Entry condition: `<explicit user approval or recorded decision>`.
-
-### Successful terminal report
-
-- Current stage: successfully persisted `closing` or `abandoned`.
-- Completed / blocker: `<persisted terminal outcome>`.
-- Next stage: `none`.
-- Entry condition: no further transition exists.

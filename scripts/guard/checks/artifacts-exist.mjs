@@ -1,7 +1,7 @@
 // scripts/guard/checks/artifacts-exist.mjs — check that required planning artifacts are present and non-empty
 import fs from 'node:fs';
 import path from 'node:path';
-import { loadConfig } from '../../lib/config-loader.mjs';
+import { artifactPolicy } from '../../lib/workflow-policy.mjs';
 import { validateSpecPathLayout } from '../../lib/spec-paths.mjs';
 
 /**
@@ -11,8 +11,9 @@ import { validateSpecPathLayout } from '../../lib/spec-paths.mjs';
  */
 export function checkArtifactsExist(changeDir) {
   const failures = [];
-  const config = loadConfig(changeDir);
-  const skipList = config.artifacts?.skip || [];
+  const policy = artifactPolicy(changeDir);
+  const skipList = policy.skip;
+  failures.push(...policy.failures);
 
   const required = ['proposal.md', 'design.md', 'tasks.md'].filter(
     f => !skipList.includes(f.replace('.md', ''))

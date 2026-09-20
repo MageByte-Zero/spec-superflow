@@ -28,7 +28,7 @@ export async function run(args) {
   try {
     execFileSync('node', nodeArgs, {
       stdio: 'inherit',
-      timeout: 15000,
+      timeout: 150000,
     });
     process.exit(0);
   } catch (e) {

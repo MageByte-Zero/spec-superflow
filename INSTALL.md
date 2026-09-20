@@ -854,15 +854,15 @@ Inline 始终串行，不会表示并行。Quick、direct Hotfix 与 `tweak`
 ssf execution recommend changes/my-change \
   --wave foundation:parallel:1.1,1.2 \
   --wave integration:serial:2.1:foundation --json
-ssf execution plan changes/my-change --mode sdd --confirm --reason "independent work" \
+ssf execution plan changes/my-change --mode sdd --confirm --acknowledge-recommendation --reason "independent work" \
   --wave foundation:parallel:1.1,1.2 \
   --wave integration:serial:2.1:foundation
 ssf execution show changes/my-change --json
-# 可将已有 inline/batch-inline 计划升级为 sdd，或重规划已有 sdd 的 wave/依赖；不能降级。
+# 修订可以保留或切换模式；保留适用证据和未解决失败，不强制升级。
 ssf execution recommend changes/my-change \
   --wave foundation:parallel:1.1,1.2 \
   --wave integration:serial:2.1:foundation --json
-ssf execution revise changes/my-change --mode sdd --confirm --reason "need parallel work" \
+ssf execution revise changes/my-change --mode sdd --confirm --acknowledge-recommendation --reason "need parallel work" \
   --wave foundation:parallel:1.1,1.2 \
   --wave integration:serial:2.1:foundation
 ssf execution review changes/my-change --wave foundation --base <sha> --head <sha> \
@@ -939,3 +939,5 @@ Checkpoint 是任务级恢复上下文。`result-ready` handoff 在继续受影�
 Full/legacy 推荐流程：`exploring -> specifying -> bridging -> approved-for-build -> execution plan -> executing -> closing`
 
 Quick（≤3 单模块代码文件/任务）与 direct Hotfix（incident，≤2）走 `exploring -> approved-for-build -> executing`。Quick 低风险时同轮推荐/接受；若涉及 PRD、Spec/Design、API、数据/权限或跨模块，必须展示风险并由用户选择 Quick 或 Full。选择 Quick 时记录 `tdd`、`new-test` 或 `bounded` 验证策略；direct Hotfix 必须复现原症状回归。legacy Hotfix 才走最小契约、DP-3、plan/review 路径。
+
+Execution efficiency: Native = `inline`, default review policy `final`; SDD = optional delegation with `wave` review. `execution revise` may retain or change mode. Reports are immutable snapshots. `closing` is logical completion; recorded pending physical finish remains resumable. `finish` uses the recorded target and never force-removes work.

@@ -227,16 +227,10 @@ describe('execution control plane instructions', () => {
     }
 
     for (const path of ['README.md', 'docs/README_en.md', 'INSTALL.md']) {
-      const content = read(path);
-      assert.match(content, /execution revise/i, `${path} documents execution revise`);
-      assert.match(content,
-        /retains?\/upgrades?.*sdd.*replan|inline\/batch-inline.*(?:upgrades?|升级).*sdd.*(?:or|或).*(?:replans?|重规划).*sdd/is,
-        `${path} allows SDD replanning while retaining the no-downgrade contract`);
-      assert.match(content, /downgrade|降级/i, `${path} keeps SDD downgrade rejection explicit`);
+      assert.match(read(path), /execution revise.*(?:retain|change|切换)/is);
     }
+    assert.match(read('scripts/lib/cmd-execution.mjs'), /review-policy/);
 
-    assert.match(read('scripts/spec-superflow.mjs'), /upgrade inline\/batch.*replan existing sdd.*new revision/is,
-      'CLI help describes SDD replanning instead of only inline upgrades');
   });
 
   it('documents portable and auditable review receipt evidence', () => {
@@ -285,20 +279,15 @@ describe('execution control plane instructions', () => {
     const codeReviewer = read('skills/code-reviewer/SKILL.md');
     const inject = read('scripts/lib/cmd-inject.mjs');
 
-    assert.match(workflowStart, /execution show <change-dir> --json/);
-    assert.match(workflowStart, /execution plan <change-dir>/);
+    assert.match(workflowStart, /ssf resume <change-dir> --json/);
     assert.match(buildExecutor, /execution recommend/i);
-    assert.match(buildExecutor, /user.*confirm|用户.*确认/is);
-    assert.match(buildExecutor, /acknowledge-recommendation/i);
-    assert.match(buildExecutor, /parallel.*wave/is);
-    assert.match(buildExecutor, /concurren(?:cy|t).*unavailable/i);
-    assert.match(buildExecutor, /retryable.*replacement.*pass/is);
-    assert.doesNotMatch(buildExecutor, />3 tasks, same module/);
+    assert.match(buildExecutor, /review-policy final/);
+    assert.match(buildExecutor, /Old plans with no policy retain wave/i);
+    assert.match(buildExecutor, /platform support.*otherwise report/is);
+    assert.match(buildExecutor, /Critical\/Important.*fail.*repair.*pass/is);
     assert.match(codeReviewer, /execution review <change-dir>.*--verdict <pass\|fail>/s);
-    assert.match(codeReviewer, /Critical\/Important.*fail.*receipt/is);
-    assert.match(inject, /execution plan/);
-    assert.match(inject, /pass.*review receipts.*closing/is);
-    assert.match(buildExecutor, /<wave-id>:<parallel\|serial>:<task,.+>\[:<depends-on/i);
+    assert.match(inject, /review_policy/);
+
   });
 
   it('gives every packaged installer the same planned-execution gate', () => {

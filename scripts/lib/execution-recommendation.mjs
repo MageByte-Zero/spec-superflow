@@ -1,3 +1,4 @@
+import { parseTasks } from './task-parser.mjs';
 // Evidence-based execution-mode recommendation for DP-4.
 
 import { createHash, randomUUID } from 'node:crypto';
@@ -33,35 +34,8 @@ export function recommendExecutionModes({ workflow, taskCount, inlineThreshold, 
     ], facts);
   }
 
-  if (hasParallelWave) {
-    return result(['inline', 'batch-inline', 'sdd'], 'sdd', [
-      'The declared execution waves include parallel work, which SDD can dispatch and review independently.',
-    ], facts);
-  }
-
-  if (hasMultipleWaves) {
-    return result(['inline', 'batch-inline', 'sdd'], 'sdd', [
-      'The declared work spans multiple waves, so SDD keeps dependencies and review receipts explicit.',
-    ], facts);
-  }
-
-  const effectiveTaskCount = plannedTaskCount || normalizedTaskCount;
-  if (effectiveTaskCount === 1) {
-    return result(['inline', 'batch-inline', 'sdd'], 'inline', [
-      'The change has a single sequential task, so inline execution keeps the work focused without dispatch overhead.',
-    ], facts);
-  }
-
-  if (effectiveTaskCount !== null && effectiveTaskCount > 1 && effectiveTaskCount <= threshold) {
-    return result(['inline', 'batch-inline', 'sdd'], 'batch-inline', [
-      `The ${effectiveTaskCount} sequential tasks are within the configured inline threshold of ${threshold}.`,
-    ], facts);
-  }
-
-  return result(['inline', 'batch-inline', 'sdd'], 'sdd', [
-    effectiveTaskCount === null
-      ? 'The task count cannot be determined, so SDD is recommended until the execution shape is made explicit.'
-      : `The ${effectiveTaskCount} tasks exceed the configured inline threshold of ${threshold}.`,
+  return result(['inline', 'batch-inline', 'sdd'], 'inline', [
+    'Native inline execution is the default. Choose SDD only when independently scoped delegation justifies its context and review overhead; task and wave counts alone do not justify it.',
   ], facts);
 }
 
@@ -140,7 +114,7 @@ export function validateRecommendationReceipt(changeDir, receipt, waves = [], ex
 function countDocumentedTasks(changeDir) {
   const tasksPath = join(changeDir, 'tasks.md');
   if (!existsSync(tasksPath)) return null;
-  return (readFileSync(tasksPath, 'utf8').match(/^- \[[ xX]\] /gm) || []).length;
+  return parseTasks(readFileSync(tasksPath, 'utf8')).length;
 }
 
 function result(availableModes, mode, reasons, facts) {

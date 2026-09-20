@@ -237,19 +237,19 @@ Quick、direct Hotfix 与 `tweak` 保持轻量例外：正常完成时不要求 
 ssf execution recommend changes/my-change \
   --wave foundation:parallel:1.1,1.2 \
   --wave integration:serial:2.1:foundation --json
-ssf execution plan changes/my-change --mode sdd --confirm --reason "independent work" \
+ssf execution plan changes/my-change --mode sdd --confirm --acknowledge-recommendation --reason "independent work" \
   --wave foundation:parallel:1.1,1.2 \
   --wave integration:serial:2.1:foundation
 ssf execution show changes/my-change --json
-# 将已有 inline/batch-inline 计划升级为 sdd，或重规划已有 sdd 计划；不能降级。
-# 每次修订都会生成新 revision 并清除旧 review receipt。
+# 计划修订可保留或切换 inline/batch-inline/sdd；不强制升级 SDD。
+# 新 revision 保留仍适用的证据；范围变化保守失效旧通过结果，但保留未解决失败。
 ssf execution recommend changes/my-change \
   --wave foundation:parallel:1.1,1.2 \
   --wave integration:serial:2.1:foundation --json
-ssf execution revise changes/my-change --mode sdd --confirm --reason "need parallel work" \
+ssf execution revise changes/my-change --mode sdd --confirm --acknowledge-recommendation --reason "need parallel work" \
   --wave foundation:parallel:1.1,1.2 \
   --wave integration:serial:2.1:foundation
-# 每个 wave 都先写入非空 review report，再记录 receipt。
+# wave 策略逐 wave 记录；Native final 策略完成后一次 --wave final 审查。
 ssf execution review changes/my-change --wave foundation --base <sha> --head <sha> \
   --report .superpowers/sdd/reviews/foundation.md --verdict pass
 ssf execution adjudicate changes/my-change --wave foundation --decision allow-review \
@@ -262,8 +262,7 @@ ssf execution adjudicate changes/my-change --wave foundation --decision allow-re
 `<change>/.superpowers/sdd/reviews/` 的目录层级必须是物理、非符号链接目录；
 report 本身必须为普通、非空、非符号链接文件。
 
-每个 wave 的 review receipt 必须是当前 revision 的 `pass`，依赖 wave 和 closing
-才会放行；修订计划会使旧 receipt 失效。恢复、切换和手动保存是 control-plane
+Native 默认 `inline` + `final`：任务按依赖连续完成，最终一次独立审查；SDD 默认 `wave`，依赖要求通过回执。无 review_policy 的旧计划保留 wave 语义。恢复、切换和手动保存是 control-plane
 overlay，不会增加第九个状态；其 CLI 与 CodeBuddy/WorkBuddy Markdown adapter 保持相同 guard。
 裁决不会生成 `pass` 或放行依赖；授权 review 若仍失败，wave 会再次进入
 `adjudication-required` 并需要新的人工裁决。
@@ -421,3 +420,5 @@ Full/legacy Hotfix 先由 `ssf execution recommend` 根据任务量和 wave 策�
 ---
 
 **Star 一下，下次需要的时候能找到。**
+
+Execution efficiency: Native = `inline`, default review policy `final`; SDD = optional delegation with `wave` review. `execution revise` may retain or change mode. Reports are immutable snapshots. `closing` is logical completion; recorded pending physical finish remains resumable. `finish` uses the recorded target and never force-removes work.
