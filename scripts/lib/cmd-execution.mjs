@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util';
-import { adjudicateWave, createPlan, describeWaves, EXECUTION_MODES, readPlan, recordReview, resyncPlan, validatePlan, writePlan } from './execution-plan.mjs';
+import { adjudicateWave, createPlan, describeWaves, EXECUTION_MODES, readPlan, recordReview, resolveRecommendationPlanRevision, resyncPlan, validatePlan, writePlan } from './execution-plan.mjs';
 import {
   createRecommendationReceipt,
   readCurrentRecommendationReceipt,
@@ -135,7 +135,10 @@ function createAndPrintPlan(changeDir, values, revise, io) {
 
 function recommendAndPrint(changeDir, values, io) {
   const waves = values.wave?.length ? parseWaves(values.wave) : [];
-  const receipt = writeRecommendationReceipt(changeDir, createRecommendationReceipt(changeDir, waves));
+  const priorPlanRevision = resolveRecommendationPlanRevision(changeDir);
+  const receipt = writeRecommendationReceipt(changeDir, createRecommendationReceipt(changeDir, waves, {
+    executionPlanRevision: priorPlanRevision,
+  }));
   const recommendation = receipt.recommendation;
   const lines = [
     'Available execution modes:',

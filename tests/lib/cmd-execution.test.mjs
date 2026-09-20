@@ -1,6 +1,7 @@
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -167,6 +168,28 @@ function createReviewPlan(directory) {
   const result = runSsf(['execution', 'plan', directory, '--mode', 'sdd',
     '--reason', 'full workflow default', '--wave', 'wave-1:serial:1.1']);
   assert.equal(result.exitCode, 0, result.stderr);
+}
+
+function createPlanThenRebuild() {
+  const initial = runSsf(['execution', 'plan', changeDir, '--mode', 'sdd',
+    '--reason', 'full workflow default', '--wave', 'wave-1:serial:1.1']);
+  assert.equal(initial.exitCode, 0, initial.stderr);
+  writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 Updated task\n- [ ] 1.2 Recovery task\n');
+  return rebuildState(changeDir, { computeArtifactsHash, computeContractHash });
+}
+
+function resealPlanForTest(plan) {
+  const { hash, ...content } = plan;
+  return {
+    ...content,
+    hash: `sha256:${createHash('sha256').update(stableJsonForTest(content)).digest('hex')}`,
+  };
+}
+
+function stableJsonForTest(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableJsonForTest).join(',')}]`;
+  return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableJsonForTest(value[key])}`).join(',')}}`;
 }
 
 function commitFileInWorktree(worktree, rel, content) {
@@ -676,6 +699,127 @@ describe('ssf execution', () => {
     assert.equal(shown.json.current, true);
     assert.equal(shown.json.waves[0].receipt, null);
     assert.match(runSsf(['state', 'get', changeDir, 'dp_4_result', '--json']).json.value, /plan revision 2/);
+  });
+
+  it('recovers the prior plan revision for recommend after state rebuild clears the summary', () => {
+    const initial = runSsf(['execution', 'plan', changeDir, '--mode', 'sdd',
+      '--reason', 'full workflow default', '--wave', 'wave-1:serial:1.1']);
+    assert.equal(initial.exitCode, 0, initial.stderr);
+    const reviewed = runSsf(['execution', 'review', changeDir, '--wave', 'wave-1',
+      '--base', gitRefs.base, '--head', gitRefs.head,
+      '--report', writeReviewReport('rebuilt-wave-1.md'), '--verdict', 'pass']);
+    assert.equal(reviewed.exitCode, 0, reviewed.stderr);
+
+    writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 Updated task\n- [ ] 1.2 Recovery task\n');
+    const rebuilt = rebuildState(changeDir, { computeArtifactsHash, computeContractHash });
+    assert.equal(rebuilt.revision, null);
+    assert.equal(rebuilt.execution_plan_hash, null);
+    assert.equal(rebuilt.execution_plan_revision, null);
+    const statePath = join(changeDir, '.spec-superflow.yaml');
+    const stateBeforeRecommend = readFileSync(statePath, 'utf8');
+
+    const recommended = runSsf(['execution', 'recommend', changeDir,
+      '--wave', 'wave-1:parallel:1.1,1.2', '--json']);
+    assert.equal(recommended.exitCode, 0, recommended.stderr);
+    assert.equal(recommended.json.receipt.execution_plan_revision_at_recommendation, 1);
+    assert.equal(readFileSync(statePath, 'utf8'), stateBeforeRecommend);
+
+    const revised = runSsf(['execution', 'revise', changeDir, '--mode', 'sdd', '--confirm',
+      '--reason', 'refresh the plan after state rebuild',
+      '--wave', 'wave-1:parallel:1.1,1.2', '--json'], process.cwd(), {
+      prepareRecommendation: false,
+    });
+    assert.equal(revised.exitCode, 0, revised.stderr);
+    assert.equal(revised.json.plan.revision, 2);
+
+    const shown = runSsf(['execution', 'show', changeDir, '--json']);
+    assert.equal(shown.exitCode, 0, shown.stderr);
+    assert.equal(shown.json.current, true);
+    assert.equal(shown.json.waves[0].receipt, null);
+  });
+
+  it('rejects a tampered retained plan instead of sealing a recovered revision', () => {
+    const rebuilt = createPlanThenRebuild();
+    assert.equal(rebuilt.execution_plan_revision, null);
+
+    const planPath = join(changeDir, '.superpowers', 'sdd', 'execution-plan.json');
+    const plan = JSON.parse(readFileSync(planPath, 'utf8'));
+    plan.rationale = 'tampered without resealing the plan';
+    writeFileSync(planPath, `${JSON.stringify(plan, null, 2)}\n`);
+    const recommendationPath = join(changeDir, '.superpowers', 'sdd', 'execution-recommendation.json');
+    const recommendationBefore = readFileSync(recommendationPath, 'utf8');
+
+    const recommended = runSsf(['execution', 'recommend', changeDir,
+      '--wave', 'wave-1:parallel:1.1,1.2', '--json']);
+
+    assert.notEqual(recommended.exitCode, 0);
+    assert.match(recommended.stderr, /recover.*revision|hash mismatch/i);
+    assert.equal(readFileSync(recommendationPath, 'utf8'), recommendationBefore);
+  });
+
+  it('rejects retained plans without a positive integer revision before replacing the recommendation receipt', () => {
+    createPlanThenRebuild();
+    const planPath = join(changeDir, '.superpowers', 'sdd', 'execution-plan.json');
+    const recommendationPath = join(changeDir, '.superpowers', 'sdd', 'execution-recommendation.json');
+    const originalPlan = JSON.parse(readFileSync(planPath, 'utf8'));
+    const recommendationBefore = readFileSync(recommendationPath, 'utf8');
+
+    for (const [label, revision] of [
+      ['missing', undefined],
+      ['null', null],
+      ['zero', 0],
+      ['negative', -1],
+      ['non-integer', 1.5],
+    ]) {
+      const invalidPlan = structuredClone(originalPlan);
+      if (revision === undefined) delete invalidPlan.revision;
+      else invalidPlan.revision = revision;
+      writeFileSync(planPath, `${JSON.stringify(resealPlanForTest(invalidPlan), null, 2)}\n`);
+      writeFileSync(recommendationPath, recommendationBefore);
+
+      const recommended = runSsf(['execution', 'recommend', changeDir,
+        '--wave', 'wave-1:parallel:1.1,1.2', '--json']);
+
+      assert.notEqual(recommended.exitCode, 0, `${label}: recommendation unexpectedly succeeded`);
+      assert.match(recommended.stderr, /revision/i, `${label}: ${recommended.stderr}`);
+      assert.equal(readFileSync(recommendationPath, 'utf8'), recommendationBefore, label);
+    }
+  });
+
+  it('rejects a retained plan from a different workflow during revision recovery', () => {
+    createPlanThenRebuild();
+    const state = readState(changeDir);
+    state.workflow = 'hotfix';
+    writeState(changeDir, state);
+    const recommendationPath = join(changeDir, '.superpowers', 'sdd', 'execution-recommendation.json');
+    const recommendationBefore = readFileSync(recommendationPath, 'utf8');
+
+    const recommended = runSsf(['execution', 'recommend', changeDir,
+      '--wave', 'wave-1:parallel:1.1,1.2', '--json']);
+
+    assert.notEqual(recommended.exitCode, 0);
+    assert.match(recommended.stderr, /workflow.*state/i);
+    assert.equal(readFileSync(recommendationPath, 'utf8'), recommendationBefore);
+  });
+
+  it('rejects revision recovery from a partially cleared execution summary', () => {
+    const rebuilt = createPlanThenRebuild();
+    const plan = JSON.parse(readFileSync(join(changeDir, '.superpowers', 'sdd', 'execution-plan.json'), 'utf8'));
+    const recommendationPath = join(changeDir, '.superpowers', 'sdd', 'execution-recommendation.json');
+    const recommendationBefore = readFileSync(recommendationPath, 'utf8');
+
+    for (const [field, value] of [
+      ['revision', 1],
+      ['execution_plan_hash', plan.hash],
+    ]) {
+      writeState(changeDir, { ...rebuilt, [field]: value });
+      const recommended = runSsf(['execution', 'recommend', changeDir,
+        '--wave', 'wave-1:parallel:1.1,1.2', '--json']);
+
+      assert.notEqual(recommended.exitCode, 0, field);
+      assert.match(recommended.stderr, /partially cleared/i, field);
+      assert.equal(readFileSync(recommendationPath, 'utf8'), recommendationBefore, field);
+    }
   });
 
   it('makes a failed current wave retryable while blocking dependents until its replacement pass receipt', () => {

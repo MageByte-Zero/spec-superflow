@@ -50,6 +50,26 @@ export function readPlan(changeDir) {
   }
 }
 
+export function resolveRecommendationPlanRevision(changeDir) {
+  const state = readState(changeDir);
+  if (state.execution_plan_revision !== null) return state.execution_plan_revision;
+
+  const plan = readPlan(changeDir);
+  if (!plan) return null;
+  const failures = validateStructure(plan);
+  const actualHash = tryHashPlan(plan);
+  if (actualHash === null) failures.push('execution plan content cannot be hashed');
+  else if (plan?.hash !== actualHash) failures.push('execution plan content hash mismatch');
+  if (state.revision !== null || state.execution_plan_hash !== null) {
+    failures.push('execution plan summary is only partially cleared');
+  }
+  if (plan?.workflow !== state.workflow) failures.push('execution plan workflow does not match state');
+  if (failures.length > 0) {
+    throw new Error(`Cannot recover execution plan revision for recommendation: ${failures.join('; ')}`);
+  }
+  return plan.revision;
+}
+
 export function writePlan(changeDir, plan) {
   const failures = validateStructure(plan);
   const expectedHash = tryHashPlan(plan);
@@ -1240,6 +1260,7 @@ function blockedDependencies(changeDir, plan, wave) {
 function validateStructure(plan) {
   const failures = [];
   if (!isObject(plan)) return ['execution plan must be an object'];
+  if (!Number.isInteger(plan.revision) || plan.revision < 1) failures.push('execution plan revision is invalid');
   if (!EXECUTION_MODES.includes(plan.mode)) failures.push('execution plan mode is invalid');
   if (typeof plan.source !== 'string' || !plan.source.trim()) failures.push('execution plan source is required');
   if (!isNonEmptyText(plan.rationale)) failures.push('execution plan rationale is required');
