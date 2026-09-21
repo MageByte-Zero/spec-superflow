@@ -1,3 +1,4 @@
+import { readState } from './state-loader.mjs';
 // scripts/lib/cmd-finish.mjs — `ssf finish <change-dir> [--test-cmd <command>]` 一键收尾
 // 将隔离分支合并回主干（merge --no-ff）、验证主干已包含隔离分支全部提交、
 // 在主干执行验证命令（默认 npm test，--test-cmd 覆盖，10 分钟超时）、
@@ -99,6 +100,7 @@ export function run(args, io = { stdout: process.stdout, stderr: process.stderr 
   }
 
   try {
+    if (readState(changeDir).completion_outcome === 'accepted-risk') throw new Error('Accepted-risk delivery is not verified integration; preserve the branch for an explicit integration decision');
     const currentRoot = resolve(git(changeDir, ['rev-parse', '--show-toplevel'], io, runGit));
     const list = parseWorktreeList(git(currentRoot, ['worktree', 'list', '--porcelain'], io, runGit));
     let context = readIsolationContext(changeDir);

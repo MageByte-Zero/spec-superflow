@@ -13,6 +13,8 @@ const BUILTIN_DEFAULTS = {
   state: 'exploring',
   workflow: 'auto',
   workflow_variant: null,
+  completion_outcome: null,
+  completion_reason: null,
   revision: null,
   artifacts_hash: null,
   contract_hash: null,
@@ -53,12 +55,14 @@ export function writeState(changeDir, state) {
   const filePath = path.join(changeDir, STATE_FILE);
   const lines = [];
   lines.push('# .spec-superflow.yaml — lightweight state machine');
-  lines.push('# Derived data. Always rebuildable from artifacts. Lost/corrupt → fall back to content-level detection.');
+  lines.push('# Progress and legacy approvals. Recover missing evidence; never infer approval from artifact existence.');
   lines.push('');
   lines.push('# === Core state ===');
   lines.push(`state: ${state.state || 'exploring'}`);
   lines.push(`workflow: ${state.workflow || 'auto'}`);
   lines.push(`workflow_variant: ${state.workflow_variant ?? 'null'}`);
+  lines.push(`completion_outcome: ${state.completion_outcome ?? 'null'}`);
+  lines.push(`completion_reason: ${state.completion_reason ?? 'null'}`);
   lines.push(`revision: ${state.revision ?? 'null'}`);
   lines.push('');
   lines.push('# === Hashes (fast staleness detection) ===');

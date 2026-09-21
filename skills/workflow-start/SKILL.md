@@ -21,43 +21,19 @@ Update checks are optional (`ssf runtime check-update`), cached and non-blocking
 
 ## New request
 
-Infer scope and risks from the request and repository. Ask only for facts that would change the decision; do not turn CLI fields into a questionnaire. Validate the change name as a single safe relative path segment under `changes/`, then `ssf state init <change-dir>` if absent.
+Infer scope and risks from the request and repository; do not turn CLI fields into a questionnaire. Validate the change name as a single safe relative path segment under `changes/` and create only that directory. Reuse authorization already given. Never infer approval from artifact existence.
 
-Run `ssf workflow recommend` with observed task/file counts, config-doc-only, schema-api-change, new-module, behavioral-constraint-change, cross-module-change, uncertainty and request-kind. Show the recommendation and its reason briefly. Workflow path is separate from execution mode.
+Offer only two paths, without a mode-selection interview:
 
-| Path | Boundary |
-|---|---|
-| Tweak | ≤4 config/doc-only tasks/files, no risk signals |
-| Quick | ≤3 low-risk code tasks/files |
-| Direct Hotfix | Incident, reproducible symptom, ≤2 tasks/files |
-| Lightweight | Eligibility reported by CLI; confirmed scope, focused review and verification |
-| Full | Requirements, cross-module behavior, uncertain design, or explicit user choice |
+- **Direct**: clear requested change with a bounded proof. In the same turn run `ssf workflow start <dir> --path direct --scope "<requested outcome and bounds>"`. No planning pack, recommendation receipt or execution plan is needed. Use affected tests or checks; `--verification` can record tdd/new-test/bounded when relevant. Task/file counts are advisory, not hard limits.
+- **Planned**: uncertain behavior, architecture or a user-requested plan. Draft proposal.md (scope, acceptance, risks) and tasks.md (ordered tasks and proof) together. Add specs/design only when their information is needed. Check shared interfaces against actual code once. Present one concrete plan for approval, reusing approval already covering it. Then run `ssf workflow start <dir> --path planned --confirm --reason "<existing approval>"`. The CLI derives the execution plan and enters executing; no contract-builder, handwritten contract, DP-0..DP-4 sequence or execution recommend is required. Native + final is the default; add `--mode sdd` only for explicit delegation.
 
-Handle bounded Quick/direct Hotfix in the same turn. Quick/direct Hotfix use `ssf workflow accept <dir> --source direct-request --verification <tdd|new-test|bounded>` with the user's verification choice. Full/Tweak/Lightweight use `workflow select --mode <mode> --confirm --reason <text>` and any receipt-required options. A nonrecommended choice requires acknowledgment. Reuse authorization already given; do not ask again. Legacy Hotfix without a direct receipt retains contract/DP-3/plan gates.
+Continue to build-executor without another question. Ordinary debugging stays in executing. Scope changes update the affected planning sections and repeat planned start once with actual reapproval; do not traverse intermediate states. Nonsemantic corrections can use execution resync with a recorded reason, retaining review history.
 
-Direct paths must not create planning packs, contracts, execution plans or wave receipts. If scope grows, refresh observed facts and obtain the user's path choice; do not silently promote every issue to Full.
+Completion uses `ssf workflow complete <dir> --verification-command "<required check command>"`. It runs the check once and preserves failures. Planned work also requires its current review and completed tasks; existing delta specs require synchronization. A user can explicitly accept known risks with `workflow complete --accept-risk --confirm --reason "<decision and remaining issues>"`; this records accepted-risk, never pass, and does not authorize integration.
 
-## Full intake and routing
+## Legacy changes
 
-Record one DP-0 summary covering intent, scope, constraints, workflow path and concrete `artifact_language`. Resolve language from explicit user preference, conversation, configured non-auto language, existing artifacts, then templates. Preserve prior decisions. Set `dp_0_decisions`, `dp_0_result`, `dp_0_confirmed`, `dp_0_timestamp` only after confirmation.
+Do not convert an active legacy change or discard its receipts automatically. Resume its recorded obligations: Full/legacy Hotfix may still need contract-builder and old approval/review gates; old Quick/Tweak/Lightweight/direct Hotfix use their existing receipts. Read docs/decision-points.md only for the applicable old decision, not for every task. Use `ssf runtime asset read docs/state-machine.md` only when a legacy transition is unclear. Legacy `ssf state init` precedes `ssf workflow recommend`; a nonrecommended choice requires acknowledgment. Legacy Quick/direct Hotfix use `workflow accept --verification` and persist `test_result: pass` before closing; use `ssf state set <change-dir> dp_0_timestamp now` for portable timestamps.
 
-Route by the next missing obligation:
-
-| State / need | Skill |
-|---|---|
-| Fuzzy intent | need-explorer |
-| Planning artifacts | spec-writer |
-| Approved plan needs contract | contract-builder |
-| Approved contract / direct receipt | build-executor |
-| Unexpected failure | bug-investigator |
-| Review required by policy | code-reviewer |
-| Verified work / pending finish | release-archivist |
-| Delta synchronization before closing | spec-merger |
-
-The destination skill enters its state **before** editing that stage's artifacts. Skip transitions already satisfied. Scope change returns Full to specifying; contract drift returns it to bridging, including from debugging. Do not bypass guards or modify state YAML manually.
-
-Use `ssf runtime asset read docs/state-machine.md` or `docs/decision-points.md` only when the applicable rule is unclear. Honor configured artifact omissions; reject Full `tasks` omission before drafting. Never infer approval from artifact existence.
-
-Continue authorized internal work without phase-by-phase handoff questions. Progress updates state the result and next action in one short paragraph. Request input only for missing material decisions or actual authorization boundaries.
-
-Persist short-path `test_result: pass` before closing. Use `ssf state set <change-dir> dp_0_timestamp now` for portable timestamps.
+Continue authorized internal work without phase-by-phase handoff questions. For all paths, read only the current task's source and evidence. Progress updates use one short paragraph; ask only for a new material decision, never “continue?” for authorized work.

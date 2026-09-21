@@ -1,9 +1,11 @@
 ---
 name: contract-builder
-description: Convert approved planning artifacts into an execution contract. Invoke when the user wants to start building, asks to move from planning to implementation, or when execution-contract.md is missing or stale.
+description: Maintain an execution contract only for an existing legacy change that requires one. New direct/planned changes do not invoke this skill when a contract is absent.
 ---
 
 # Contract Builder
+
+Legacy compatibility only: new planned changes use proposal.md + tasks.md and `ssf workflow start --path planned`. Do not generate a contract or request a second approval for them. Read the remaining instructions only for an existing legacy change.
 
 Converts planning artifacts into a single execution handshake: `execution-contract.md`. Load the baseline with `ssf runtime asset read templates/execution-contract.md`.
 

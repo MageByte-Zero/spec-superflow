@@ -7,6 +7,10 @@ description: Use when encountering any bug, test failure, or unexpected behavior
 
 **Core principle:** Find root cause before attempting fixes. Symptom fixes are failure.
 
+## New direct/planned changes
+
+Investigate in executing without a phase transition or a separate debug ledger: reproduce, trace the root cause, make one focused repair and verify. Keep useful failure evidence in the existing progress entry. Three failures for the same unresolved issue warrant a decision; unrelated findings do not accumulate a shared budget. No task book or subagent is required. The detailed legacy protocol below is for an existing debugging state or an investigation that needs it.
+
 ## The Iron Law
 
 No fixes without root cause investigation first. If you haven't completed Phase 1, you cannot propose fixes.

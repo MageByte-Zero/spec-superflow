@@ -1,8 +1,16 @@
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, lstatSync, realpathSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { resolve, relative, isAbsolute, sep } from 'node:path';
+import { parseTasks } from './task-parser.mjs';
+import { createPlan, readPlan, validatePlan, writePlan, writePlanRevision, describeReviews } from './execution-plan.mjs';
+import { resolveIsolationChange } from './isolation-context.mjs';
+import { computeArtifactsHash, computeContractHash } from './hash.mjs';
+import { runGuard } from '../guard/guard.mjs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import {
   WORKFLOW_MODES,
+  recordDirectRequest,
   acceptWorkflowRecommendation,
   escalateLightweightWorkflow,
   hasLightweightCompletionEvidence,
@@ -16,6 +24,9 @@ import {
 import { readState, writeState } from './state-loader.mjs';
 
 const OPTIONS = {
+  path: { type: 'string' },
+  scope: { type: 'string' },
+  'accept-risk': { type: 'boolean', default: false },
   'task-count': { type: 'string' },
   'file-count': { type: 'string' },
   'config-doc-only': { type: 'string' },
@@ -84,15 +95,17 @@ export async function run(args) {
   const { positionals, values } = parsed;
   const [subcommand, changeDir] = positionals;
   if (values.help || subcommand === undefined) return printHelp();
-  if (!['recommend', 'select', 'accept', 'evidence', 'escalate', 'show'].includes(subcommand)) {
-    return fail('Usage: ssf workflow <recommend|select|accept|evidence|escalate|show> <change-dir>', 2);
+  if (!['start', 'complete', 'recommend', 'select', 'accept', 'evidence', 'escalate', 'show'].includes(subcommand)) {
+    return fail('Usage: ssf workflow <start|complete|recommend|select|accept|evidence|escalate|show> <change-dir>', 2);
   }
   if (positionals.length !== 2 || !changeDir) {
-    return fail('Usage: ssf workflow <recommend|select|accept|evidence|escalate|show> <change-dir>', 2);
+    return fail('Usage: ssf workflow <start|complete|recommend|select|accept|evidence|escalate|show> <change-dir>', 2);
   }
 
   try {
+    if (subcommand === 'start') return start(changeDir, values);
     requireStateFile(changeDir);
+    if (subcommand === 'complete') return complete(changeDir, values);
     const state = readState(changeDir);
 
     if (subcommand === 'accept' && isExplicitWorkflow(state.workflow)
@@ -117,6 +130,122 @@ export async function run(args) {
     if (error instanceof UsageError) return fail(error.message, 2);
     return fail(error.message, 1);
   }
+}
+
+function safeText(value, label) {
+  if (typeof value !== 'string' || !value.trim() || /[\p{Cc}\p{Zl}\p{Zp}]/u.test(value)) throw new UsageError(`${label} requires non-empty single-line text`);
+  return value.trim();
+}
+
+function checkChangePath(dir) {
+  const root = execFileSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', stdio: 'pipe' }).trim();
+  const rel = relative(realpathSync.native(root), realpathSync.native(dir));
+  if (!rel || isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) throw new Error('Change must be strictly inside its repository');
+  let current = root;
+  for (const part of rel.split(sep)) {
+    current = join(current, part);
+    if (lstatSync(current).isSymbolicLink()) throw new Error('Change path must not traverse symlinks');
+  }
+  if (realpathSync.native(resolveIsolationChange(dir)) !== realpathSync.native(dir)) throw new Error('Use the recorded isolation change directory');
+  return root;
+}
+
+function start(dir, values) {
+  if (!['direct', 'planned'].includes(values.path)) throw new UsageError('--path must be direct or planned');
+  checkChangePath(dir);
+  const state = readState(dir);
+  const existing = readPlan(dir);
+  const compact = ['planned', 'direct'].includes(state.workflow_variant);
+  if (existsSync(join(dir, '.spec-superflow.yaml')) && !compact
+    && (state.workflow !== 'auto' || state.state !== 'exploring')) throw new Error('Existing legacy change: resume it without replacing its authorization or evidence');
+  if (['closing', 'abandoned'].includes(state.state)) throw new Error('Change is terminal; create a new change');
+  if (state.workflow_variant === 'planned' && values.path === 'direct') throw new Error('Do not discard planned review obligations; complete or explicitly accept risks before a new direct change');
+  if (values.path === 'direct') {
+    const scope = safeText(values.scope, '--scope');
+    if (existing) throw new Error('Direct execution cannot discard an existing plan');
+    const loaded = readWorkflowSelection(dir);
+    if (compact) {
+      if (!loaded.valid || loaded.record?.schema_version !== 3 || loaded.record.selection.scope_confirmation !== scope) throw new Error('Existing direct scope differs or evidence is invalid; preserve it and create a new change');
+      return print({ ok: true, state: state.state, path: 'direct' }, values.json);
+    } else recordDirectRequest(dir, scope, values.verification ?? 'bounded');
+    state.workflow = 'quick'; state.workflow_variant = 'direct';
+  } else {
+    if (!values.confirm) throw new Error('Record the existing approval of this concrete plan with --confirm --reason; do not ask again if already approved');
+    const reason = safeText(values.reason, '--reason');
+    for (const file of ['proposal.md', 'tasks.md']) {
+      if (!existsSync(join(dir, file)) || !readFileSync(join(dir, file), 'utf8').trim()) throw new Error(`${file} is required for planned execution`);
+    }
+    const tasks = parseTasks(readFileSync(join(dir, 'tasks.md'), 'utf8'));
+    if (!tasks.length || tasks.some(task => !task.id || !/^[ xX]$/.test(task.marker)) || new Set(tasks.map(task => task.id)).size !== tasks.length) throw new Error('tasks.md needs unique numbered checkbox tasks');
+    const mode = values.mode ?? existing?.mode ?? 'inline';
+    if (!['inline', 'batch-inline', 'sdd'].includes(mode)) throw new UsageError('Invalid execution mode');
+    if (mode === 'sdd' && values.mode !== 'sdd' && !existing) throw new Error('Delegation requires explicit selection');
+    if (state.workflow_variant === 'planned' && !existing) throw new Error('Authoritative execution plan is missing; recover it instead of discarding approval and review history');
+    if (existing && existing.schema_version !== 2) throw new Error('Legacy plan must be revised with its existing commands');
+    const validation = existing ? validatePlan(dir, existing) : null;
+    if (validation?.valid && mode === existing.mode) return print({ ok: true, state: state.state, plan: existing }, values.json);
+    if (validation?.failures.some(failure => !/artifacts hash mismatch|contract hash mismatch/.test(failure))) throw new Error('Plan evidence is invalid; recover it instead of resetting review history');
+    state.workflow = 'full'; state.workflow_variant = 'planned';
+    // Construct before mutating state. The persisted plan holds the one approval
+    // and derives the serial task list directly from tasks.md.
+    const plan = createPlan(dir, { schemaVersion: 2, mode, source: 'approved-plan', rationale: reason,
+      reviewPolicy: mode === 'sdd' ? 'wave' : 'final', revision: (existing?.revision ?? 0) + 1,
+      waves: [{ id: 'implementation', strategy: 'serial', tasks: tasks.map(task => task.id), depends_on: [] }],
+      workflow: 'full' });
+    writeState(dir, state);
+    if (existing) writePlanRevision(dir, plan, existing); else writePlan(dir, plan);
+  }
+  state.state = 'executing'; state.test_result = null; state.dp_6_result = null;
+  state.artifacts_hash = computeArtifactsHash(dir); state.contract_hash = computeContractHash(dir);
+  state.last_transition = new Date().toISOString();
+  writeState(dir, state);
+  return print({ ok: true, state: 'executing', path: values.path, mode: readPlan(dir)?.mode ?? 'inline' }, values.json);
+}
+
+function complete(dir, values) {
+  const root = checkChangePath(dir);
+  const state = readState(dir);
+  if (!['planned', 'direct'].includes(state.workflow_variant)) throw new Error('Legacy change: use its existing closure commands');
+  if (state.state === 'closing') return print({ ok: true, outcome: state.completion_outcome }, values.json);
+  if (!['executing', 'debugging'].includes(state.state)) throw new Error('Only active implementation can complete');
+  if (state.workflow_variant === 'planned') {
+    const plan = readPlan(dir), validation = validatePlan(dir, plan);
+    if (!validation.valid) throw new Error(validation.failures.join('; '));
+    const invalidEvidence = describeReviews(dir, plan).flatMap(review => review.blockers);
+    if (invalidEvidence.length) throw new Error(invalidEvidence.join('; '));
+  } else {
+    const receipt = readWorkflowSelection(dir);
+    if (!receipt.valid || !isDirectWorkflowReceipt(receipt.record, state)) throw new Error('Direct request evidence is invalid');
+  }
+  if (values['accept-risk']) {
+    if (!values.confirm) throw new Error('Accepting known risk requires explicit user approval (--confirm)');
+    state.completion_reason = safeText(values.reason, '--reason');
+    state.completion_outcome = 'accepted-risk';
+  } else {
+    const command = safeText(values['verification-command'], '--verification-command');
+    const before = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    const result = spawnSync(command, { cwd: root, shell: true, stdio: values.json ? 'pipe' : 'inherit', encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout: 600000 });
+    if (values.json) process.stderr.write((result.stdout ?? '') + (result.stderr ?? ''));
+    state.test_result = `${result.status === 0 ? 'pass' : 'fail'}: ${command}`;
+    writeState(dir, state);
+    if (result.status !== 0) throw new Error(`Verification failed (${result.error?.message ?? result.signal ?? result.status}); repair within executing and retry when evidence changes`);
+    if (state.workflow_variant === 'planned') {
+      const prefix = execFileSync('git', ['-C', dir, 'rev-parse', '--show-prefix'], { encoding: 'utf8' }).trim();
+      const dirty = execFileSync('git', ['-C', root, 'status', '--porcelain', '--untracked-files=all', '--', '.', `:(exclude,literal)${prefix.replace(/\/$/, '')}`], { encoding: 'utf8' }).trim();
+      const after = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+      if (before !== after || dirty) throw new Error('Implementation differs from the reviewed snapshot; commit and review affected changes before completion');
+    }
+    let detail = '';
+    const output = { write(text) { detail += text; } };
+    const guard = runGuard(['check', dir, 'executing', 'closing', '--json'], { stdout: output, stderr: output });
+    if (guard.exitCode !== 0) {
+      const report = JSON.parse(detail);
+      throw new Error(`Completion evidence is incomplete: ${report.checks.filter(check => !check.pass).flatMap(check => check.failures).join('; ')}`);
+    }
+    state.completion_outcome = 'verified';
+  }
+  state.state = 'closing'; state.last_transition = new Date().toISOString(); writeState(dir, state);
+  return print({ ok: true, outcome: state.completion_outcome, verification: state.test_result }, values.json);
 }
 
 function recommend(changeDir, values) {
@@ -214,7 +343,9 @@ function persistWorkflowSelection(changeDir, state, record) {
 }
 
 function show(changeDir, state, json) {
+  if (state.workflow_variant === 'planned') return print({ path: 'planned', state: state.state, mode: readPlan(changeDir)?.mode, outcome: state.completion_outcome }, json);
   const receipt = readWorkflowSelection(changeDir);
+  if (receipt.valid && receipt.record?.schema_version === 3) return print({ path: 'direct', state: state.state, scope: receipt.record.selection.scope_confirmation, outcome: state.completion_outcome }, json);
   if (!receipt.exists) {
     if (isExplicitWorkflow(state.workflow)) {
       return print({ source: 'explicit-state', workflow: state.workflow }, json);
@@ -388,6 +519,7 @@ function fail(message, exitCode) {
 }
 
 function printHelp() {
+  console.log('New tasks: ssf workflow start <dir> --path direct --scope <request> | --path planned --confirm --reason <approval> [--mode sdd]\nComplete: ssf workflow complete <dir> --verification-command <command> | --accept-risk --confirm --reason <decision>\nThe following commands are legacy compatibility:');
   console.log(`Usage:
   ssf workflow recommend <change-dir> [--task-count <n>] [--file-count <n>] [--config-doc-only yes|no|unknown] [--schema-api-change yes|no|unknown] [--new-module yes|no|unknown] [--behavioral-constraint-change yes|no] [--cross-module-change yes|no] [--uncertainty low|high|unknown] [--request-kind standard|incident] [--affected-path <path>] [--production-behavior yes|no|unknown] [--public-boundary yes|no|unknown] [--installer yes|no|unknown] [--state-machine yes|no|unknown] [--external-side-effect yes|no|unknown] [--data-permission-config-semantics yes|no|unknown] [--expected-behavior-clear yes|no|unknown] [--verification-reproducible yes|no|unknown] [--impact-paths-complete yes|no|unknown] [--json]
   ssf workflow select <change-dir> --mode full|hotfix|tweak|quick|lightweight --confirm --reason <text> [--scope-confirmation <text>] [--acknowledge-recommendation] [--verification tdd|new-test|bounded] [--json]

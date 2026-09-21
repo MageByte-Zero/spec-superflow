@@ -17,6 +17,8 @@ Two responsibilities: reviewing the recorded Git range and acting on findings wi
 2. For Native `final`, the current executor reviews the complete diff locally and writes the report; do not dispatch a reviewer subagent. For user-authorized SDD with `wave` review, dispatch at most one reviewer for that wave using `skills/code-reviewer/code-reviewer-prompt.md`. If dispatch is unavailable, review locally.
 3. When dispatching, fill only `[DESCRIPTION]`, `[PLAN_OR_REQUIREMENTS]`, `[BASE_SHA]`, `[HEAD_SHA]`, `[WAVE_ID]`, and `[REVIEW_REPORT_FILE]`. Do not send the whole planning bundle.
 4. Write a non-empty report at `.superpowers/sdd/reviews/<wave-id>.md`, then record that path with `ssf execution review <change-dir> --wave <wave-id> --base <base-sha> --head <head-sha> --report .superpowers/sdd/reviews/<wave-id>.md --verdict <pass|fail>`.
+For schema-2 plans, failed receipts also require `--issue <stable-finding-id>` for the blocking defect being repaired; reuse its ID across retries. Other findings keep their own IDs in the report. Identical failed input cannot consume another attempt.
+
 5. Critical/Important findings require a `fail` receipt, focused repair, one focused re-review, and replacement `pass`. Note Minor for later.
 6. At `adjudication-required`, wait for human authorization before another review.
 
@@ -48,7 +50,7 @@ behavior-neutral redundancy; never score by line count.
 Never: performative agreement ("You're right!", "Great point!"), blind implementation before verification, thanking the reviewer. Instead: restate the requirement, ask clarifying questions, push back with reasoning, or just fix it (actions > words).
 
 ### Handling Unclear Feedback
-If any item is unclear → STOP. Do not implement anything yet. Ask for clarification on unclear items. Partial understanding = wrong implementation.
+Ask only about unclear findings that change a material decision; continue independent, already-understood repairs within scope. Do not turn an unclear optional comment into a global stop.
 
 ### Source-Specific Rules
 
@@ -60,7 +62,7 @@ If any item is unclear → STOP. Do not implement anything yet. Ask for clarific
 Suggestion breaks existing functionality, reviewer lacks context, violates YAGNI, technically incorrect for this stack, legacy/compatibility reasons, conflicts with user's architectural decisions. Push back with technical reasoning, not defensiveness.
 
 ### Implementation Order
-1. Clarify unclear items first
+1. Clarify only the material uncertainty that blocks a repair
 2. Fix blocking issues (breaks, security)
 3. Fix simple issues (typos, imports)
 4. Fix complex issues (refactoring, logic)
@@ -76,7 +78,7 @@ Suggestion breaks existing functionality, reviewer lacks context, violates YAGNI
 | Proceeding without a wave receipt | Record `pass`/`fail` via `ssf execution review` before the next dependent wave |
 | Assuming reviewer is right | Check if breaks things |
 | Avoiding pushback | Technical correctness > comfort |
-| Partial implementation | Clarify all items first |
+| Unclear feedback | Clarify the blocked finding while continuing independent repairs |
 
 ## Exception Handling
 

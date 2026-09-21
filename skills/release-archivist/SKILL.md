@@ -7,6 +7,12 @@ description: Close out a spec-superflow change with verification, summary, and a
 
 Read `ssf resume <change-dir> --json`. In `executing`, complete verification and logical closure. In `closing`, perform only recorded pending physical finish, if merging is authorized. `abandoned` or a completed finish requires no work. Other states route through workflow-start.
 
+## New direct/planned changes
+
+Use `ssf workflow complete <dir> --verification-command "<required check command>"`. It runs final verification once; do not run the identical full suite immediately before invoking it. Planned execution additionally checks completed tasks, current full-range/wave review and any delta-spec publication. Direct execution needs no plan or review receipt. Ordinary failures stay in executing for focused repair. Do not add DP-6/DP-7 or another approval to authorized code delivery.
+
+If the user explicitly accepts unfinished work or failed verification, use `ssf workflow complete <dir> --accept-risk --confirm --reason "<decision and remaining issues>"`. Preserve every failure and report accepted-risk, not verified success. This ends code delivery without merging or deleting the branch. A plain closing transition cannot bypass failed checks. For verified work, physical integration remains a separate authorized operation. The remaining closure steps are legacy compatibility.
+
 ## Bounded paths
 
 Quick/direct Hotfix/Tweak record changed files, focused command and result, persist `test_result: pass`, then transition to closing. Hotfix must prove the original symptom fixed. Lightweight also needs its receipt's focused review and passing verification evidence. These paths require no contract, execution plan, wave reviews, audit, DP-6/DP-7 or `ssf finish`.

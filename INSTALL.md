@@ -11,6 +11,19 @@
 
 ---
 
+## 默认流程：直接执行或规划后执行
+
+新任务只有两个入口，不再先填任务/文件数量问卷或选择五种工作流。
+
+- **直接执行**：目标和验证方式明确时，`ssf workflow start <dir> --path direct --scope "请求的结果与边界"`。不创建规划包或执行计划。
+- **规划后执行**：一起写 proposal.md（范围、验收、风险）和 tasks.md（有序任务、证明）；specs/design 按需。用户批准这份具体计划后，`ssf workflow start <dir> --path planned --confirm --reason "已有批准"`，直接进入 executing。默认 Native + final，不手写契约、不生成模式推荐凭据、不逐阶段确认。
+- **交付**：`ssf workflow complete <dir> --verification-command "npm test"` 执行最终验证一次；planned 还检查当前审查、任务完成和已有 delta specs 同步。不要先重复跑同一套全量检查。普通调试留在 executing。
+- **接受风险**：只有用户明确接受已知问题时使用 `workflow complete --accept-risk --confirm --reason "决定与未解决问题"`；保留 fail/未完成任务，结果为 accepted-risk，不自动合并或删除分支。
+
+默认当前目录特性分支；worktree 和 SDD 分别需要显式选择。相同问题的失败复审用稳定 `--issue <finding-id>`，三次未解决失败才要求裁决，不累计无关问题。流程偏好是建议，证据损坏、错误目录和真实失败不能伪装为通过。
+
+以下旧路径、DP 和命令说明用于兼容已有任务；新任务使用上面的入口。不会自动迁移或丢弃旧审批和审查记录。
+
 ## 平台总览
 
 | 平台 | 安装 | 升级 | 卸载 |

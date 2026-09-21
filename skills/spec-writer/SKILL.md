@@ -7,6 +7,12 @@ description: Create or refine spec-superflow planning artifacts. Invoke when the
 
 Create or refine planning artifacts when the change has moved beyond exploration.
 
+## New planned changes
+
+For a new request (no state or workflow auto), or workflow_variant planned, write proposal.md and tasks.md together without pausing between individual artifacts. Proposal holds the goal, in/out scope, acceptance and risks; tasks holds ordered deliverables and proof commands. Add specs only for behavior needing durable scenarios and design only for unresolved architectural decisions. Do not create execution-contract.md or duplicate the task list in another plan.
+
+Check shared interfaces against the real source once, then self-check the problem, scope, dependencies and proof. Present one approval request only if this concrete plan lacks approval. After approval run `ssf workflow start <dir> --path planned --confirm --reason "<user decision>"` and continue implementation. No intermediate planning/bridging transitions or independent reader agent. A semantic revision uses the same command after approval; a nonsemantic correction uses execution resync and retains failed-review history. The remaining sections apply only to existing legacy changes.
+
 ## Required Inputs
 
 Read `.spec-superflow.yaml` (especially `dp_0_decisions`, `dp_0_confirmed`) and any existing planning artifacts. If `dp_0_confirmed` is not `true`, stop and route back to `workflow-start` for DP-0.

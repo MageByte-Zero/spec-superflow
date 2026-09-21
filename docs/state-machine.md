@@ -1,5 +1,10 @@
 # State Machine
 
+新任务走紧凑流程：draft（尚未批准的 proposal/tasks）→ executing → closing，abandoned 为取消。直接请求从 executing 开始。普通调试和验证是执行活动，不单独扭转状态。`workflow start` 记录一次具体计划批准并生成计划；`workflow complete` 验证交付。planned 的权威执行记录是 schema_version 2 plan，派生状态摘要不构成门禁；不要求 execution-contract、推荐凭据或 DP-0..DP-4。用户可明确选择 accepted-risk 结束，不能伪造测试通过，且不自动物理集成。
+
+**下文保留旧八状态和 DP 协议，仅供既有 legacy 任务恢复。不要为新任务重走这些步骤。**
+
+
 `spec-superflow` treats workflow progression as explicit state transitions.
 
 ## States

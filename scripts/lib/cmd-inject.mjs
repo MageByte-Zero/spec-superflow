@@ -178,6 +178,15 @@ function unique(values) {
 }
 
 function generatePhaseGuard(state, { directShortPath = false } = {}) {
+  if (state.workflow_variant === 'planned' || (state.workflow_variant === 'direct' && state.workflow === 'quick')) {
+    return `# Phase Guard: ${state.change_name || 'unknown'}
+仅在用户明确要求继续本 change 时应用。当前阶段：${state.state}。
+默认 Native 连续执行；只有显式授权才委派。复用已有批准，不逐任务询问。
+规划仅 proposal.md 与 tasks.md，specs/design 按需；不手写合同或先生成模式推荐凭据。
+普通调试留在 executing。范围变更才重新批准；非语义修正保留历史。
+用 workflow complete --verification-command 执行最终验证一次；planned 还需当前审查和任务完成。
+用户明确接受风险时记录 accepted-risk，不能伪造 pass。closing 后仅可恢复已授权的物理 finish；accepted-risk 不自动集成。`;
+  }
   const workflow = state.workflow || 'full';
   const isShortPath = workflow === 'tweak' || directShortPath;
   const template = isShortPath && SHORT_PATH_TEMPLATES[state.state]

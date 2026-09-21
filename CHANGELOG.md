@@ -6,6 +6,10 @@ The format loosely follows Keep a Changelog.
 
 ## [Unreleased]
 
+- Simplify new changes to direct/planned `workflow start` and `workflow complete`: one planned approval, two default planning documents, generated Native/final plan, no recommendation prerequisite or handwritten contract.
+- Make schema-2 execution plans authoritative rather than blocking on duplicated state summaries; preserve legacy plans and their recovery obligations.
+- Keep ordinary diagnosis in executing, count review failures per stable issue, and support explicit accepted-risk delivery without forging verification success or automatically integrating.
+
 - Default isolation to a feature branch in the current checkout; require explicit `--worktree`, reject mismatched branch recovery, and preserve the feature branch after failed verification.
 
 - Keep final reviews bound to the complete isolated change through repair, reject empty diffs, and surface adjudication as a recovery blocker.

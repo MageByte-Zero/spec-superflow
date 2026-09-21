@@ -313,11 +313,27 @@ export function acceptWorkflowRecommendation(changeDir, { source, verificationSt
   return accepted;
 }
 
+// A direct user request is itself the path decision. Do not manufacture risk facts
+// or require a recommendation questionnaire merely to record that decision.
+export function recordDirectRequest(changeDir, scope, verification = 'bounded') {
+  if (!isSafeReason(scope) || !isVerificationStrategy(verification)) throw new Error('Direct execution requires scope and a valid verification strategy');
+  const record = withHash({ schema_version: 3, status: 'ready', selection: {
+    authorization_id: randomUUID(), mode: 'quick', source: 'direct-request',
+    scope_confirmation: scope, verification_strategy: verification,
+    confirmed_at: new Date().toISOString(),
+  } });
+  writeRecord(changeDir, record);
+  return record;
+}
+
 export function isDirectWorkflowReceipt(record, state) {
   const selection = record?.selection;
   const mode = selection?.mode;
   if (!['quick', 'hotfix', 'lightweight'].includes(mode) || state?.workflow !== mode) return false;
   if (record?.status !== 'ready') return false;
+  if (record.schema_version === 3) return mode === 'quick' && selection.source === 'direct-request'
+    && isSafeReason(selection.scope_confirmation) && isVerificationStrategy(selection.verification_strategy)
+    && isIsoTimestamp(selection.confirmed_at) && isSafeReason(selection.authorization_id);
   if (mode === 'lightweight') {
     return record?.recommendation?.mode === 'lightweight'
       && selection.accepted_automatically === false

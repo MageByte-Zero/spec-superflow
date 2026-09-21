@@ -23,6 +23,19 @@
 
 ---
 
+## Default flow: direct or planned
+
+New tasks use two paths, without a recommendation questionnaire:
+
+- Direct: `ssf workflow start <dir> --path direct --scope "requested outcome and bounds"`. No planning pack or execution plan.
+- Planned: write proposal.md and tasks.md together; add specs/design only when needed. With approval of this concrete plan, run `ssf workflow start <dir> --path planned --confirm --reason "existing approval"`. It enters executing with a generated Native/final plan. No handwritten contract, execution recommendation or phase-by-phase approval.
+- Deliver: `ssf workflow complete <dir> --verification-command "npm test"` runs final checks once. Planned work also needs its current review, completed tasks and any delta publication. Ordinary debugging stays in executing.
+- Only explicit acceptance of known issues permits `workflow complete --accept-risk --confirm --reason "decision and remaining issues"`. The outcome is accepted-risk, failures remain failures, and integration is not automatic.
+
+Feature branches are the default. Worktrees and SDD each require explicit selection. Failed reviews use a stable `--issue <finding-id>`; three unresolved failures for that issue require adjudication, unrelated findings do not share the budget.
+
+The older paths, DPs and commands below remain compatibility documentation for existing changes; they are not additional steps for new tasks.
+
 ## Quick Start
 
 Once installed, just tell your agent:

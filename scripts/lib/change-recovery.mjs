@@ -68,6 +68,8 @@ export function createRecoverySummary(changeDir) {
     change: { name: basename(changeDir), path: resolve(changeDir) },
     state: state.state,
     workflow: state.workflow,
+    path: state.workflow_variant === 'planned' ? 'planned' : state.workflow_variant === 'direct' ? 'direct' : null,
+    outcome: state.completion_outcome,
     terminal,
     checkpoint: checkpoints[0]
       ? { status: checkpoints[0].stale ? 'stale' : 'current', record: checkpoints[0] }
@@ -167,6 +169,7 @@ function buildBlockers(changeDir, handoffs, execution) {
 }
 
 function selectNextAction(changeDir, state, terminal, checkpoint, blockers, execution) {
+  if (terminal && state.completion_outcome === 'accepted-risk') return { skill: 'none', command: null, reason: `User accepted known risks: ${state.completion_reason}` };
   if (terminal && state.state === 'closing') {
     const isolation = readIsolationContext(changeDir);
     if (isolation?.finish_status === 'verify-pending') {
@@ -186,11 +189,15 @@ function selectNextAction(changeDir, state, terminal, checkpoint, blockers, exec
       reason: blockers[0].message,
     };
   }
+  if (['planned', 'direct'].includes(state.workflow_variant) && /^fail(?::|$)/i.test(state.test_result ?? '')) {
+    return { skill: 'bug-investigator', command: null, reason: 'Diagnose recorded verification failure within executing; update its result after a real affected check, then review and complete' };
+  }
   if (state.state === 'debugging') {
     return { skill: 'bug-investigator', command: null, reason: 'Diagnose the failure before resuming implementation' };
   }
   if (blockers[0]?.code === 'EXECUTION_PLAN_STALE') {
     const failures = execution.failures.join('; ');
+    if (state.workflow_variant === 'planned') return { skill: 'spec-writer', command: null, reason: 'Approved inputs changed: review the changed scope once and use workflow start --path planned --confirm --reason; use execution resync only for an explicitly nonsemantic correction' };
     const stage = failures.includes('artifacts hash mismatch') ? 'specifying'
       : failures.includes('contract hash mismatch') ? 'bridging' : null;
     if (stage) return { skill: stage === 'bridging' ? 'contract-builder' : 'spec-writer',

@@ -30,9 +30,10 @@ export function createPlan(changeDir, input) {
     waves: input?.waves,
     artifacts_hash: computeArtifactsHash(changeDir),
     contract_hash: computeContractHash(changeDir),
-    workflow: state.workflow,
+    workflow: input?.workflow ?? state.workflow,
     revision: input?.revision ?? state.revision ?? 1,
   };
+  if (input?.schemaVersion !== undefined) plan.schema_version = input.schemaVersion;
   if (input?.reviewPolicy !== undefined) plan.review_policy = input.reviewPolicy;
   if (input?.recommendation !== undefined) plan.recommendation = input.recommendation;
   if (input?.recommendationReceipt !== undefined) plan.recommendation_receipt = input.recommendationReceipt;
@@ -95,10 +96,10 @@ export function validatePlan(changeDir, plan) {
   else if (plan?.hash !== actualHash) failures.push('execution plan content hash mismatch');
 
   const state = readState(changeDir);
-  if (state.execution_plan_hash !== plan?.hash) {
+  if (plan?.schema_version !== 2 && state.execution_plan_hash !== plan?.hash) {
     failures.push('execution plan summary does not match state');
   }
-  if (state.execution_mode !== plan?.mode) {
+  if (plan?.schema_version !== 2 && state.execution_mode !== plan?.mode) {
     failures.push('execution plan mode does not match state');
   }
   if (plan?.artifacts_hash !== computeArtifactsHash(changeDir)) {
@@ -110,13 +111,13 @@ export function validatePlan(changeDir, plan) {
   if (plan?.workflow !== state.workflow) {
     failures.push('execution plan workflow does not match state');
   }
-  if (state.execution_plan_revision !== plan?.revision) {
+  if (plan?.schema_version !== 2 && state.execution_plan_revision !== plan?.revision) {
     failures.push('execution plan revision does not match state');
   }
-  if (state.revision != null && plan?.revision !== state.revision) {
+  if (plan?.schema_version !== 2 && state.revision != null && plan?.revision !== state.revision) {
     failures.push('execution plan revision does not match state');
   }
-  if (plan?.workflow !== 'tweak') {
+  if (plan?.schema_version !== 2 && plan?.workflow !== 'tweak') {
     if (plan?.recommendation === undefined) failures.push('execution plan recommendation is required for full/hotfix');
     if (plan?.recommendation_receipt === undefined) failures.push('execution plan recommendation receipt is required for full/hotfix');
     if (plan?.selection === undefined) failures.push('execution plan selection is required for full/hotfix');
@@ -146,6 +147,7 @@ export function recordReview(changeDir, waveId, receipt, options = {}) {
   const plan = readPlan(changeDir);
   const validation = validatePlan(changeDir, plan);
   if (!validation.valid) throw new Error(`Cannot record a review for an invalid execution plan: ${validation.failures.join('; ')}`);
+  if (plan.schema_version === 2 && receipt?.status === 'fail' && !/^[a-zA-Z0-9_.:-]{1,128}$/.test(receipt.issue ?? '')) throw new Error('Failed compact reviews require a stable --issue identifier for the unresolved finding');
   const wave = reviewTargets(plan).find(candidate => candidate.id === waveId);
   if (!wave) throw new Error(`Review receipt references unknown wave '${waveId}'`);
   const blockedBy = blockedDependencies(changeDir, plan, wave);
@@ -174,6 +176,9 @@ export function recordReview(changeDir, waveId, receipt, options = {}) {
     throw new Error(`Wave '${waveId}' cannot be reviewed while its failed report evidence is invalid: ${currentReview.blocker}`);
   }
   const previousReceipt = currentReview.receipt;
+  if (plan.schema_version === 2 && receipt.status === 'fail' && previousReceipt?.status === 'fail'
+    && previousReceipt.head === head && previousReceipt.issue === receipt.issue
+    && previousReceipt.report_sha256 === reportEvidence.sha256) throw new Error('Retry requires new evidence, not the identical failed review');
   const previousRepair = readRepairState(
     changeDir,
     plan,
@@ -207,6 +212,7 @@ export function recordReview(changeDir, waveId, receipt, options = {}) {
 
   const savedReceipt = {
     status: receipt.status,
+    ...(receipt.issue ? { issue: receipt.issue } : {}),
     base,
     head,
     report: immutableReport.path,
@@ -754,7 +760,7 @@ function updateRepairState(changeDir, plan, waveId, previousRepair, previousRece
       plan_hash: plan.hash,
       plan_revision: plan.revision,
       wave_id: waveId,
-      status: failures.length >= MAX_REPAIR_FAILURES ? 'adjudication-required' : 'repairing',
+      status: issueFailureCount(plan, failures) >= MAX_REPAIR_FAILURES ? 'adjudication-required' : 'repairing',
       failure_count: failures.length,
       previous_head: receipt.head,
       previous_report: receipt.report,
@@ -784,9 +790,14 @@ function updateRepairState(changeDir, plan, waveId, previousRepair, previousRece
   return state;
 }
 
+function issueFailureCount(plan, failures) {
+  return plan.schema_version === 2 ? failures.filter(f => f.issue === failures.at(-1)?.issue).length : failures.length;
+}
+
 function reviewEvidence(receipt, waveId) {
   return {
     status: receipt.status,
+    ...(receipt.issue ? { issue: receipt.issue } : {}),
     base: receipt.base,
     head: receipt.head,
     report: receipt.report,
@@ -828,16 +839,17 @@ function validateRepairStateEvidence(changeDir, plan, waveId, state, currentRece
     || !isNonEmptyText(state.previous_report)) {
     throw new Error('Repair state failure history is malformed');
   }
-  if (state.status === 'repairing' && state.failure_count >= MAX_REPAIR_FAILURES) {
+  if (state.status === 'repairing' && issueFailureCount(plan, state.failures) >= MAX_REPAIR_FAILURES) {
     throw new Error('Repair state status does not match its failure count');
   }
-  if (state.status === 'adjudication-required' && state.failure_count < MAX_REPAIR_FAILURES) {
+  if (state.status === 'adjudication-required' && issueFailureCount(plan, state.failures) < MAX_REPAIR_FAILURES) {
     throw new Error('Repair state status does not meet the adjudication threshold');
   }
 
   let previousFailure = null;
   for (const [index, failure] of state.failures.entries()) {
     const label = `Repair state failure ${index + 1}`;
+    if (plan.schema_version === 2 && !/^[a-zA-Z0-9_.:-]{1,128}$/.test(failure.issue ?? '')) throw new Error(`${label} issue identity is invalid`);
     if (failure?.status !== 'fail' || failure?.plan_hash !== plan.hash
       || failure?.plan_revision !== plan.revision || failure?.wave_id !== waveId) {
       throw new Error(`${label} plan or wave binding is invalid`);
@@ -906,6 +918,7 @@ function sameReviewEvidence(evidence, receipt, plan, waveId) {
     && evidence?.plan_hash === plan.hash
     && evidence?.plan_revision === plan.revision
     && evidence?.wave_id === waveId
+    && evidence?.issue === receipt?.issue
     && evidence?.recorded_at === receipt?.recorded_at;
 }
 
@@ -1325,6 +1338,8 @@ function blockedDependencies(changeDir, plan, wave) {
 function validateStructure(plan) {
   const failures = [];
   if (!isObject(plan)) return ['execution plan must be an object'];
+  if (plan.schema_version !== undefined && plan.schema_version !== 2) failures.push('unsupported execution plan schema');
+  if (plan.schema_version === 2 && plan.source !== 'approved-plan') failures.push('compact plan requires recorded approval');
   if (plan.review_policy !== undefined && !['final', 'wave'].includes(plan.review_policy)) failures.push('invalid review policy');
   if (plan.review_policy === 'final' && plan.waves?.some(wave => wave.id === 'final')) failures.push('final is reserved for final review');
   if (!Number.isInteger(plan.revision) || plan.revision < 1) failures.push('execution plan revision is invalid');
@@ -1479,6 +1494,7 @@ function stableJson(value, seen = new WeakSet()) {
 }
 
 function writeExecutionPlanSummary(changeDir, plan) {
+  if (plan.schema_version === 2) return; // The plan is authoritative; do not duplicate its fields in state.
   const statePath = join(changeDir, '.spec-superflow.yaml');
   const state = readState(changeDir);
   const original = existsSync(statePath)

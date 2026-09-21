@@ -23,6 +23,7 @@ export function run(args, io = { stdout: process.stdout, stderr: process.stderr 
       head: { type: 'string' },
       report: { type: 'string' },
       verdict: { type: 'string' },
+      issue: { type: 'string' },
       decision: { type: 'string' },
       json: { type: 'boolean', default: false },
       help: { type: 'boolean', default: false },
@@ -170,6 +171,7 @@ function recordAndPrintReview(changeDir, values, io) {
   if (!['pass', 'fail'].includes(values.verdict)) throw new Error("--verdict must be 'pass' or 'fail'");
   const receipt = recordReview(changeDir, values.wave[0], {
     status: values.verdict,
+    issue: values.issue,
     base: values.base,
     head: values.head,
     report: values.report,
@@ -251,7 +253,7 @@ function printHelp(io) {
   ssf execution plan <dir> --mode <mode> [--review-policy final|wave] --confirm --reason <text> --wave <id>:<strategy>:<task,...>[:<depends-on,...>] [--acknowledge-recommendation]
   ssf execution show <dir> [--json]
   ssf execution revise <dir> --mode <mode> [--review-policy final|wave] --confirm --reason <text> --wave <id>:<strategy>:<task,...>[:<depends-on,...>] [--acknowledge-recommendation]
-  ssf execution review <dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict pass|fail
+  ssf execution review <dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict pass|fail [--issue <finding-id>]
   ssf execution adjudicate <dir> --wave <id> --decision allow-review --confirm --reason <text>
   ssf execution resync <dir> --confirm --reason <text>\n`);
 }

@@ -1,4 +1,6 @@
-# 执行合同
+# 执行合同（Legacy）
+
+仅供已有 legacy 任务使用。新 planned 任务以 proposal.md + tasks.md 为源，由 workflow start 生成执行记录，不创建此文件。
 
 ## Intent Lock
 

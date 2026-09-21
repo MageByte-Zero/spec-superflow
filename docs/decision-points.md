@@ -1,5 +1,10 @@
 # Decision Points Protocol
 
+新任务走紧凑流程：draft（尚未批准的 proposal/tasks）→ executing → closing，abandoned 为取消。直接请求从 executing 开始。普通调试和验证是执行活动，不单独扭转状态。`workflow start` 记录一次具体计划批准并生成计划；`workflow complete` 验证交付。planned 的权威执行记录是 schema_version 2 plan，派生状态摘要不构成门禁；不要求 execution-contract、推荐凭据或 DP-0..DP-4。用户可明确选择 accepted-risk 结束，不能伪造测试通过，且不自动物理集成。
+
+**下文保留旧八状态和 DP 协议，仅供既有 legacy 任务恢复。不要为新任务重走这些步骤。**
+
+
 本文档集中定义了 spec-superflow 工作流中所有需要用户明确确认的决策点。每个决策点（Decision Point）都是工作流中的关键门禁，确保用户在自动化流程中始终保持最终决策权。决策点是授权与证据记录，不等于新的对话轮次。先核对现有用户授权与记录：同一范围、同一工件、同一决定已获批准时直接继续，不再次询问。仅缺少实质决定或发生范围、行为、权限、外部副作用变化时暂停；可合并展示的待决事项用一次具体问题处理。不得把尚未展示的契约或未知行为视为已获批准。
 
 ## DP-0: 设计前确认（User Confirmation Gate）

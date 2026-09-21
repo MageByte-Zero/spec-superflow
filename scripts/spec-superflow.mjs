@@ -143,6 +143,8 @@ Examples:
   ssf state init changes/my-change/
   ssf state check changes/my-change/
   ssf state transition changes/my-change/ approved-for-build
+  ssf workflow start <dir> --path direct|planned   Start from request or one approved plan
+  ssf workflow complete <dir> --verification-command <command>   Verify and deliver
   ssf workflow recommend changes/fix-typo --task-count 1 --file-count 1 --config-doc-only no --schema-api-change no --new-module no --behavioral-constraint-change no --cross-module-change no --uncertainty low --request-kind incident
   ssf workflow accept changes/fix-typo --source direct-request --verification bounded
   ssf state get changes/my-change/ batches_completed
