@@ -106,7 +106,9 @@ test('recovery uses the recorded worktree instead of the stale source change', t
   writeIsolationContext(f.dir, { change_name: 'demo', change_relative_path: 'changes/demo', target_root: f.root,
     target_branch: 'main', isolation_root: wt, isolation_branch: 'feature', kind: 'worktree', setup_status: 'ready', finish_status: 'pending' });
   const target = resolveChangeTarget(f.dir);
-  assert.equal(fs.realpathSync(target.path), fs.realpathSync(change));
+  // Windows runners expose TEMP through an 8.3 path while Git returns the long
+  // form. Native realpath makes both sides use the same filesystem identity.
+  assert.equal(fs.realpathSync.native(target.path), fs.realpathSync.native(change));
   assert.equal(target.state, 'debugging');
   fs.rmSync(change, { recursive: true });
   assert.throws(() => resolveChangeTarget(f.dir), /isolation|worktree/i);
