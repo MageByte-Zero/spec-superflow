@@ -960,5 +960,3 @@ Execution efficiency: Native = `inline`, default review policy `final`; SDD = op
 ### Recovery and execution cost boundaries
 
 Default isolation uses a feature branch in the current checkout; worktrees require explicit `--worktree`. Native execution reuses unchanged approvals and requires explicit authorization for delegation. Final reviews cover the full change through repairs. Unfinished physical finish remains recoverable and revalidates once per attempt.
-
-See [root causes and recovery boundaries](docs/workflow-efficiency-root-causes.md).
