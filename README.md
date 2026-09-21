@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="#快速开始">快速开始</a> · <a href="#两个执行路径">执行路径</a> · <a href="#9-个-skills">Skills</a> · <a href="#安装">安装</a> · <a href="#命令">命令</a> · <a href="docs/README_en.md">English</a>
+  <a href="#快速开始">快速开始</a> · <a href="#两个执行路径">执行路径</a> · <a href="#9-个-skills">Skills</a> · <a href="#安装">安装</a> · <a href="#命令">命令</a> · <a href="#关注码哥跳动">公众号</a> · <a href="docs/README_en.md">English</a>
 </p>
 
 ---
@@ -232,6 +232,14 @@ gemini extensions install https://github.com/MageByte-Zero/spec-superflow
 - **按需加载**：普通会话不应被 SessionStart 或全局规则强制注入完整工作流。
 
 项目借鉴 [OpenSpec](https://github.com/Fission-AI/OpenSpec) 的规格组织与 [Superpowers](https://github.com/obra/superpowers) 的 TDD、调试和审查纪律，但运行时不依赖二者。
+
+## 关注「码哥跳动」
+
+<p align="center">
+  <img src="assets/magebyte-wechat.jpg" alt="码哥跳动微信公众号二维码" width="220">
+</p>
+
+<p align="center">扫码关注公众号「码哥跳动」，获取 AI 编程工作流、工程实践和 spec-superflow 项目更新。</p>
 
 ## 开发
 
