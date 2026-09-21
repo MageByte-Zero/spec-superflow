@@ -7,6 +7,10 @@ description: Use when encountering any bug, test failure, or unexpected behavior
 
 **Core principle:** Find root cause before attempting fixes. Symptom fixes are failure.
 
+## New direct/planned changes
+
+Investigate in executing without a phase transition or a separate debug ledger: reproduce, trace the root cause, make one focused repair and verify. Keep useful failure evidence in the existing progress entry. Three failures for the same unresolved issue warrant a decision; unrelated findings do not accumulate a shared budget. No task book or subagent is required. The detailed legacy protocol below is for an existing debugging state or an investigation that needs it.
+
 ## The Iron Law
 
 No fixes without root cause investigation first. If you haven't completed Phase 1, you cannot propose fixes.
@@ -99,36 +103,3 @@ If truly environmental/timing-dependent/external: document what you investigated
 - **Parse failures**: Report raw output, ask for clarification — don't guess
 - **Missing files**: Escalate immediately — not a normal debugging scenario
 - **User interruption**: Re-read investigation report on resume, continue from last completed phase
-
-## Standard User-Facing Handoff
-
-End every user-facing phase report with this concise handoff. Only a successfully
-persisted `closing` state and `abandoned` are terminal.
-
-### Normal report
-
-- Current stage: `<detected workflow stage>`.
-- Completed / blocker: `<completed work>`.
-- Next stage: `<next workflow stage or skill>`.
-- Entry condition: `<what must be true to enter it>`.
-
-### Blocked report
-
-- Current stage: `<detected workflow stage>`.
-- Completed / blocker: `<blocking fact or missing evidence>`.
-- Next stage: `<stage that resumes after the blocker>`.
-- Entry condition: `<the approval, artifact, validation, or fix required>`.
-
-### Approval-wait report
-
-- Current stage: `<detected workflow stage>`.
-- Completed / blocker: `<work ready for the named decision>`.
-- Next stage: `<stage that follows approval>`.
-- Entry condition: `<explicit user approval or recorded decision>`.
-
-### Successful terminal report
-
-- Current stage: successfully persisted `closing` or `abandoned`.
-- Completed / blocker: `<persisted terminal outcome>`.
-- Next stage: `none`.
-- Entry condition: no further transition exists.

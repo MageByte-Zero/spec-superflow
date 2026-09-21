@@ -55,6 +55,8 @@ export async function runRecoveryCommand(command, args, { requireTarget = false 
       change: { ...summary.change, ...selection },
       state: summary.state,
       workflow: summary.workflow,
+      path: summary.path,
+      outcome: summary.outcome,
       terminal: summary.terminal,
       checkpoint: summary.checkpoint,
       handoffs: summary.handoffs,
@@ -63,6 +65,7 @@ export async function runRecoveryCommand(command, args, { requireTarget = false 
       next_action: summary.next_action,
       continuation: summary.continuation,
     });
+    if (!summary.ok) process.exitCode = 1;
   } catch (error) {
     printRecoveryError(command, error, values.json);
   }
@@ -74,6 +77,13 @@ function printRecoverySummary(json, summary) {
     return;
   }
 
+  if (summary.path) {
+    console.log([`Change: ${summary.change.name} (${summary.path})`, `Path: ${summary.change.path}`,
+      `State: ${summary.state}${summary.outcome ? ` (${summary.outcome})` : ''}`,
+      `Next: ${summary.next_action.reason}`,
+      ...(summary.blockers.length ? [`Blocked: ${summary.blockers.map(b => b.message).join('; ')}`] : [])].join('\n'));
+    return;
+  }
   const checkpoint = summary.checkpoint
     ? `${summary.checkpoint.status} (${summary.checkpoint.record.task_id})`
     : 'none';

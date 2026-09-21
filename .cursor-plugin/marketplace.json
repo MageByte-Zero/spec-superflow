@@ -4,14 +4,14 @@
     "name": "MageByte"
   },
   "metadata": {
-    "description": "Spec-first workflow plugin marketplace for Cursor",
-    "version": "1.2.0"
+    "description": "Lean spec workflow plugin marketplace for Cursor",
+    "version": "2.0.0"
   },
   "plugins": [
     {
       "name": "spec-superflow",
       "source": ".",
-      "description": "Spec-first workflow: integrates OpenSpec planning engine + Superpowers execution discipline with 9 collaborative skills."
+      "description": "Direct or planned execution with evidence-based completion and optional delegation."
     }
   ]
 }

@@ -13,4 +13,4 @@
 ## 实施备注（仅在必要时）
 
 - 记录跨批次接口、迁移风险或不可从任务名称推断的约束。测试的 RED/GREEN 证据、review
-  回执与精确调度细节属于 execution contract / task brief，不重复写在这里。
+  回执由 CLI 记录，不重复写在这里；execution contract / task brief 仅用于 legacy 或显式委派。

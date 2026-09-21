@@ -6,12 +6,32 @@ The format loosely follows Keep a Changelog.
 
 ## [Unreleased]
 
+
+## [2.0.0] - 2026-09-21
+
+### Changed
+
+- Replace the five-path intake for new changes with `workflow start --path direct|planned` and one `workflow complete` command.
+- Make `proposal.md` and `tasks.md` the default planned artifacts; specs and design are optional, and no handwritten execution contract or recommendation receipt is required.
+- Default planned execution to the current session with one final review. SDD, subagents, wave reviews, and worktrees require explicit selection.
+- Make schema-2 execution plans authoritative instead of allowing duplicated state summaries to veto them. Legacy plans retain their existing recovery obligations.
+- Default Git isolation to a feature branch in the current checkout; `--worktree` is opt-in.
+- Rewrite the Chinese and English homepages around the v2 flow and move legacy commands out of the primary path.
+
+### Added
+
+- Add explicit `accepted-risk` completion, preserving failed verification and preventing automatic integration.
+- Add stable issue identities for failed compact reviews; only three unresolved failures of the same issue require adjudication.
+- Add direct-to-planned scope expansion without restarting the state machine.
+
 ### Fixed
 
-- **Windows-compatible decision-point timestamps (#117)**: `ssf state set <change-dir> dp_N_timestamp now` now generates the UTC ISO timestamp inside the Node.js CLI, and all skills use that cross-platform form instead of POSIX `date` command substitution.
-- **Planless debugging for lightweight paths (#117)**: Quick, Tweak, lightweight, and direct Hotfix may record evidence-backed debug attempts and DP-5 escalation without an execution plan when their workflow receipt is valid; the ledger is sealed to the receipt's stable authorization identity, while Full and legacy Hotfix retain the current-plan requirement.
-- **Accurate Codex hook guidance (#117)**: the platform matrix and installation docs now match the Codex manifest's explicit `hooks: {}` suppression and tell users to invoke `workflow-start` in new sessions.
-- **Current Codex release pin (#117)**: direct marketplace examples now use v1.2.0, and `ssf version` keeps those `--ref` pins synchronized during future releases.
+- Keep ordinary diagnosis in execution and preserve approval hashes instead of bouncing between debugging and planning states.
+- Bind final review to the complete isolated Git range after repairs; reject empty ranges, truncated `HEAD~1` reviews, stale snapshots, and mismatched checkout recovery.
+- Revalidate mutable finish inputs on retry, preserve isolation after failed verification, and avoid automatic force cleanup.
+- Recover missing direct-path evidence without silently replacing valid authorization or review history.
+- Remove unsolicited OpenCode bootstrap and duplicate approval or delegation instructions; ordinary sessions no longer receive the full workflow through Codex SessionStart.
+- Fix Windows-compatible decision-point timestamps, planless legacy fast-path debugging, and current Codex release pins.
 
 ## [1.2.0] - 2026-09-01
 

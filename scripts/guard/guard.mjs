@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // scripts/guard/guard.mjs — dimension-based phase transition guard
 // Usage: node guard.mjs check <change-dir> <from-state> <to-state> [--workflow <mode>] [--json]
+import { readIsolationContext, resolveIsolationChange } from '../lib/isolation-context.mjs';
+import { workflowPolicy, artifactPolicy } from '../lib/workflow-policy.mjs';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
@@ -27,7 +29,7 @@ import {
 // Transition matrix: <from>:<to> → required check dimensions
 const TRANSITION_CHECKS = {
   // Forward transitions
-  'exploring:specifying':           [],
+  'exploring:specifying':           ['planning-config'],
   'specifying:bridging':            ['artifacts-exist', 'schema-valid'],
   'bridging:approved-for-build':    ['artifacts-exist', 'schema-valid', 'contract-fresh', 'dp-gate-passed'],
   'approved-for-build:executing':   ['artifacts-exist', 'contract-fresh', 'dp-gate-passed', 'execution-plan-ready', 'tasks-checkbox-format'],
@@ -36,6 +38,9 @@ const TRANSITION_CHECKS = {
   // Debugging side-path
   'executing:debugging':            [],
   'debugging:executing':            ['contract-fresh', 'execution-plan-ready'],
+  'debugging:specifying':           [],
+  'debugging:bridging':             [],
+  'closing:debugging':              ['finish-verification-pending'],
 
   // Fast-path transitions are workflow-gated; full workflow must reject them explicitly.
   'exploring:bridging':             [],
@@ -83,6 +88,7 @@ const WORKFLOW_TRANSITION_CHECKS = {
     'exploring:approved-for-build': [],
     'approved-for-build:executing': [],
     'executing:closing': ['direct-test-result'],
+    'executing:debugging': [],
     'debugging:executing': [],
     // rewind/abandon（workflow-aware-guard B2）：纠正路径与退出路径保留，维度为空。
     'specifying:approved-for-build': [],
@@ -114,6 +120,7 @@ const DIRECT_SHORT_PATH_CHECKS = {
   'specifying:approved-for-build': [],
   'approved-for-build:executing': ['direct-short-path'],
   'executing:closing': ['direct-short-path', 'direct-test-result'],
+  'executing:debugging': [],
   'debugging:executing': ['direct-short-path'],
   // rewind/abandon（workflow-aware-guard B2）：行为与现状一致（放行）。
   'specifying:exploring': [],
@@ -312,8 +319,8 @@ export function runGuard(args, {
   }
 
   const key = `${fromState}:${toState}`;
-  const directShortPath = isDirectShortPath(readWorkflowSelection(changeDir).record, readState(changeDir));
-  const dimensions = resolveDimensions(key, workflow, directShortPath);
+  const policy = workflowPolicy(changeDir);
+  const dimensions = resolveDimensions(key, workflow, policy.directShortPath || (workflow === 'hotfix' && policy.missingDirectReceipt));
 
   if (!dimensions) {
     const valid = Object.keys(TRANSITION_CHECKS).join(', ');
@@ -361,6 +368,15 @@ export function runGuard(args, {
   }
 
   const CHECK_RUNNERS = {
+    'finish-verification-pending': dir => {
+      try {
+        const context = readIsolationContext(dir);
+        if (context?.finish_status !== 'verify-pending') return { pass: false, failures: ['Only unfinished physical verification may reopen closing'] };
+        resolveIsolationChange(dir);
+        return { pass: true, failures: [] };
+      } catch (error) { return { pass: false, failures: [error.message] }; }
+    },
+    'planning-config': dir => { const failures = artifactPolicy(dir).failures; return { pass: !failures.length, failures }; },
     'artifacts-exist': (dir) => checkArtifactsExist(dir),
     'schema-valid': (dir) => checkSchemaValid(dir),
     'contract-fresh': (dir) => checkContractFresh(dir),

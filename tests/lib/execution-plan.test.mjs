@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   adjudicateWave, createGitRangeValidator, createPlan as createRawPlan, describeWaves, readCurrentReview, readPlan,
-  recordReview, resyncPlan, validatePlan, writePlan,
+  recordReview, resyncPlan, validatePlan, writePlan, writePlanRevision,
 } from '../../scripts/lib/execution-plan.mjs';
 import { createRecommendationReceipt, recommendExecutionModes, validateRecommendationReceiptStructure } from '../../scripts/lib/execution-recommendation.mjs';
 import { readState } from '../../scripts/lib/state-loader.mjs';
@@ -15,6 +15,7 @@ import { getCheckpoint, getPlanScopedPaths, listCheckpoints, saveCheckpoint } fr
 import * as sddOverlayModule from '../../scripts/lib/sdd-overlay.mjs';
 import { createGitSeedFixture } from '../helpers/git-seed-fixture.mjs';
 import { canCreateSymlink } from '../helpers/symlink-support.mjs';
+import { writeIsolationContext } from '../../scripts/lib/isolation-context.mjs';
 import { computeArtifactsHash } from '../../scripts/lib/hash.mjs';
 import { hashReceipt, readRecommendationReceipt, writeRecommendationReceipt } from '../../scripts/lib/execution-recommendation.mjs';
 
@@ -49,6 +50,7 @@ beforeEach(() => {
   // （protected），既有 review 用例直接使用该分支上的 head；建立一个指向
   // head 的非 protected 隔离分支，使分支校验放行，保持既有行为不变。
   runGit(changeDir, ['branch', 'test-isolation', fixture.head]);
+  writeIsolationContext(changeDir, { change_name: changeDir.split(/[\\/]/).at(-1), target_branch: 'master', review_base: fixture.base });
 });
 
 afterEach(() => {
@@ -169,7 +171,7 @@ describe('execution plan data contract', () => {
 
     assert.deepEqual(result.available_modes, ['inline', 'batch-inline', 'sdd']);
     assert.equal(result.recommendation.mode, 'inline');
-    assert.match(result.recommendation.reasons.join('\n'), /single sequential task/i);
+    assert.match(result.recommendation.reasons.join('\n'), /Native inline/i);
   });
 
   it('recommends batch-inline for a bounded sequential batch', () => {
@@ -180,8 +182,8 @@ describe('execution plan data contract', () => {
       waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1', '1.2', '1.3'], depends_on: [] }],
     });
 
-    assert.equal(result.recommendation.mode, 'batch-inline');
-    assert.match(result.recommendation.reasons.join('\n'), /within.*threshold/i);
+    assert.equal(result.recommendation.mode, 'inline');
+    assert.match(result.recommendation.reasons.join('\n'), /task and wave counts/i);
   });
 
   it('recommends SDD for independent parallel work', () => {
@@ -192,8 +194,8 @@ describe('execution plan data contract', () => {
       waves: [{ id: 'foundation', strategy: 'parallel', tasks: ['1.1', '1.2'], depends_on: [] }],
     });
 
-    assert.equal(result.recommendation.mode, 'sdd');
-    assert.match(result.recommendation.reasons.join('\n'), /parallel/i);
+    assert.equal(result.recommendation.mode, 'inline');
+    assert.match(result.recommendation.reasons.join('\n'), /independently scoped/i);
   });
 
   it('limits tweak recommendations to direct inline execution', () => {
@@ -518,8 +520,8 @@ describe('execution plan data contract', () => {
       .sort()
       .map(fileName => JSON.parse(readFileSync(join(reviewsDir, fileName), 'utf8')));
     assert.equal(receipts.length, 2);
-    assert.ok(receipts.some(receipt => receipt.report === join('.superpowers', 'sdd', 'reviews', 'percent.md')));
-    assert.ok(receipts.some(receipt => receipt.report === join('.superpowers', 'sdd', 'reviews', 'underscore.md')));
+    assert.ok(receipts.some(receipt => readFileSync(join(changeDir, receipt.report), 'utf8') === 'Percent wave passed.\n'));
+    assert.ok(receipts.some(receipt => readFileSync(join(changeDir, receipt.report), 'utf8') === 'Underscore wave failed.\n'));
   });
 
   it('rejects missing, non-file, empty, and symbolic-link report evidence before writing a receipt', { skip: !canCreateSymlink() }, () => {
@@ -565,7 +567,8 @@ describe('execution plan data contract', () => {
       status: 'pass', base: gitRefs.base, head: gitRefs.head, report: reportPath,
     });
 
-    assert.equal(receipt.report, join('.superpowers', 'sdd', 'reviews', 'audit.md'));
+    assert.notEqual(receipt.report, join('.superpowers', 'sdd', 'reviews', 'audit.md'));
+    assert.equal(readFileSync(join(changeDir, receipt.report), 'utf8'), readFileSync(reportPath, 'utf8'));
   });
 
   it('starts repair state from the first failed review and rejects a non-contiguous repair range', () => {
@@ -595,11 +598,12 @@ describe('execution plan data contract', () => {
       waves: [{ id: 'wave-1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }],
     });
     writePlan(changeDir, plan);
-    const reportPath = writeReviewReport('failed-evidence.md', 'Original failed review finding.\n');
-    recordReview(changeDir, 'wave-1', {
+    let reportPath = writeReviewReport('failed-evidence.md', 'Original failed review finding.\n');
+    const receipt = recordReview(changeDir, 'wave-1', {
       status: 'fail', base: gitRefs.base, head: gitRefs.head, report: reportPath,
     });
 
+    reportPath = join(changeDir, receipt.report);
     rmSync(reportPath);
     let wave = describeWaves(changeDir, plan)[0];
     assert.equal(wave.receipt, null);
@@ -719,7 +723,7 @@ describe('execution plan data contract', () => {
     assert.throws(() => recordReview(changeDir, 'wave-1', {
       status: 'pass', base: head, head,
       report: writeReviewReport('unauthorized-pass.md'),
-    }), /requires adjudication/i);
+    }), /requires adjudication|non-empty|must differ/i);
 
     adjudicateWave(changeDir, 'wave-1', {
       decision: 'allow-review', confirmed: true,
@@ -1226,7 +1230,7 @@ describe('execution plan resync (plan-resync R1)', () => {
     assert.equal(readFileSync(join(changeDir, '.superpowers', 'sdd', 'execution-plan.json'), 'utf8'), planBefore, 'no-op rejection must not write');
   });
 
-  it('rejects resync while any wave has an unresolved fail receipt and lists the wave id', () => {
+  it('preserves open repair chains and dependency blockers across resync', () => {
     const plan = createPlan(changeDir, {
       mode: 'sdd', source: 'default', rationale: 'fail receipts block resync',
       waves: [
@@ -1238,19 +1242,11 @@ describe('execution plan resync (plan-resync R1)', () => {
     recordReview(changeDir, 'wave-1', {
       status: 'fail', base: gitRefs.base, head: gitRefs.head, report: writeReviewReport('resync-fail.md'),
     });
-    writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 Changed first task\n- [ ] 1.2 Second task\n');
+    writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [ ] 1.1 First task\n- [ ] 1.2 Second task\n\n');
 
-    const planPath = join(changeDir, '.superpowers', 'sdd', 'execution-plan.json');
-    const planBefore = readFileSync(planPath, 'utf8');
-    const reviewsDirBefore = readdirSync(join(changeDir, '.superpowers', 'sdd', 'reviews')).sort();
-
-    assert.throws(() => resyncPlan(changeDir, { reason: 'attempted while repair chain open' }), /wave-1/);
-    assert.equal(readFileSync(planPath, 'utf8'), planBefore, 'fail-receipt rejection must not modify the execution plan');
-    assert.deepEqual(
-      readdirSync(join(changeDir, '.superpowers', 'sdd', 'reviews')).sort(),
-      reviewsDirBefore,
-      'fail-receipt rejection must not write any receipt file',
-    );
+    const refreshed = resyncPlan(changeDir, { reason: 'nonsemantic correction confirmed' });
+    assert.equal(describeWaves(changeDir, refreshed)[0].repair.failure_count, 1);
+    assert.equal(describeWaves(changeDir, refreshed)[1].eligible, false);
   });
 
   // —— P0/P3（review-findings-fix R1/R4）测试辅助 ——
@@ -1679,5 +1675,100 @@ describe('execution review branch protection (worktree-lifecycle R4)', () => {
 
     assert.equal(receipt.status, 'pass');
     assert.equal(receipt.head, isolatedHead);
+  });
+});
+
+describe('efficiency evidence regressions', () => {
+  it('preserves failed evidence when the caller reuses its report filename and resyncs', () => {
+    const plan = createPlan(changeDir, { mode: 'inline', source: 'user-confirmed', rationale: 'native repair', waves: [{ id: 'w1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }] });
+    writePlan(changeDir, plan);
+    const report = writeReviewReport('reused.md', 'Important: fix behavior\n');
+    const first = recordReview(changeDir, 'w1', { status: 'fail', ...gitRefs, report });
+    writeFileSync(report, 'Re-review passes\n');
+    assert.equal(readFileSync(join(changeDir, first.report), 'utf8'), 'Important: fix behavior\n');
+    writeFileSync(join(changeDir, 'tasks.md'), readFileSync(join(changeDir, 'tasks.md'), 'utf8') + '\n');
+    const updated = resyncPlan(changeDir, { reason: 'trailing blank line only' });
+    assert.equal(describeWaves(changeDir, updated)[0].repair.failure_count, 1);
+    recordReview(changeDir, 'w1', { status: 'pass', ...gitRefs, report });
+    assert.equal(describeWaves(changeDir, updated)[0].receipt.status, 'pass');
+  });
+});
+
+describe('Native final review policy', () => {
+  it('executes sequential waves without intermediate review but still requires final evidence', () => {
+    const plan = createPlan(changeDir, { mode: 'inline', reviewPolicy: 'final', source: 'user-confirmed', rationale: 'Native', waves: [
+      { id: 'w1', strategy: 'serial', tasks: ['1.1'], depends_on: [] },
+      { id: 'w2', strategy: 'serial', tasks: ['1.2'], depends_on: ['w1'] },
+    ] });
+    writePlan(changeDir, plan);
+    assert.equal(plan.review_policy, 'final');
+    assert.equal(describeWaves(changeDir, plan)[1].eligible, false);
+    writeFileSync(join(changeDir, 'tasks.md'), '# Tasks\n\n- [x] 1.1 First task\n- [ ] 1.2 Second task\n');
+    assert.equal(describeWaves(changeDir, plan)[1].eligible, true);
+    assert.equal(readCurrentReview(changeDir, 'final', plan), null);
+  });
+});
+
+describe('revision evidence continuity', () => {
+  it('preserves an open failure chain across a Native mode revision', () => {
+    const waves = [{ id: 'w1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }];
+    const prior = createPlan(changeDir, { mode: 'sdd', source: 'user-confirmed', rationale: 'original', waves });
+    writePlan(changeDir, prior);
+    recordReview(changeDir, 'w1', { status: 'fail', ...gitRefs, report: writeReviewReport('revision-fail.md') });
+    const next = createPlan(changeDir, { mode: 'inline', source: 'user-confirmed-revision', rationale: 'Native mode only', waves, revision: prior.revision + 1 });
+    writePlanRevision(changeDir, next, prior);
+    assert.equal(validatePlan(changeDir, next).valid, true);
+    assert.equal(describeWaves(changeDir, next)[0].repair.failure_count, 1);
+    assert.equal(describeWaves(changeDir, next)[0].receipt.status, 'fail');
+    assert.equal(readCurrentReview(changeDir, 'w1', prior).status, 'fail');
+  });
+  it('preserves applicable passing evidence when only the execution mode changes', () => {
+    const waves = [{ id: 'w1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }];
+    const prior = createPlan(changeDir, { mode: 'sdd', source: 'user-confirmed', rationale: 'original', waves });
+    writePlan(changeDir, prior);
+    recordReview(changeDir, 'w1', { status: 'pass', ...gitRefs, report: writeReviewReport('revision-pass.md') });
+    const next = createPlan(changeDir, { mode: 'inline', source: 'user-confirmed-revision', rationale: 'Native mode only', waves, revision: prior.revision + 1 });
+    writePlanRevision(changeDir, next, prior);
+    assert.equal(readCurrentReview(changeDir, 'w1', next).status, 'pass');
+  });
+});
+
+import { checkExecutionReviewsPassed } from '../../scripts/guard/checks/execution-reviews-passed.mjs';
+describe('final review binds the delivered code', () => {
+  it('never accepts a zero-diff final review receipt', () => {
+    const plan = createPlan(changeDir, { mode: 'inline', reviewPolicy: 'final', source: 'user-confirmed', rationale: 'review real changes', waves: [{ id: 'w1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }] });
+    writePlan(changeDir, plan);
+    assert.throws(() => recordReview(changeDir, 'final', {
+      status: 'pass', base: gitRefs.head, head: gitRefs.head, report: writeReviewReport('empty-final.md'),
+    }), /non-empty|must differ/i);
+    assert.equal(checkExecutionReviewsPassed(changeDir).pass, false);
+  });
+
+  it('rejects uncommitted additions and invalidates a final pass after HEAD changes', () => {
+    const plan = createPlan(changeDir, { mode: 'inline', reviewPolicy: 'final', source: 'user-confirmed', rationale: 'final code', waves: [{ id: 'w1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }] });
+    writePlan(changeDir, plan);
+    recordReview(changeDir, 'final', { status: 'pass', ...gitRefs, report: writeReviewReport('final-current.md') });
+    assert.deepEqual(checkExecutionReviewsPassed(changeDir), { pass: true, failures: [] });
+    writeFileSync(join(changeDir, 'unreviewed-code.mjs'), 'export const behavior = 2;\n');
+    assert.equal(checkExecutionReviewsPassed(changeDir).pass, false);
+    runGit(changeDir, ['add', 'unreviewed-code.mjs']);
+    runGit(changeDir, ['commit', '-m', 'additional behavior']);
+    assert.equal(checkExecutionReviewsPassed(changeDir).pass, false);
+    assert.equal(readCurrentReview(changeDir, 'final', plan), null);
+  });
+});
+
+describe('resolved final review rounds', () => {
+  it('starts a new failure chain after a resolved review and later code changes', () => {
+    const plan = createPlan(changeDir, { mode: 'inline', reviewPolicy: 'final', source: 'user-confirmed', rationale: 'independent final rounds', waves: [{ id: 'w1', strategy: 'serial', tasks: ['1.1'], depends_on: [] }] });
+    writePlan(changeDir, plan);
+    recordReview(changeDir, 'final', { status: 'fail', ...gitRefs, report: writeReviewReport('round1-fail.md') });
+    const repaired = createRepairCommit('round1');
+    recordReview(changeDir, 'final', { status: 'pass', base: gitRefs.base, head: repaired, report: writeReviewReport('round1-pass.md') });
+    const changed = createRepairCommit('new-work');
+    recordReview(changeDir, 'final', { status: 'fail', base: gitRefs.base, head: changed, report: writeReviewReport('round2-fail.md') });
+    const fixed = createRepairCommit('round2');
+    recordReview(changeDir, 'final', { status: 'pass', base: gitRefs.base, head: fixed, report: writeReviewReport('round2-pass.md') });
+    assert.equal(readCurrentReview(changeDir, 'final', plan).status, 'pass');
   });
 });

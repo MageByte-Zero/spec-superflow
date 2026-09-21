@@ -5,8 +5,7 @@ Use this template when dispatching an implementer subagent.
 ```
 Subagent (general-purpose):
   description: "Implement Task N: [task name]"
-  model: [MODEL — REQUIRED: choose per build-executor Model Selection; an omitted
-         model silently inherits the session's most expensive one]
+  model: [MODEL — use configured profile when available; otherwise inherit host model]
   prompt: |
     You are implementing Task N: [task name]
 
@@ -68,7 +67,7 @@ Subagent (general-purpose):
     It's always OK to pause and clarify. Don't guess or make assumptions.
 
     While iterating, run the focused test for what you're changing; run the
-    full suite once before committing, not after every edit.
+    affected tests before committing; the controller runs required integration and final checks.
 
     ## Code Organization
 
@@ -175,7 +174,7 @@ Subagent (general-purpose):
 
 **Placeholders:**
 - `[task name]` — short name for the task
-- `[MODEL]` — REQUIRED: implementer model per build-executor Model Selection
+- `[MODEL]` — when configured: implementer model per build-executor Model Selection
 - `[BRIEF_FILE]` — REQUIRED: the task brief file (`scripts/task-brief PLAN N` prints the path)
 - `[directory]` — working directory for the implementation
 - `[REPORT_FILE]` — REQUIRED: the file path where the implementer writes its full report

@@ -1,6 +1,25 @@
 #!/usr/bin/env bash
-# v1.2.0: conditional injection — detects artifacts, injects workflow-start pointer
-msg="<EXTREMELY_IMPORTANT>\nYou have spec-superflow installed. Use /spec-superflow:workflow-start ONLY when you detect an active spec-superflow change in the workspace (look for \`.spec-superflow.yaml\`, \`proposal.md\`, \`execution-contract.md\`, or \`specs/\` directories), OR when the user explicitly invokes it by name. For ordinary coding tasks without spec-superflow artifacts, do NOT invoke workflow-start — just handle the request directly.\n</EXTREMELY_IMPORTANT>"
+# v2.0.0: conditional injection
+# Keep the installed workflow dormant unless its own state file is present.
+# Explicit user requests are handled by the installed skill catalog after the
+# session starts, so inactive sessions need no injected reminder at all.
+active_dir=""
+for candidate in \
+  "${SPEC_SUPERFLOW_CHANGE_DIR:-}" \
+  "${PWD:-}" \
+  "${CODEBUDDY_PROJECT_DIR:-}" \
+  "${CURSOR_PROJECT_DIR:-}" \
+  "${CLAUDE_PROJECT_DIR:-}"
+do
+  if [ -n "$candidate" ] && [ -f "$candidate/.spec-superflow.yaml" ]; then
+    active_dir="$candidate"
+    break
+  fi
+done
+
+[ -n "$active_dir" ] || exit 0
+
+msg="Active spec-superflow state detected. Use workflow-start only when asked to continue this change."
 
 # Four platforms share the same message, only output format differs.
 # CodeBuddy Code CLI (detected via CODEBUDDY_PROJECT_DIR) loads hooks from

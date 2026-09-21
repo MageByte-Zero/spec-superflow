@@ -2,6 +2,10 @@
 
 This file provides guidance to Codex (codex.ai) when working with code in this repository.
 
+## Current default (new changes)
+
+Use only when the user opts into spec-superflow. New tasks have direct and planned entry points (`workflow start`), not a five-path questionnaire. Planned work uses proposal.md + tasks.md and one concrete approval; specs/design are optional. No handwritten execution-contract or recommendation receipt is required. Native/final is default, delegation and worktrees are explicit. Ordinary debugging stays in executing. `workflow complete` runs final checks and records verified or explicit accepted-risk delivery; failure is never rewritten as pass. The eight-state and DP descriptions below are legacy compatibility, not additional steps for new changes. User instructions always take precedence.
+
 ## What This Is
 
 A self-contained Codex plugin that integrates OpenSpec-style planning + Superpowers execution discipline. Zero runtime dependencies, supports 9 installation surfaces (Claude Code, Cursor, OpenAI Codex CLI, OpenAI Codex App, GitHub Copilot CLI, Gemini CLI, OpenCode, WorkBuddy, Trae).
@@ -92,7 +96,7 @@ exploring → specifying → bridging → approved-for-build → executing → c
 
 ### Hooks (`hooks/`)
 
-- `hooks/session-start` — Detects platform and injects `workflow-start/SKILL.md` as session context.
+- `hooks/session-start` — Emits a short resume pointer only when the current project/change directory contains `.spec-superflow.yaml`; inactive sessions receive no injected context.
 - `hooks/hooks.json` — Claude Code hook config (SessionStart).
 - `hooks/hooks-cursor.json` — Cursor equivalent.
 

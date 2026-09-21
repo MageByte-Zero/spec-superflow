@@ -1,6 +1,6 @@
 {
   "name": "spec-superflow",
-  "description": "Spec-first workflow: integrates OpenSpec planning engine + Superpowers execution discipline. 9 collaborative skills with embedded TDD, SDD, code review, debugging, and delta spec sync.",
+  "description": "Lean spec workflow with direct or planned execution and evidence-based completion.",
   "owner": {
     "name": "MageByte",
     "url": "https://github.com/MageByte-Zero"
@@ -8,8 +8,8 @@
   "plugins": [
     {
       "name": "spec-superflow",
-      "description": "8-state workflow engine with 9 collaborative skills. Bridges planning and execution via execution-contract.md. Embedded schema validation, TDD, SDD, code review, systematic debugging, and delta spec sync.",
-      "version": "1.2.0",
+      "description": "Two-path workflow with optional planning, final review, recoverable state, and delta spec sync.",
+      "version": "2.0.0",
       "source": "./",
       "author": {
         "name": "MageByte",

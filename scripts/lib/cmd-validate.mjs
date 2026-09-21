@@ -54,7 +54,7 @@ export async function run(args) {
     process.exit(2);
   }
 
-  const config = loadConfig(process.cwd());
+  const config = loadConfig(changeDir);
   const changeName = basename(changeDir);
   const projectRoot = projectRootForStandardChange(changeDir);
   const validator = await getValidator();
@@ -74,7 +74,7 @@ export async function run(args) {
   }
 
   // Validate specs/*/spec.md
-  const specLayout = validateSpecPathLayout(changeDir, { requireSpecs: true });
+  const specLayout = validateSpecPathLayout(changeDir, { requireSpecs: !config.artifacts?.skip?.includes('specs') });
   for (const failure of specLayout.failures) {
     printReport('specs/', {
       valid: false,

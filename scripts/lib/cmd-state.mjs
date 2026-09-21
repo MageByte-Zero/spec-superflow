@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readState, writeState, updateField, rebuildState } from './state-loader.mjs';
+import { readState, writeState, updateField, rebuildState, SETTABLE_FIELDS } from './state-loader.mjs';
 import { computeArtifactsHash, computeContractHash } from './hash.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -14,15 +14,7 @@ const VALID_STATES = [
   'executing', 'debugging', 'closing', 'abandoned',
 ];
 
-const SETTABLE_FIELDS = [
-  'workflow', 'test_result', 'batches_completed', 'spec_merged',
-  'dp_0_decisions', 'dp_0_confirmed', 'dp_0_timestamp', 'dp_0_result',
-  'dp_1_result', 'dp_1_timestamp', 'dp_1_decisions', 'dp_1_confirmed',
-  'dp_2_result', 'dp_2_timestamp', 'dp_2_decisions', 'dp_2_confirmed',
-  'dp_3_result', 'dp_3_timestamp', 'dp_3_decisions', 'dp_3_confirmed',
-  'dp_6_result', 'dp_6_timestamp', 'dp_6_decisions', 'dp_6_confirmed',
-  'dp_7_result', 'dp_7_timestamp', 'dp_7_decisions', 'dp_7_confirmed',
-];
+
 
 export async function run(args) {
   const { positionals, values } = parseArgs({
@@ -85,12 +77,15 @@ export async function run(args) {
     case 'check': {
       const state = readState(changeDir);
       const currentHash = computeArtifactsHash(changeDir);
-      const consistent = state.artifacts_hash === currentHash;
+      const currentContractHash = computeContractHash(changeDir);
+      const consistent = state.artifacts_hash === currentHash && state.contract_hash === currentContractHash;
       if (values.json) {
         console.log(JSON.stringify({
           consistent,
           stored_hash: state.artifacts_hash,
           current_hash: currentHash,
+          stored_contract_hash: state.contract_hash,
+          current_contract_hash: currentContractHash,
           state: state.state,
         }));
       } else {
@@ -170,8 +165,13 @@ export async function run(args) {
       }
 
       state.state = toState;
-      state.artifacts_hash = computeArtifactsHash(changeDir);
-      state.contract_hash = computeContractHash(changeDir);
+      // Diagnostic and rewind transitions are not artifact approvals. Preserve
+      // the approved snapshot so drift cannot be blessed by entering debugging.
+      if (['exploring', 'specifying'].includes(fromState)) {
+        state.artifacts_hash = computeArtifactsHash(changeDir);
+        state.contract_hash = computeContractHash(changeDir);
+      }
+      if (toState === 'debugging') { state.test_result = null; state.dp_6_result = null; }
       state.last_transition_from = fromState;
       state.last_transition_to = toState;
       state.last_transition = new Date().toISOString();

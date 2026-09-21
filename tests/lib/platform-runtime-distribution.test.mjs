@@ -31,12 +31,12 @@ function skill(name) {
 }
 
 describe('canonical skill runtime protocol', () => {
-  it('publishes four-mode direct-path rules in generated Cursor and ZCODE assets', () => {
+  it('generates Cursor and ZCODE phase guards from the shared opt-in policy', () => {
     for (const path of ['scripts/install-cursor.mjs', 'scripts/install-zcode.mjs']) {
       const content = readFileSync(join(ROOT, path), 'utf8');
-      assert.match(content, /Quick、direct Hotfix、tweak/);
-      assert.match(content, /Full 或 legacy Hotfix/);
-      assert.match(content, /test_result: pass/);
+      assert.match(content, /phase-guard-content\.mjs/);
+      assert.match(content, /createPhaseGuardContent/);
+      assert.doesNotMatch(content, /所有工作必须/);
     }
   });
 
@@ -66,7 +66,7 @@ describe('canonical skill runtime protocol', () => {
     const content = skill('build-executor');
 
     assert.match(content, /runtime asset read skills\/build-executor\/implementer-prompt\.md/);
-    assert.match(content, /runtime asset read skills\/build-executor\/task-reviewer-prompt\.md/);
+    assert.match(content, /runtime asset read skills\/code-reviewer\/code-reviewer-prompt\.md/);
   });
 
   it('keeps the source command unversioned so npm link resolves the live checkout', () => {
@@ -92,9 +92,11 @@ describe('local runtime deployment', () => {
         readFileSync(join(sharedTarget, '.clinerules', 'phase-guard.md'), 'utf8'),
       ];
       for (const guard of guards) {
-        assert.match(guard, /Full 或 legacy Hotfix/);
-        assert.match(guard, /Quick、direct Hotfix、tweak/);
-        assert.match(guard, /test_result: pass/);
+        assert.match(guard, /opt-in/i);
+        assert.match(guard, /explicitly requests spec-superflow/);
+        assert.match(guard, /\.spec-superflow\.yaml/);
+        assert.match(guard, /not activation signals/i);
+        assert.doesNotMatch(guard, /所有工作必须/);
       }
     } finally {
       rmSync(cursorTarget, { recursive: true, force: true });
@@ -174,7 +176,9 @@ describe('platform runtime inventory', () => {
 
 describe('runtime version synchronization', () => {
   it('does not version source runtime commands during a release dry-run', () => {
-    const output = execFileSync(process.execPath, [CLI, 'version', '2.0.0', '--dry-run'], {
+    const current = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
+    const nextMajor = `${Number(current.split('.')[0]) + 1}.0.0`;
+    const output = execFileSync(process.execPath, [CLI, 'version', nextMajor, '--dry-run'], {
       cwd: ROOT,
       encoding: 'utf8',
     });

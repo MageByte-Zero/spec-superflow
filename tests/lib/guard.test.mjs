@@ -117,7 +117,7 @@ describe('guard: transition matrix', () => {
   it('exploring→specifying permits a confirmed intake before planning artifacts exist', () => {
     const result = runGuard('exploring', 'specifying');
     assert.equal(result.exitCode, 0, `Expected exit 0 but got ${result.exitCode}: ${JSON.stringify(result.output)}`);
-    assert.deepEqual(result.output.checks, []);
+    assert.deepEqual(result.output.checks, [{ dimension: 'planning-config', pass: true, failures: [] }]);
   });
 
   it('specifying→bridging requires artifacts-exist + schema-valid', () => {
@@ -400,7 +400,7 @@ describe('guard: hotfix minimal contract', () => {
     const refs = initializeGitRepository(dir);
 
     runNodeScript(CLI_PATH, ['execution', 'recommend', dir, '--wave', 'wave-1:serial:1.1']);
-    runNodeScript(CLI_PATH, ['execution', 'plan', dir, '--mode', 'inline', '--confirm',
+    runNodeScript(CLI_PATH, ['execution', 'plan', dir, '--mode', 'inline', '--review-policy', 'wave', '--confirm',
       '--reason', 'user-selected hotfix closing plan', '--wave', 'wave-1:serial:1.1']);
 
     const reportsDir = join(dir, '.superpowers', 'sdd', 'reviews');
@@ -484,7 +484,7 @@ describe('guard: execution control records', () => {
     runNodeScript(CLI_PATH, ['execution', 'recommend', dir,
       '--wave', 'wave-1:parallel:1.1,1.2',
       '--wave', 'wave-2:serial:2.1']);
-    runNodeScript(CLI_PATH, ['execution', 'plan', dir, '--mode', 'sdd', '--confirm',
+    runNodeScript(CLI_PATH, ['execution', 'plan', dir, '--mode', 'sdd', '--confirm', '--acknowledge-recommendation',
       '--reason', 'full workflow user-selected execution plan',
       '--wave', 'wave-1:parallel:1.1,1.2',
       '--wave', 'wave-2:serial:2.1']);
@@ -733,7 +733,8 @@ describe('guard: execution control records', () => {
       runNodeScript(CLI_PATH, ['execution', 'review', dir, '--wave', 'wave-2',
         '--base', gitRefs.base, '--head', gitRefs.head, '--report', writeReviewReport('wave-2.md'), '--verdict', 'pass']);
 
-      replacement.replace(waveOneReport);
+      const saved = JSON.parse(readFileSync(join(dir, '.superpowers', 'sdd', 'reviews', `${Buffer.from('wave-1').toString('base64url')}.json`), 'utf8'));
+      replacement.replace(join(dir, saved.report));
 
       const result = await run('executing', 'closing');
       const reviewCheck = result.output.checks.find(check => check.dimension === 'execution-reviews-passed');
@@ -796,7 +797,7 @@ describe('guard: workflow-aware transition resolution', () => {
   it('still allows exploring→specifying for full (regression)', () => {
     const result = run('exploring', 'specifying', 'full');
     assert.equal(result.exitCode, 0, JSON.stringify(result.output));
-    assert.deepEqual(result.output.checks, []);
+    assert.deepEqual(result.output.checks, [{ dimension: 'planning-config', pass: true, failures: [] }]);
   });
 
   it('allows specifying→approved-for-build for quick (corrective skip)', () => {
@@ -897,7 +898,7 @@ describe('guard: workflow-aware transition resolution', () => {
       writeFileSync(join(workflowDir, '.spec-superflow.yaml'), 'state: exploring\nworkflow: full\n');
       const released = run('exploring', 'specifying', 'full');
       assert.equal(released.exitCode, 0, JSON.stringify(released.output));
-      assert.deepEqual(released.output.checks, []);
+      assert.deepEqual(released.output.checks, [{ dimension: 'planning-config', pass: true, failures: [] }]);
     } finally {
       rmSync(workflowDir, { recursive: true, force: true });
     }

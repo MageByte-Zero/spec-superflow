@@ -1,5 +1,10 @@
 # State Machine
 
+新任务走紧凑流程：draft（尚未批准的 proposal/tasks）→ executing → closing，abandoned 为取消。直接请求从 executing 开始。普通调试和验证是执行活动，不单独扭转状态。`workflow start` 记录一次具体计划批准并生成计划；`workflow complete` 验证交付。planned 的权威执行记录是 schema_version 2 plan，派生状态摘要不构成门禁；不要求 execution-contract、推荐凭据或 DP-0..DP-4。用户可明确选择 accepted-risk 结束，不能伪造测试通过，且不自动物理集成。
+
+**下文保留旧八状态和 DP 协议，仅供既有 legacy 任务恢复。不要为新任务重走这些步骤。**
+
+
 `spec-superflow` treats workflow progression as explicit state transitions.
 
 ## States
@@ -94,12 +99,7 @@ Quick, direct Hotfix, and Tweak are exempt from execution-plan and review-receip
 
 For Full/legacy Hotfix, the plan names ordered execution waves, dependencies,
 and parallel/serial strategy. `ssf execution show <change-dir> --json` reports
-which current waves are eligible. Each completed Full/legacy wave must have a current
-`pass` review receipt, recorded with `ssf execution review`, before a dependent
-wave or `closing` can proceed. `ssf execution revise` retains or upgrades an
-existing plan as `sdd`; that new revision requires a fresh confirmation (and
-acknowledgement when it differs from the new recommendation), invalidates old
-review receipts, and does not permit a downgrade. Recovery, switching, and
+which current waves are eligible. Native defaults to `inline` and `review_policy: final`: task dependencies permit continuous implementation, with one local whole-range review and no reviewer subagent. SDD defaults to `wave`; omitted policy preserves legacy wave receipt gates. `ssf execution revise` may retain or switch any confirmed mode. Mode-only revisions preserve applicable evidence; scope changes invalidate passing evidence conservatively and retain unresolved failures. Recovery, switching, and
 manual save are a control-plane overlay; they do not create a ninth workflow
 state.
 
@@ -113,9 +113,9 @@ state.
 ### `closing`
 
 - successful terminal state（成功终态）；验证、同步和审计证据已在 `executing` 完成
-- 没有 active skill，next skill 为 `none`
-- 进入后不运行 handoff、checkpoint 或 execution-control 恢复扫描，也不再路由 `release-archivist` 或 `spec-merger`
-- 不允许继续、恢复、交接或发生任何后续状态转换
+- 已完成物理收尾时 next skill 为 `none`，不能重开。唯一修复出口是 recorded `verify-pending` 的 `closing -> debugging`；保留原批准快照，修复后重新验证和审查。
+- isolation 为 pending / cleanup-pending 时恢复物理收尾；verify-pending 时先诊断，禁止无新证据反复 finish。
+- 合并仍需已有用户授权；branch-only 不删除 checkout。
 
 ### `abandoned`
 
@@ -126,7 +126,7 @@ state.
 
 ## Terminal States
 
-- `closing` — successful terminal completion；所有收尾动作均在 `executing` 完成后才可进入
+- `closing` — successful logical terminal completion；验证、同步、审计在 executing 完成，物理收尾独立记录
 - `abandoned` — change abandoned (no delta spec merge, no further transitions allowed)
 
 ## Recovery Overlays
@@ -210,3 +210,5 @@ If the contract changed, the artifacts changed.
 - **direct Hotfix** (incident, ≤2 files/tasks) and **Quick** (≤3 files/tasks) follow `exploring -> approved-for-build -> executing` with a valid direct receipt; no artifacts, contract, plan, review receipt, or DP approval. Direct Hotfix proves the original symptom; Quick runs focused verification.
 - **legacy Hotfix** follows `exploring -> bridging -> approved-for-build -> executing` and retains its minimal contract and DP-3.
 - **Tweak** (≤4 configuration/doc files) also jumps directly from `exploring` to `approved-for-build`.
+
+Execution efficiency: Native = `inline`, default review policy `final`; SDD = optional delegation with `wave` review. `execution revise` may retain or change mode. Reports are immutable snapshots. `closing` is logical completion; recorded pending physical finish remains resumable. `finish` uses the recorded target and never force-removes work.

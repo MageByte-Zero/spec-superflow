@@ -7,9 +7,22 @@
 - [Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec) — 规划引擎（Schema 验证、Delta Spec、工件解析）
 - [obra/superpowers](https://github.com/obra/superpowers) — 执行纪律（TDD 铁律、SDD、系统化调试、代码审查）
 
-当前发布版本：**v1.2.0**。
+当前发布版本：**v2.0.0**。
 
 ---
+
+## 默认流程：直接执行或规划后执行
+
+新任务只有两个入口，不再先填任务/文件数量问卷或选择五种工作流。
+
+- **直接执行**：目标和验证方式明确时，`ssf workflow start <dir> --path direct --scope "请求的结果与边界"`。不创建规划包或执行计划。
+- **规划后执行**：一起写 proposal.md（范围、验收、风险）和 tasks.md（有序任务、证明）；specs/design 按需。用户批准这份具体计划后，`ssf workflow start <dir> --path planned --confirm --reason "已有批准"`，直接进入 executing。默认 Native + final，不手写契约、不生成模式推荐凭据、不逐阶段确认。
+- **交付**：`ssf workflow complete <dir> --verification-command "npm test"` 执行最终验证一次；planned 还检查当前审查、任务完成和已有 delta specs 同步。不要先重复跑同一套全量检查。普通调试留在 executing。
+- **接受风险**：只有用户明确接受已知问题时使用 `workflow complete --accept-risk --confirm --reason "决定与未解决问题"`；保留 fail/未完成任务，结果为 accepted-risk，不自动合并或删除分支。
+
+默认当前目录特性分支；worktree 和 SDD 分别需要显式选择。相同问题的失败复审用稳定 `--issue <finding-id>`，三次未解决失败才要求裁决，不累计无关问题。流程偏好是建议，证据损坏、错误目录和真实失败不能伪装为通过。
+
+以下旧路径、DP 和命令说明用于兼容已有任务；新任务使用上面的入口。不会自动迁移或丢弃旧审批和审查记录。
 
 ## 平台总览
 
@@ -171,7 +184,7 @@ codex plugin add spec-superflow@awesome-codex-plugins
 当社区 marketplace 镜像尚未同步时，可直接指定本仓库的 release tag：
 
 ```bash
-codex plugin marketplace add MageByte-Zero/spec-superflow --ref v1.2.0
+codex plugin marketplace add MageByte-Zero/spec-superflow --ref v2.0.0
 codex plugin add spec-superflow@spec-superflow
 ```
 
@@ -415,7 +428,7 @@ npx spec-superflow@latest install-codebuddy
 - 在 `~/.codebuddy/spec-superflow/bin/` 生成 `ssf`（POSIX）、`ssf.cmd` / `ssf.ps1`（Windows）命令 shim，指向已部署的 `scripts/spec-superflow.mjs`；
 - 默认把 `bin/` 目录加入用户 PATH（幂等，重复安装不会产生重复条目），**新开终端**后即可像 `npm install -g spec-superflow` 一样直接使用 `ssf` 命令。
 
-> **Windows 前置依赖**：SessionStart hook 通过 `bash "<path>"` 执行（`hooks/session-start` 是 bash 脚本），因此 Windows 上需要 `bash` 在 PATH 中——请先安装 **Git for Windows**（自带 Git Bash）或启用 **WSL**，否则 session-start hook 无法运行，`workflow-start` skill 不会被注入。
+> **Windows 前置依赖**：SessionStart hook 通过 `bash "<path>"` 执行（`hooks/session-start` 是 bash 脚本），因此 Windows 上需要 `bash` 在 PATH 中——请先安装 **Git for Windows**（自带 Git Bash）或启用 **WSL**。普通目录中 hook 不注入内容；仅当当前目录存在 `.spec-superflow.yaml` 时注入恢复提示。
 
 如果不想修改用户 PATH，用 `--no-path` 跳过（shim 仍会生成，可手动把 `bin/` 加入 PATH）：
 
@@ -854,15 +867,15 @@ Inline 始终串行，不会表示并行。Quick、direct Hotfix 与 `tweak`
 ssf execution recommend changes/my-change \
   --wave foundation:parallel:1.1,1.2 \
   --wave integration:serial:2.1:foundation --json
-ssf execution plan changes/my-change --mode sdd --confirm --reason "independent work" \
+ssf execution plan changes/my-change --mode sdd --confirm --acknowledge-recommendation --reason "independent work" \
   --wave foundation:parallel:1.1,1.2 \
   --wave integration:serial:2.1:foundation
 ssf execution show changes/my-change --json
-# 可将已有 inline/batch-inline 计划升级为 sdd，或重规划已有 sdd 的 wave/依赖；不能降级。
+# 修订可以保留或切换模式；保留适用证据和未解决失败，不强制升级。
 ssf execution recommend changes/my-change \
   --wave foundation:parallel:1.1,1.2 \
   --wave integration:serial:2.1:foundation --json
-ssf execution revise changes/my-change --mode sdd --confirm --reason "need parallel work" \
+ssf execution revise changes/my-change --mode sdd --confirm --acknowledge-recommendation --reason "need parallel work" \
   --wave foundation:parallel:1.1,1.2 \
   --wave integration:serial:2.1:foundation
 ssf execution review changes/my-change --wave foundation --base <sha> --head <sha> \
@@ -873,15 +886,16 @@ ssf finish changes/my-change
 `--report` 相对于 `<change>` 解析，且必须位于
 `<change>/.superpowers/sdd/reviews/` 之下。`--base` 和 `--head` 必须是该
 `<change>` Git 工作树中的真实 commit，且 `base` 必须是 `head` 的祖先。
+`pass` 回执要求 `base` 与 `head` 之间存在实际文件差异；final review 使用记录的隔离起点 review_base（旧上下文使用明确目标的 merge-base），不能用 `HEAD~1`。
 `<change>/.superpowers/sdd/reviews/` 的目录层级必须是物理、非符号链接目录；
 report 本身必须为普通、非空、非符号链接文件。
 
-`ssf isolate <change-dir>` 创建隔离上下文后会自动递归初始化子模块（存在
+`ssf isolate <change-dir>` 默认使用当前目录中的特性分支，只有显式 `--worktree` 才创建工作树。创建隔离上下文后会自动递归初始化子模块（存在
 `.gitmodules` 时），并向 `<change>/.superpowers/sdd/progress.md` 追加 cwd 不持续警告。
 `ssf execution review` 在记录 receipt 前校验 head 必须被至少一个非 `main`/`master`
-分支包含——head 只落在主干上会被拒绝且不写 receipt。全部 wave 通过后，
+分支包含——head 只落在主干上会被拒绝且不写 receipt。当前 review policy 所要求的审查通过后，
 `ssf finish <change-dir>` 一条命令完成收尾：`merge --no-ff` 回主干、验证主干包含
-隔离分支全部提交、删除 worktree 与隔离分支；`finish` 与 `review` 在 cwd 位于
+隔离分支全部提交；worktree 模式删除 worktree 与分支，branch 模式只删除隔离分支。`finish` 与 `review` 在 cwd 位于
 worktree 之外时会输出含 worktree 绝对路径的 WARN（不阻断执行）。
 
 每一个 wave 均须有当前 `pass` review receipt，才可启动依赖 wave 或进入 closing；
@@ -939,3 +953,12 @@ Checkpoint 是任务级恢复上下文。`result-ready` handoff 在继续受影�
 Full/legacy 推荐流程：`exploring -> specifying -> bridging -> approved-for-build -> execution plan -> executing -> closing`
 
 Quick（≤3 单模块代码文件/任务）与 direct Hotfix（incident，≤2）走 `exploring -> approved-for-build -> executing`。Quick 低风险时同轮推荐/接受；若涉及 PRD、Spec/Design、API、数据/权限或跨模块，必须展示风险并由用户选择 Quick 或 Full。选择 Quick 时记录 `tdd`、`new-test` 或 `bounded` 验证策略；direct Hotfix 必须复现原症状回归。legacy Hotfix 才走最小契约、DP-3、plan/review 路径。
+
+Execution efficiency: Native = `inline`, default review policy `final`; SDD = optional delegation with `wave` review. `execution revise` may retain or change mode. Reports are immutable snapshots. `closing` is logical completion; recorded pending physical finish remains resumable. `finish` uses the recorded target and never force-removes work.
+
+
+### Recovery and execution cost boundaries
+
+Default isolation uses a feature branch in the current checkout; worktrees require explicit `--worktree`. Native execution reuses unchanged approvals and requires explicit authorization for delegation. Final reviews cover the full change through repairs. Unfinished physical finish remains recoverable and revalidates once per attempt.
+
+See [root causes and recovery boundaries](docs/workflow-efficiency-root-causes.md).

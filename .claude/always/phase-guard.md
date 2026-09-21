@@ -1,3 +1,2 @@
-# spec-superflow v1.2.0 | 阶段: {{state}} | 工作流: {{workflow}}
-当前阶段允许的操作由 workflow-start 路由规则定义。
-禁止跨越 DP gate 进入下一阶段。变更范围以 execution-contract.md 的 Intent Lock 为准。
+# spec-superflow v2.0.0 | opt-in
+仅当用户明确要求 spec-superflow，或用户要求继续的活动 change 含 `.spec-superflow.yaml` 时进入 `workflow-start`。普通任务不应用本工作流；proposal、spec、design、tasks、contract 等通用文件不是触发信号。

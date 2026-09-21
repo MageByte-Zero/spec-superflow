@@ -44,11 +44,19 @@ const COMMANDS = {
   'uninstall-codebuddy': () => import('./lib/cmd-uninstall-codebuddy.mjs'),
 };
 
-const HELP = `spec-superflow (ssf) — Spec-first workflow CLI
+const HELP = `spec-superflow (ssf) — Lean spec workflow CLI
 
 Usage: ssf <command> [options]
 
 Commands:
+  workflow start <dir> --path direct --scope <request>
+                        Start bounded work without a planning pack
+  workflow start <dir> --path planned --confirm --reason <approval> [--mode sdd]
+                        Start one approved plan; defaults to inline execution and final review
+  workflow complete <dir> --verification-command <command>
+                        Run final verification once and record verified completion
+  workflow complete <dir> --accept-risk --confirm --reason <decision>
+                        Record accepted risk without forging verification success
   list                  List all changes and their status
   validate <dir>        Validate artifacts in a change directory
   doctor                Health check (versions, hooks, skills, docs)
@@ -81,17 +89,18 @@ Commands:
                         Validate a handoff result
   handoff resolve <change-dir> <id> --decision <accept|reject|defer>
                         Record the explicit handoff decision
-  ssf finish <change-dir>   Merge the isolated branch back to the trunk (--no-ff), verify sync, clean up worktree/branch
+  ssf isolate <change-dir> [--worktree]   Use a feature branch by default; opt into a worktree explicitly
+  ssf finish <change-dir>   Merge the isolated branch to its recorded target, verify, and clean up recorded isolation
   execution recommend <change-dir> [--wave <id>:<strategy>:<task,...>]
                         List execution modes and an evidence-based recommendation
-  execution plan <change-dir> --mode <mode> --confirm --reason <text> --wave <id>:<strategy>:<task,...> [--acknowledge-recommendation]
+  execution plan <change-dir> --mode <mode> [--review-policy final|wave] --confirm --reason <text> --wave <id>:<strategy>:<task,...> [--acknowledge-recommendation]
                         Record a user-confirmed guarded execution plan
   execution show <change-dir> [--json]
                         Show and validate the current execution plan
-  execution revise <change-dir> --mode sdd --confirm --reason <text> --wave <id>:<strategy>:<task,...> [--acknowledge-recommendation]
-                        Upgrade inline/batch to SDD, or replan existing SDD waves, as a new revision
+  execution revise <change-dir> --mode <mode> [--review-policy final|wave] --confirm --reason <text> --wave <id>:<strategy>:<task,...> [--acknowledge-recommendation]
+                        Retain or switch execution mode; preserve applicable evidence in a new revision
   execution review <change-dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict pass|fail
-                        Record one review receipt for a planned wave
+                        Record a review receipt for a planned wave or final review
   execution adjudicate <change-dir> --wave <id> --decision allow-review --confirm --reason <text>
                         Authorize one review for an adjudication-required wave
   resume [change-dir] [--json]
@@ -100,10 +109,10 @@ Commands:
                         Recover an explicit change context without changing the shell
   runtime check-update  Run a portable update check for canonical skills
   runtime infer <dir>   Infer workflow mode without a plugin-root path
-  workflow recommend <change-dir> [--task-count <n>] [--file-count <n>] [--config-doc-only yes|no|unknown] [--schema-api-change yes|no|unknown] [--new-module yes|no|unknown] [--behavioral-constraint-change yes|no] [--cross-module-change yes|no] [--uncertainty low|high|unknown] [--request-kind standard|incident] [--affected-path <path>] [--production-behavior yes|no|unknown] [--public-boundary yes|no|unknown] [--installer yes|no|unknown] [--state-machine yes|no|unknown] [--external-side-effect yes|no|unknown] [--data-permission-config-semantics yes|no|unknown] [--expected-behavior-clear yes|no|unknown] [--verification-reproducible yes|no|unknown] [--impact-paths-complete yes|no|unknown]
-                        Persist observed intake facts and recommend full, hotfix, tweak, quick, or lightweight without selecting one
-  workflow select <change-dir> --mode full|hotfix|tweak|quick|lightweight --confirm --reason <text> [--scope-confirmation <text>] [--acknowledge-recommendation] [--verification tdd|new-test|bounded]
-                        Persist a user-confirmed path; a risk-acknowledged Quick requires a verification choice
+  workflow recommend <change-dir> [legacy options]
+                        Recover a v1 path recommendation
+  workflow select <change-dir> --mode full|hotfix|tweak|quick|lightweight ...
+                        Recover or repair a v1 path selection
   workflow accept <change-dir> --source direct-request --verification tdd|new-test|bounded
                         Directly accept a recommended quick or hotfix workflow with the user's chosen verification
   workflow show <change-dir> [--json]
@@ -142,6 +151,8 @@ Examples:
   ssf state init changes/my-change/
   ssf state check changes/my-change/
   ssf state transition changes/my-change/ approved-for-build
+  ssf workflow start <dir> --path direct|planned   Start from request or one approved plan
+  ssf workflow complete <dir> --verification-command <command>   Verify and deliver
   ssf workflow recommend changes/fix-typo --task-count 1 --file-count 1 --config-doc-only no --schema-api-change no --new-module no --behavioral-constraint-change no --cross-module-change no --uncertainty low --request-kind incident
   ssf workflow accept changes/fix-typo --source direct-request --verification bounded
   ssf state get changes/my-change/ batches_completed

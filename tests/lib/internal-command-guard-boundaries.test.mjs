@@ -69,7 +69,7 @@ describe('internal command and guard boundaries', () => {
     const result = await runGuard(['check', '.', 'exploring', 'specifying', '--json'], io);
 
     assert.equal(result.exitCode, 0);
-    assert.deepEqual(JSON.parse(output.stdout), { pass: true, checks: [] });
+    assert.deepEqual(JSON.parse(output.stdout), { pass: true, checks: [{ dimension: 'planning-config', pass: true, failures: [] }] });
     assert.equal(output.stderr, '');
   });
 

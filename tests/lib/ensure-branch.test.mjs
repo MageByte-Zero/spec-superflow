@@ -47,10 +47,10 @@ function runProcess(cmd, args, opts = {}) {
   return r;
 }
 
-function run(args) {
+function run(args, worktree = true) {
   // args 由测试字面量拼接（路径可能含空格），拆分为 argv 数组传递。
   const argv = args.match(/"[^"]*"|\S+/g).map((a) => a.replace(/^"|"$/g, ''));
-  const r = runProcess(process.execPath, [ENSURE, ...argv]);
+  const r = runProcess(process.execPath, [ENSURE, ...argv, ...(worktree ? ['--worktree'] : [])]);
   if (r.status === 0) return { ok: true, out: r.stdout || '' };
   return { ok: false, out: `${r.stdout || ''}\n${r.stderr || ''}` || r.stderr || String(r.error) };
 }
@@ -163,7 +163,9 @@ describe('BUG/#15: ensure-branch enforces isolation', () => {
   });
 
   it('SHALL allow (zero) work on a non-protected branch', () => {
-    const r = run(`"${repoDir}"`);
+    const change = join(repoDir, 'changes', 'existing-branch');
+    mkdirSync(change, { recursive: true });
+    const r = run(`"${change}"`, false);
     assert.equal(r.ok, true, `ensure-branch should pass on feature branch, got: ${r.out}`);
     assert.match(r.out, /already isolated/i);
   });
@@ -181,6 +183,16 @@ describe('BUG/#15: ensure-branch enforces isolation', () => {
       assert.equal(r.ok, true, r.out);
       assert.equal(existsSync(join(worktree, 'changes', 'planned-change', 'proposal.md')), true);
       assert.equal(existsSync(join(worktree, 'changes', 'planned-change', 'README.md')), false);
+
+      writeFileSync(join(worktree, 'changes', 'planned-change', 'proposal.md'), 'Newer worktree evidence.');
+      const repeated = run(`"${changeDir}" planned-change`);
+      assert.equal(repeated.ok, true, repeated.out);
+      assert.match(repeated.out, /existing git worktree .* is ready/i);
+      assert.equal(
+        readFileSync(join(worktree, 'changes', 'planned-change', 'proposal.md'), 'utf8'),
+        'Newer worktree evidence.',
+        're-running isolation must not overwrite worktree-side evidence',
+      );
     } finally {
       if (existsSync(worktree)) git(repoDir, 'worktree', 'remove', '--force', worktree);
     }
@@ -256,6 +268,30 @@ describe('worktree-lifecycle R1/R2: submodule init + progress cwd warning', () =
     }
   });
 
+  it('R1 SHALL resume the recorded worktree after a submodule failure is repaired', () => {
+    const base = mkdtempSync(join(tmpdir(), 'ssf-ensure-sub-retry-'));
+    try {
+      const { main } = makeSubmoduleFixtureSafe(base);
+      addBogusSubmodule(main, 'subX', pathToFileURL(join(base, 'does-not-exist')).href);
+      const changeDir = join(main, 'changes', 'retry-change');
+      mkdirSync(changeDir, { recursive: true });
+
+      const first = run(`"${changeDir}" retry-change`);
+      const worktree = join(base, 'main-retry-change');
+      assert.equal(first.ok, false, first.out);
+      assert.equal(existsSync(worktree), true, 'failed initialization keeps the recorded worktree');
+
+      git(worktree, 'config', '-f', '.gitmodules', 'submodule.subX.url', submoduleSourceUrl(main));
+      const retried = run(`"${changeDir}" retry-change`);
+      assert.equal(retried.ok, true, retried.out);
+      assert.match(retried.out, /resumed existing git worktree/i);
+      assert.equal(existsSync(join(worktree, 'subX', 'm.txt')), true);
+      assert.equal(git(worktree, 'submodule', 'status').includes('subX'), true);
+    } finally {
+      rmRetry(base);
+    }
+  });
+
   it('R1 SHALL skip submodule init and still succeed when there is no .gitmodules', () => {
     const base = mkdtempSync(join(tmpdir(), 'ssf-ensure-nosub-'));
     try {
@@ -308,20 +344,19 @@ describe('worktree-lifecycle R1/R2: submodule init + progress cwd warning', () =
     }
   });
 
-  it('R1/R2 SHALL init submodules and write the warning on the git switch -c fallback path', () => {
+  it('R1/R2 SHALL init submodules and write the warning on the default feature branch path', () => {
     const base = mkdtempSync(join(tmpdir(), 'ssf-ensure-fb-'));
     try {
       const { main } = makeSubmoduleFixtureSafe(base);
       const changeDir = join(main, 'changes', 'fb-change');
       mkdirSync(changeDir, { recursive: true });
       writeFileSync(join(changeDir, 'proposal.md'), 'x');
-      // Occupy the worktree path so `git worktree add` fails and the fallback
-      // `git switch -c` path runs instead.
+      // A sibling directory must not affect default branch isolation.
       const blockedPath = join(base, 'main-fb-change');
       mkdirSync(blockedPath, { recursive: true });
       writeFileSync(join(blockedPath, 'blocker.txt'), 'x');
 
-      const r = run(`"${changeDir}" fb-change`);
+      const r = run(`"${changeDir}" fb-change`, false);
 
       assert.equal(r.ok, true, r.out);
       assert.equal(existsSync(join(main, 'subA', 'a.txt')), true, 'fallback outer submodule content');

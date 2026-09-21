@@ -101,10 +101,14 @@ describe('ssf runtime', () => {
     chmodSync(fakeNpm, 0o755);
 
     const result = runRuntime(['check-update'], {
-      env: { PATH: `${binDir}${delimiter}${process.env.PATH}` },
+      env: { HOME: tempDir, USERPROFILE: tempDir, PATH: `${binDir}${delimiter}${process.env.PATH}` },
     });
 
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /up to date/i);
+    writeFileSync(fakeNpm, '#!/bin/sh\nexit 1\n', 'utf8');
+    const cached = runRuntime(['check-update'], { cwd: tempDir, env: { HOME: tempDir, USERPROFILE: tempDir, PATH: `${binDir}${delimiter}${process.env.PATH}` } });
+    assert.equal(cached.status, 0, cached.stderr);
+    assert.match(cached.stdout, /up to date/i);
   });
 });

@@ -21,6 +21,7 @@ export function checkExecutionPlanReady(changeDir) {
     return { pass: false, failures: validation.failures };
   }
 
+  if (plan.schema_version === 2) return { pass: true, failures: [] };
   const state = readState(changeDir);
   const expectedRevision = `plan revision ${plan.revision}`;
   const decision = typeof state.dp_4_result === 'string' ? state.dp_4_result : '';

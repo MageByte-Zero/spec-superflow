@@ -94,7 +94,8 @@ describe('cmd-inject: generatePhaseGuard()', () => {
     const result = generatePhaseGuard({ state: 'closing', change_name: 'test' });
     assert.ok(result.includes('已成功关闭'));
     assert.ok(result.includes('终止状态'));
-    assert.ok(result.includes('不允许任何进一步操作'));
+    assert.ok(result.includes('finish'));
+    assert.ok(result.includes('仅恢复'));
     assert.ok(!result.includes('三维验证'));
     assert.ok(!result.includes('DP-6'));
     assert.ok(!result.includes('DP-7'));

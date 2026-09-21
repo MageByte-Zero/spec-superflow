@@ -1,3 +1,4 @@
+import { artifactPolicy } from '../../lib/workflow-policy.mjs';
 // scripts/guard/checks/schema-valid.mjs — validate artifacts using the existing Validator engine
 import fs from 'node:fs';
 import path from 'node:path';
@@ -28,7 +29,7 @@ export function checkSchemaValid(changeDir) {
     }
   }
 
-  const specLayout = validateSpecPathLayout(changeDir, { requireSpecs: true });
+  const specLayout = validateSpecPathLayout(changeDir, { requireSpecs: artifactPolicy(changeDir).requireSpecs });
   failures.push(...specLayout.failures);
 
   for (const specFile of specLayout.specFiles) {

@@ -7,7 +7,7 @@ import { computeArtifactsHash, computeContractHash } from './hash.mjs';
 import { readPlan, validatePlan } from './execution-plan.mjs';
 import { getOverlayPaths, getPlanScopedPaths } from './sdd-overlay.mjs';
 import { readState, writeState } from './state-loader.mjs';
-import { isDirectWorkflowReceipt, readWorkflowSelection } from './workflow-recommendation.mjs';
+import { readPlanlessDebugReceipt } from './workflow-policy.mjs';
 
 const LEDGER_VERSION = 1;
 const MINIMUM_FAILED_ATTEMPTS = 3;
@@ -177,22 +177,6 @@ function buildContext(changeDir, state, requireDebugging, requirePlan) {
   };
 }
 
-function readPlanlessDebugReceipt(changeDir, state) {
-  const loaded = readWorkflowSelection(changeDir);
-  if (!loaded.valid) return null;
-  if (isDirectWorkflowReceipt(loaded.record, state)) return loaded.record;
-
-  const selection = loaded.record?.selection;
-  const validTweak = state.workflow === 'tweak'
-    && loaded.record?.status === 'ready'
-    && loaded.record?.recommendation?.mode === 'tweak'
-    && selection?.mode === 'tweak'
-    && selection.accepted_automatically === false
-    && selection.followed_recommendation === true
-    && typeof selection.confirmed_at === 'string'
-    && Number.isFinite(Date.parse(selection.confirmed_at));
-  return validTweak ? loaded.record : null;
-}
 
 function ledgerPath(changeDir, plan) {
   if (plan) return join(getPlanScopedPaths(changeDir, plan).planRoot, 'debug-attempts.json');

@@ -1,95 +1,107 @@
 {
-  "_comment": "Token baseline for spec-superflow v0.8.7 post token-efficiency compression. Estimation: English ~4 chars/token, Chinese ~1.5 chars/token. Pre-compression: ~24,387 tokens / 2,536 lines. Post-compression: ~9,669 tokens / 793 lines (-60.3%).",
-  "timestamp": "2026-07-03T14:50:36.427Z",
+  "timestamp": "2026-09-20T10:34:48.613Z",
+  "note": "Catalog estimate only. Inactive hook sessions emit no context; the hook component measures its active-state message. Other components are loaded conditionally. This is not a runtime session, repeated-read, subagent, latency, or cost benchmark.",
   "components": [
     {
       "path": "hooks/session-start",
-      "label": "hooks/session-start",
-      "lines": 15,
-      "chars": 1015,
-      "estimatedTokens": 254
+      "label": "hook active context (inactive sessions inject 0)",
+      "lines": 1,
+      "chars": 70,
+      "estimatedTokens": 18,
+      "measurement": "shell-message"
     },
     {
       "path": ".claude/always/phase-guard.md",
       "label": "phase-guard (claude)",
-      "lines": 4,
-      "chars": 160,
-      "estimatedTokens": 57
+      "lines": 3,
+      "chars": 177,
+      "estimatedTokens": 61,
+      "measurement": "file-source"
     },
     {
       "path": "GEMINI.md",
       "label": "phase-guard (gemini)",
-      "lines": 15,
-      "chars": 709,
-      "estimatedTokens": 194
+      "lines": 13,
+      "chars": 712,
+      "estimatedTokens": 178,
+      "measurement": "file-source"
     },
     {
       "path": "skills/workflow-start/SKILL.md",
       "label": "skill: workflow-start",
-      "lines": 116,
-      "chars": 6667,
-      "estimatedTokens": 1674
+      "lines": 64,
+      "chars": 4904,
+      "estimatedTokens": 1226,
+      "measurement": "file-source"
     },
     {
       "path": "skills/need-explorer/SKILL.md",
       "label": "skill: need-explorer",
       "lines": 74,
-      "chars": 2982,
-      "estimatedTokens": 746
+      "chars": 2955,
+      "estimatedTokens": 739,
+      "measurement": "file-source"
     },
     {
       "path": "skills/spec-writer/SKILL.md",
       "label": "skill: spec-writer",
-      "lines": 90,
-      "chars": 3901,
-      "estimatedTokens": 976
+      "lines": 84,
+      "chars": 4947,
+      "estimatedTokens": 1237,
+      "measurement": "file-source"
     },
     {
       "path": "skills/contract-builder/SKILL.md",
       "label": "skill: contract-builder",
-      "lines": 68,
-      "chars": 3081,
-      "estimatedTokens": 771
+      "lines": 90,
+      "chars": 4402,
+      "estimatedTokens": 1101,
+      "measurement": "file-source"
     },
     {
       "path": "skills/build-executor/SKILL.md",
       "label": "skill: build-executor",
-      "lines": 97,
-      "chars": 5170,
-      "estimatedTokens": 1293
+      "lines": 72,
+      "chars": 7052,
+      "estimatedTokens": 1763,
+      "measurement": "file-source"
     },
     {
       "path": "skills/bug-investigator/SKILL.md",
       "label": "skill: bug-investigator",
-      "lines": 78,
-      "chars": 4373,
-      "estimatedTokens": 1094
+      "lines": 102,
+      "chars": 5743,
+      "estimatedTokens": 1436,
+      "measurement": "file-source"
     },
     {
       "path": "skills/code-reviewer/SKILL.md",
       "label": "skill: code-reviewer",
-      "lines": 77,
-      "chars": 3874,
-      "estimatedTokens": 969
+      "lines": 86,
+      "chars": 5089,
+      "estimatedTokens": 1273,
+      "measurement": "file-source"
     },
     {
       "path": "skills/release-archivist/SKILL.md",
       "label": "skill: release-archivist",
-      "lines": 97,
-      "chars": 3617,
-      "estimatedTokens": 905
+      "lines": 34,
+      "chars": 3356,
+      "estimatedTokens": 839,
+      "measurement": "file-source"
     },
     {
       "path": "skills/spec-merger/SKILL.md",
       "label": "skill: spec-merger",
-      "lines": 62,
-      "chars": 2942,
-      "estimatedTokens": 736
+      "lines": 74,
+      "chars": 4508,
+      "estimatedTokens": 1127,
+      "measurement": "file-source"
     }
   ],
   "totals": {
-    "lines": 793,
-    "chars": 38491,
-    "estimatedTokens": 9669
+    "lines": 697,
+    "chars": 43915,
+    "estimatedTokens": 10998
   }
 }

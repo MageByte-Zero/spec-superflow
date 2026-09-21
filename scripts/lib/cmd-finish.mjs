@@ -1,3 +1,4 @@
+import { readState } from './state-loader.mjs';
 // scripts/lib/cmd-finish.mjs — `ssf finish <change-dir> [--test-cmd <command>]` 一键收尾
 // 将隔离分支合并回主干（merge --no-ff）、验证主干已包含隔离分支全部提交、
 // 在主干执行验证命令（默认 npm test，--test-cmd 覆盖，10 分钟超时）、
@@ -10,6 +11,8 @@
 import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
+import { readIsolationContext, writeIsolationContext, archiveIsolationChange } from './isolation-context.mjs';
+import { createHash } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 
 const GIT_OPTS = { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] };
@@ -32,6 +35,19 @@ function git(root, args, io, runGit) {
     err.stderr = (e.stderr || '').toString();
     throw err;
   }
+}
+
+export function verificationEnvironmentFingerprint(env = process.env) {
+  const volatile = /^(?:GIT_|PWD$|OLDPWD$|SHLVL$|_$|TERM_SESSION_ID$|ITERM_|LC_TERMINAL|SSH_|XPC_|VSCODE_|CURSOR_|CLAUDE_|CODEX_|SESSION_ID$)/i;
+  const stableEnvironment = Object.fromEntries(
+    Object.entries(env).filter(([key]) => !volatile.test(key)).sort(([left], [right]) => left.localeCompare(right)),
+  );
+  return createHash('sha256').update(JSON.stringify({
+    node: process.version,
+    platform: process.platform,
+    arch: process.arch,
+    env: stableEnvironment,
+  })).digest('hex');
 }
 
 // 规范化路径：realpath 解析 8.3 短名/junction，失败时退化为 resolve。
@@ -83,165 +99,110 @@ export function run(args, io = { stdout: process.stdout, stderr: process.stderr 
     return { exitCode: 2 };
   }
 
-  // 隔离分支名 = change 目录名（ensure-branch 以 change-name 命名分支）。
-  const name = basename(resolve(changeDir));
-
-  // 主仓库根：change-dir 必须在仓库内。
-  let mainRoot;
   try {
-    mainRoot = resolve(git(changeDir, ['rev-parse', '--show-toplevel'], io, runGit));
-  } catch (e) {
-    io.stderr.write(`finish: ${changeDir} 不在任何 git 仓库内：${e.message}\n`);
-    return { exitCode: 1 };
-  }
-
-  // 1. 定位隔离 worktree（按隔离分支名匹配）。
-  const list = parseWorktreeList(git(mainRoot, ['worktree', 'list', '--porcelain'], io, runGit));
-  const entry = list.find(item => item.branch === `refs/heads/${name}`);
-  if (!entry) {
-    io.stderr.write(
-      `finish: change '${changeDir}' 不存在隔离上下文（未找到分支 '${name}' 的 worktree）。` +
-      '请先运行 `ssf isolate` 创建隔离上下文后再执行 finish。\n'
-    );
-    return { exitCode: 1 };
-  }
-  const worktreePath = entry.path;
-
-  // 5. cwd 越界 WARN：cwd 不在隔离 worktree 内时输出一行警告，不阻断。
-  if (!isSubpath(worktreePath, process.cwd())) {
-    io.stdout.write(
-      `WARN: 进程 cwd（${process.cwd()}）不在隔离 worktree 内。worktree 绝对路径：${worktreePath}；` +
-      '实现编辑必须使用 worktree 内路径，或每条命令以前缀 `cd <worktree> &&` 开头。\n'
-    );
-  }
-
-  // 2. 校验 worktree 工作树干净；存在未提交改动则停止并列出路径。
-  const status = git(worktreePath, ['status', '--porcelain'], io, runGit);
-  if (status) {
-    io.stderr.write(
-      `finish: 隔离 worktree 存在未提交改动，停止收尾。未提交路径：\n${status}\n` +
-      '请先在 worktree 内提交或清理改动，再重试 `ssf finish`。\n'
-    );
-    return { exitCode: 1 };
-  }
-
-  // 3. 在主仓库当前分支（主干）执行 merge --no-ff。
-  let mergeOut;
-  try {
-    mergeOut = git(mainRoot, ['merge', '--no-ff', name], io, runGit);
-  } catch (e) {
-    // 冲突检测：unmerged 路径非空即 merge 冲突。不自动解决，保留现场由用户手动处理。
-    const unmerged = git(mainRoot, ['diff', '--name-only', '--diff-filter=U'], io, runGit);
-    if (unmerged) {
-      io.stderr.write(
-        `finish: git merge --no-ff ${name} 产生冲突，停止收尾。冲突文件需手动解决：\n${unmerged}\n` +
-        'finish 未自动解决冲突、未删除 worktree 与隔离分支，请手动解决后重试。\n'
-      );
-    } else {
-      io.stderr.write(`finish: git merge --no-ff ${name} 失败：${e.message}\n`);
-    }
-    return { exitCode: 1 };
-  }
-
-  // 4. 同步验证：隔离分支 head 必须是主干 head 的祖先（主干已包含全部提交）。
-  let isoHead, mainHead;
-  try {
-    isoHead = git(mainRoot, ['rev-parse', name], io, runGit);
-    mainHead = git(mainRoot, ['rev-parse', 'HEAD'], io, runGit);
-    git(mainRoot, ['merge-base', '--is-ancestor', isoHead, mainHead], io, runGit);
-  } catch {
-    io.stderr.write(
-      'finish: 同步验证失败——隔离分支 head 不是主干 head 的祖先，主干未包含隔离分支全部提交。' +
-      '请检查仓库状态后重试。\n'
-    );
-    return { exitCode: 1 };
-  }
-
-  // 5b. merge 成功即时反馈（closing-finish-alignment R3）：同步验证通过后、
-  // 验证命令启动前输出一行含 merge commit sha 的成功信息，使
-  // merge-vs-verify 的执行顺序在日志中清晰可见。失败路径（merge 冲突/
-  // 同步验证失败）不会到达此处，故不输出该行。
-  io.stdout.write(`finish: merge --no-ff 成功（commit ${mainHead}），开始主干验证…\n`);
-
-  // 5. 主干验证：merge --no-ff 成功且同步验证通过后、删除 worktree 前，
-  // 在主仓库主干（当前分支）的 cwd 执行验证命令（默认 npm test，
-  // --test-cmd <command> 覆盖），10 分钟超时。
-  // --test-cmd 是用户显式信任的命令，shell: true 是唯一 shell 例外；
-  // git 调用仍保持 execFileSync 数组字面量形式。
-  const verifyCmd = values['test-cmd'] || 'npm test';
-  io.stdout.write(`finish: 在主干执行验证命令：${verifyCmd}\n`);
-  try {
-    execFileSync(verifyCmd, { cwd: mainRoot, shell: true, timeout: 600000, stdio: 'inherit' });
-  } catch (e) {
-    const isTimeout = e.code === 'ETIMEDOUT';
-    const reason = isTimeout
-      ? '验证命令超时（超过 10 分钟）'
-      : `验证命令以非零状态退出（exit ${e.status ?? 'unknown'}）`;
-    const detail = e.message ? `：${e.message}` : '';
-    io.stderr.write(
-      `finish: 主干验证失败——${reason}${detail}\n` +
-      `- 验证命令: ${verifyCmd}\n` +
-      `- 已执行 merge --no-ff，但未删除 worktree 与隔离分支。\n` +
-      '请返回 worktree 修改后重跑 `ssf finish`。\n'
-    );
-    return { exitCode: 1 };
-  }
-
-  // 6. 清理：先移除 worktree（已校验干净），再删除隔离分支。
-  // Windows 无法删除作为进程 cwd 的目录，故若 cwd 位于 worktree 内，
-  // 先把进程 cwd 切回主仓库再执行移除。
-  if (isSubpath(worktreePath, process.cwd())) {
-    try {
-      process.chdir(mainRoot);
-    } catch { /* 忽略——移除仍会尝试，失败由下方错误路径处理 */ }
-  }
-  // worktree 移除失败自动 fallback --force（closing-finish-alignment R2）：
-  // submodule 项目场景普通 remove 可能失败（目录非空/占用），自动以
-  // --force 重试；--force 成功则继续收尾并在报告标注 (force removed)；
-  // --force 仍失败则输出手动指引（merge 已成功 + 手动 remove/branch 命令）
-  // 但仍尝试删除隔离分支（分支引用独立于 worktree 目录）。
-  let forceRemoved = false;
-  try {
-    git(mainRoot, ['worktree', 'remove', worktreePath], io, runGit);
-  } catch (e) {
-    io.stderr.write(`WARN: worktree remove 失败（${e.message}），尝试 --force 重试\n`);
-    try {
-      git(mainRoot, ['worktree', 'remove', '--force', worktreePath], io, runGit);
-      forceRemoved = true;
-    } catch (e2) {
-      io.stderr.write(
-        `finish: worktree 移除失败（含 --force 重试）：${e2.message}\n` +
-        `- merge 已成功（commit ${mainHead}），主干验证已通过。\n` +
-        `- 手动清理命令：\n` +
-        `  git worktree remove --force ${worktreePath}\n` +
-        `  git branch -d ${name}\n`
-      );
-      // 分支删除不依赖 worktree 移除成功：仍尝试删除，如实报告结果。
-      let branchOutcome;
-      try {
-        git(mainRoot, ['branch', '-d', name], io, runGit);
-        branchOutcome = `finish: 隔离分支已删除: ${name}\n`;
-      } catch (e3) {
-        branchOutcome = `finish: 隔离分支删除失败：${e3.message}\n`;
+    if (readState(changeDir).completion_outcome === 'accepted-risk') throw new Error('Accepted-risk delivery is not verified integration; preserve the branch for an explicit integration decision');
+    const currentRoot = resolve(git(changeDir, ['rev-parse', '--show-toplevel'], io, runGit));
+    const list = parseWorktreeList(git(currentRoot, ['worktree', 'list', '--porcelain'], io, runGit));
+    let context = readIsolationContext(changeDir);
+    if (!context) {
+      // Legacy contexts are accepted only when both sides can be resolved uniquely.
+      const name = basename(resolve(changeDir));
+      const isolated = list.filter(item => item.branch === `refs/heads/${name}`);
+      const targets = list.filter(item => ['refs/heads/main', 'refs/heads/master'].includes(item.branch)
+        && item.path !== isolated[0]?.path);
+      if (isolated.length !== 1 || targets.length !== 1) {
+        throw new Error('不存在可靠隔离上下文或目标不明确；请先运行 ssf isolate 并记录目标');
       }
-      io.stderr.write(branchOutcome);
-      return { exitCode: 1 };
+      context = { change_name: name, target_root: targets[0].path, target_branch: targets[0].branch.slice(11),
+        isolation_root: isolated[0].path, isolation_branch: name, kind: 'worktree', finish_status: 'pending' };
     }
-  }
-  try {
-    git(mainRoot, ['branch', '-d', name], io, runGit);
-  } catch (e) {
-    io.stderr.write(`finish: 隔离分支删除失败：${e.message}\n`);
+    if (context.finish_status === 'complete') {
+      io.stdout.write('finish: 收尾完成（此前已完成）。\n');
+      return { exitCode: 0 };
+    }
+    const mainRoot = context.target_root;
+    const common = root => normPath(resolve(root, git(root, ['rev-parse', '--git-common-dir'], io, runGit)));
+    if (common(mainRoot) !== common(currentRoot)) throw new Error('recorded target belongs to a different Git repository');
+    const worktreePath = context.isolation_root;
+    const name = context.isolation_branch;
+    if (name === context.target_branch || (context.kind !== 'branch' && normPath(mainRoot) === normPath(worktreePath))) {
+      throw new Error('isolation and target must be distinct');
+    }
+    const persist = () => writeIsolationContext(mainRoot, context);
+    const isolatedExists = list.some(item => normPath(item.path) === normPath(worktreePath)
+      && item.branch === `refs/heads/${name}`);
+    const isolationStatus = isolatedExists ? git(worktreePath, ['status', '--porcelain'], io, runGit) : '';
+    if (isolationStatus) throw new Error(`隔离 worktree 存在未提交改动，停止收尾：\n${isolationStatus}`);
+    if (context.kind === 'branch' && isolatedExists) {
+      git(mainRoot, ['switch', context.target_branch], io, runGit);
+    }
+    if (git(mainRoot, ['branch', '--show-current'], io, runGit) !== context.target_branch) {
+      throw new Error('target checkout is no longer on the recorded target branch');
+    }
+    if (git(mainRoot, ['status', '--porcelain'], io, runGit)) throw new Error('target checkout has uncommitted changes');
+    let isoHead;
+    let branchExists = true;
+    try { isoHead = git(mainRoot, ['rev-parse', '--verify', `refs/heads/${name}`], io, runGit); }
+    catch (error) {
+      if (context.finish_status !== 'cleanup-pending' || !context.isolation_head || isolatedExists) throw error;
+      isoHead = context.isolation_head;
+      branchExists = false;
+    }
+    if (!context.review_base) {
+      context.review_base = git(mainRoot, ['merge-base', 'HEAD', isoHead], io, runGit);
+      persist();
+    }
+    let contained = false;
+    try { git(mainRoot, ['merge-base', '--is-ancestor', isoHead, 'HEAD'], io, runGit); contained = true; } catch {}
+    if (!contained) {
+      try { git(mainRoot, ['merge', '--no-ff', name], io, runGit); }
+      catch (error) { throw new Error(`合并失败（可能存在冲突，请手动解决）：${error.message}`); }
+    }
+    git(mainRoot, ['merge-base', '--is-ancestor', isoHead, 'HEAD'], io, runGit);
+    const mainHead = git(mainRoot, ['rev-parse', 'HEAD'], io, runGit);
+    const verifyCmd = values['test-cmd'] || 'npm test';
+    const environment = verificationEnvironmentFingerprint();
+    // A prior process cannot attest that ignored dependencies, local config or
+    // external services stayed unchanged. Revalidate each unfinished attempt.
+    {
+      context.finish_status = 'verify-pending';
+      persist();
+      io.stdout.write(`finish: merge --no-ff 成功（commit ${mainHead}），开始主干验证…\n`);
+      io.stdout.write(`finish: 在主干执行验证命令：${verifyCmd}\n`);
+      try { execFileSync(verifyCmd, { cwd: mainRoot, shell: true, timeout: 600000, stdio: 'inherit' }); }
+      catch (error) {
+        if (context.kind === 'branch' && !git(mainRoot, ['status', '--porcelain'], io, runGit)) {
+          git(mainRoot, ['switch', name], io, runGit);
+        }
+        throw new Error(`主干验证失败：${error.message}。在记录的隔离分支修复后重试；若验证产生未提交改动，先保留并处理这些改动`);
+      }
+      if (git(mainRoot, ['rev-parse', 'HEAD'], io, runGit) !== mainHead
+        || git(mainRoot, ['branch', '--show-current'], io, runGit) !== context.target_branch
+        || git(mainRoot, ['status', '--porcelain'], io, runGit)) {
+        throw new Error('Verification changed the target checkout; preserve changes and diagnose before cleanup');
+      }
+      context.verified_head = mainHead;
+      context.verified_command = verifyCmd;
+      context.verified_environment = environment;
+    }
+    context.isolation_head = isoHead;
+    context.finish_status = 'cleanup-pending';
+    persist();
+    if (context.kind !== 'branch' && isolatedExists) {
+      // Verify again after tests. Never force-delete untracked files or submodules.
+      if (git(worktreePath, ['status', '--porcelain'], io, runGit)) throw new Error('isolation changed during verification; cleanup stopped');
+      context.change_archive = archiveIsolationChange(changeDir, context);
+      persist();
+      if (isSubpath(worktreePath, process.cwd())) process.chdir(mainRoot);
+      git(mainRoot, ['worktree', 'remove', worktreePath], io, runGit);
+    }
+    if (branchExists) git(mainRoot, ['branch', '-d', name], io, runGit);
+    context.finish_status = 'complete';
+    persist();
+    io.stdout.write(`finish: 收尾完成。\n- merge commit: ${mainHead}\n- worktree 已移除: ${context.kind === 'branch' ? 'branch-only checkout retained' : worktreePath}\n- 隔离分支已删除: ${name}\n`);
+    return { exitCode: 0 };
+  } catch (error) {
+    io.stderr.write(`finish: ${error.message}；保留尚未清理的隔离上下文，可修复后重试。\n`);
     return { exitCode: 1 };
   }
-
-  // 7. 输出收尾报告。
-  io.stdout.write(
-    `finish: 收尾完成。\n` +
-    `- merge commit: ${mainHead}\n` +
-    `- worktree 已移除: ${worktreePath}${forceRemoved ? ' (force removed)' : ''}\n` +
-    `- 隔离分支已删除: ${name}\n` +
-    (mergeOut ? `- merge 输出: ${mergeOut}\n` : '')
-  );
-  return { exitCode: 0 };
 }

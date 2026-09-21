@@ -155,7 +155,7 @@ describe('change-recovery: resolveChangeTarget()', () => {
 
       assert.equal(summary.execution.required, true);
       assert.deepEqual(summary.blockers.map(blocker => blocker.code), ['EXECUTION_PLAN_REQUIRED']);
-      assert.equal(summary.next_action.skill, 'build-executor');
+      assert.equal(summary.next_action.skill, state === 'debugging' ? 'bug-investigator' : 'build-executor');
     }
   });
 

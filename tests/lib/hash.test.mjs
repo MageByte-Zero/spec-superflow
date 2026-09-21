@@ -148,4 +148,20 @@ describe('hash: computeContractHash()', () => {
 
     assert.notEqual(contractHash, artifactsHash);
   });
+
+  it('treats either planning or contract drift as stale', () => {
+    writeFileSync(join(tempDir, 'proposal.md'), 'proposal approved');
+    writeFileSync(join(tempDir, 'execution-contract.md'), 'contract approved');
+    const artifactsHash = hashMod.computeArtifactsHash(tempDir);
+    const contractHash = hashMod.computeContractHash(tempDir);
+    writeFileSync(
+      join(tempDir, '.spec-superflow.yaml'),
+      `artifacts_hash: ${artifactsHash}\ncontract_hash: ${contractHash}\n`,
+    );
+
+    assert.equal(hashMod.isContractFresh(tempDir), true);
+
+    writeFileSync(join(tempDir, 'execution-contract.md'), 'contract changed');
+    assert.equal(hashMod.isContractFresh(tempDir), false);
+  });
 });

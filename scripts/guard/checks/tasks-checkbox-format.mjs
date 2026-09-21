@@ -1,3 +1,4 @@
+import { parseTasks } from '../../lib/task-parser.mjs';
 // scripts/guard/checks/tasks-checkbox-format.mjs — verify tasks.md uses template checkbox format
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,7 +15,7 @@ export function checkTasksCheckboxFormat(changeDir) {
   }
 
   const content = fs.readFileSync(tasksPath, 'utf-8');
-  const checkboxLines = content.match(/^[ \t]*- \[[ xX]\]/gm);
+  const checkboxLines = parseTasks(content).filter(task => /^[ xX]$/.test(task.marker));
   if (!checkboxLines || checkboxLines.length === 0) {
     return { pass: false, failures: [`${TEMPLATE_HINT}: no checkbox task lines found`] };
   }

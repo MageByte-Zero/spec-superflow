@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { rewriteRuntime } from './lib/runtime-rewrite.mjs';
+import { createPhaseGuardContent } from './lib/phase-guard-content.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const defaultPluginRoot = dirname(__dirname); // repository root when running from clone
@@ -125,39 +126,7 @@ async function copySkillsWithRoot(sourceSkills, targetSkills, pluginRootAbs) {
 
 async function writePhaseGuard(targetRules) {
   ensureDir(targetRules);
-  const content = `---
-description: spec-superflow phase guard — 防止阶段漂移和未授权实现
-alwaysApply: true
----
-
-# Phase Guard
-
-## 入口规则
-
-- 所有工作必须从 "/workflow-start" 入口开始。
-- 在 .spec-superflow.yaml 中确认当前 state 和 workflow 模式之前，不要开始写代码。
-
-## 全局禁止
-
-- Full 或 legacy Hotfix 没有 execution-contract.md 或未经用户明确批准，不得进入实现。
-- Full 或 legacy Hotfix 必须先运行 ssf execution plan <change-dir> ...；没有 current execution plan 不得开始实现。
-- 只有 Full/legacy Hotfix 的 all pass review receipts 后才可 closing；不得把未审查的 wave 当作完成。
-- Quick、direct Hotfix、tweak 不要求 contract、execution plan、review receipt 或 DP-3/DP-4；它们须在边界内验证并持久化 test_result: pass。direct Hotfix 必须验证原症状回归。
-- 执行过程中如果发现需求/范围变化，必须回退到 specifying 或 bridging，而不是直接改代码。
-- 不要直接调用执行类 skill（如 "/build-executor"），必须通过入口路由。
-
-## 决策点协议
-
-- DP-0：设计前确认
-- DP-1：需求确认
-- DP-2：工件审查
-- DP-3/DP-4：仅 Full 或 legacy Hotfix 需要 contract 批准与执行模式确认。
-- DP-5：调试升级
-- DP-6：验证失败
-- DP-7：是否收口归档？
-
-> 本文件由 scripts/install-zcode.mjs 生成；对具体变更的 guard 内容请运行 ssf inject <change-dir> 更新。
-`;
+  const content = createPhaseGuardContent({ platformId: 'zcode', format: 'mdc', alwaysApply: true });
   await writeFile(join(targetRules, 'phase-guard.mdc'), content, 'utf-8');
 }
 

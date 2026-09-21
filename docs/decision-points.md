@@ -1,6 +1,11 @@
 # Decision Points Protocol
 
-本文档集中定义了 spec-superflow 工作流中所有需要用户明确确认的决策点。每个决策点（Decision Point）都是工作流中的关键门禁，确保用户在自动化流程中始终保持最终决策权。工作流中的 skill 在到达决策点时必须暂停执行、向用户呈现所需信息，并等待明确指令后方可继续。
+新任务走紧凑流程：draft（尚未批准的 proposal/tasks）→ executing → closing，abandoned 为取消。直接请求从 executing 开始。普通调试和验证是执行活动，不单独扭转状态。`workflow start` 记录一次具体计划批准并生成计划；`workflow complete` 验证交付。planned 的权威执行记录是 schema_version 2 plan，派生状态摘要不构成门禁；不要求 execution-contract、推荐凭据或 DP-0..DP-4。用户可明确选择 accepted-risk 结束，不能伪造测试通过，且不自动物理集成。
+
+**下文保留旧八状态和 DP 协议，仅供既有 legacy 任务恢复。不要为新任务重走这些步骤。**
+
+
+本文档集中定义了 spec-superflow 工作流中所有需要用户明确确认的决策点。每个决策点（Decision Point）都是工作流中的关键门禁，确保用户在自动化流程中始终保持最终决策权。决策点是授权与证据记录，不等于新的对话轮次。先核对现有用户授权与记录：同一范围、同一工件、同一决定已获批准时直接继续，不再次询问。仅缺少实质决定或发生范围、行为、权限、外部副作用变化时暂停；可合并展示的待决事项用一次具体问题处理。不得把尚未展示的契约或未知行为视为已获批准。
 
 ## DP-0: 设计前确认（User Confirmation Gate）
 
@@ -47,7 +52,7 @@
 - **名称**：执行模式选择
 - **触发条件**：仅 Full 或 legacy Hotfix 在 build-executor 启动前选择执行模式；Quick/direct Hotfix/Tweak 不适用。
 - **所需输入**：已批准的 `execution-contract.md`、项目测试基础设施现状，以及 `ssf execution recommend` 提供的执行模式证据与建议
-- **预期输出**：用户明确选择 `Inline`、`Batch Inline` 或 `SDD` 执行模式，build-executor 据此创建受确认的执行计划。DP-4 不重新选择 DP-0 已确认的 `full`、`hotfix` 或 `tweak` 路径。
+- **预期输出**：默认 Native（`inline`），记录已有执行授权即可，不单独询问一次模式菜单。只有用户明确选择委派才启用 `SDD`；任务数量、上下文长度和可用子代理工具都不是授权。`Batch Inline` 保留串行兼容。build-executor 据此创建执行计划。DP-4 不重新选择 DP-0 已确认的 `full`、`hotfix` 或 `tweak` 路径。
 - **关联 skill**：`spec-superflow:build-executor`
 
 ## DP-5: 调试升级
@@ -66,7 +71,7 @@
 - **名称**：验证失败
 - **触发条件**：release-archivist 在执行收尾验证时发现验证项未通过
 - **所需输入**：验证报告（包含通过项与失败项）、失败项的具体差异说明、原始规格要求与实际实现的对比
-- **预期输出**：用户决定返回修复失败项（重新进入执行阶段）或放弃验证直接关闭变更
+- **预期输出**：已有授权范围内先诊断并修复失败项，不能放弃验证而直接关闭。只有需要新范围、不可逆操作或人工裁决时才请求用户决定
 - **关联 skill**：`spec-superflow:release-archivist`
 
 ## DP-7: 归档确认

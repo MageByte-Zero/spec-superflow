@@ -39,6 +39,7 @@ import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { rewriteRuntime } from './runtime-rewrite.mjs';
+import { createPhaseGuardContent } from './phase-guard-content.mjs';
 import { writeShims, applyPathEntry } from './path-shim.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -261,41 +262,7 @@ async function copySkillsWithRoot(sourceSkills, targetSkills, pluginRootAbs, sou
 
 /** Phase-guard rule content for CodeBuddy CLI (md format). */
 function phaseGuardContent() {
-  return `---
-alwaysApply: false
----
-
-# Phase Guard — spec-superflow (codebuddy)
-
-> 仅在检测到 spec-superflow 变更工件（\`.spec-superflow.yaml\`、\`proposal.md\`、\`execution-contract.md\`、\`specs/\`）时应用此规则。普通项目无需走 workflow-start，CodeBuddy 不会强制加载本规则（\`alwaysApply: false\`）。
-
-## 入口规则
-
-- 所有工作必须从 "/workflow-start" 入口开始。
-- 在 .spec-superflow.yaml 中确认当前 state 和 workflow 模式之前，不要开始写代码。
-
-## 全局禁止
-
-- Full 或 legacy Hotfix 没有 execution-contract.md 或未经用户明确批准，不得进入实现。
-- Full 或 legacy Hotfix 必须先运行 ssf execution plan <change-dir> ...；没有 current execution plan 不得开始实现。
-- 只有 Full/legacy Hotfix 的 all pass review receipts 后才可 closing；不得把未审查的 wave 当作完成。
-- Quick、direct Hotfix、tweak 不要求 contract、execution plan、review receipt 或 DP-3/DP-4；它们须在边界内验证并持久化 test_result: pass。direct Hotfix 必须验证原症状回归。
-- 执行过程中如果发现需求/范围变化，必须回退到 specifying 或 bridging，而不是直接改代码。
-- 不要直接调用执行类 skill（如 "/build-executor"），必须通过入口路由。
-
-## 决策点协议
-
-- DP-0：设计前确认
-- DP-1：需求确认
-- DP-2：工件审查
-- DP-3/DP-4：仅 Full 或 legacy Hotfix 需要 contract 批准与执行模式确认。
-- DP-5：调试升级
-- DP-6：验证失败
-- DP-7：是否收口归档？
-
-> 本文件由 spec-superflow 安装脚本生成（platform: codebuddy）；
-> 对具体变更的 guard 内容请运行 \`ssf inject <change-dir>\` 更新。
-`;
+  return createPhaseGuardContent({ platformId: 'codebuddy', alwaysApply: false });
 }
 
 /**

@@ -4,9 +4,17 @@ import path from 'node:path';
 
 const STATE_FILE = '.spec-superflow.yaml';
 
+export const SETTABLE_FIELDS = [
+  'workflow', 'test_result', 'batches_completed', 'spec_merged',
+  ...[0, 1, 2, 3, 6, 7].flatMap(n => ['result', 'timestamp', 'decisions', 'confirmed'].map(field => `dp_${n}_${field}`)),
+];
+
 const BUILTIN_DEFAULTS = {
   state: 'exploring',
   workflow: 'auto',
+  workflow_variant: null,
+  completion_outcome: null,
+  completion_reason: null,
   revision: null,
   artifacts_hash: null,
   contract_hash: null,
@@ -21,26 +29,8 @@ const BUILTIN_DEFAULTS = {
   last_transition: null,
   last_transition_from: null,
   last_transition_to: null,
-  dp_0_decisions: null,
-  dp_0_result: null,
-  dp_0_confirmed: null,
-  dp_0_timestamp: null,
-  dp_1_result: null,
-  dp_1_timestamp: null,
-  dp_2_result: null,
-  dp_2_timestamp: null,
-  dp_3_result: null,
-  dp_3_timestamp: null,
-  dp_4_result: null,
-  dp_4_timestamp: null,
-  dp_5_result: null,
-  dp_5_timestamp: null,
-  dp_5_decisions: null,
-  dp_5_confirmed: null,
-  dp_6_result: null,
-  dp_6_timestamp: null,
-  dp_7_result: null,
-  dp_7_timestamp: null,
+  ...Object.fromEntries(Array.from({ length: 8 }, (_, n) =>
+    ['result', 'timestamp', 'decisions', 'confirmed'].map(field => [`dp_${n}_${field}`, null])).flat()),
 };
 
 /**
@@ -65,11 +55,14 @@ export function writeState(changeDir, state) {
   const filePath = path.join(changeDir, STATE_FILE);
   const lines = [];
   lines.push('# .spec-superflow.yaml — lightweight state machine');
-  lines.push('# Derived data. Always rebuildable from artifacts. Lost/corrupt → fall back to content-level detection.');
+  lines.push('# Progress and legacy approvals. Recover missing evidence; never infer approval from artifact existence.');
   lines.push('');
   lines.push('# === Core state ===');
   lines.push(`state: ${state.state || 'exploring'}`);
   lines.push(`workflow: ${state.workflow || 'auto'}`);
+  lines.push(`workflow_variant: ${state.workflow_variant ?? 'null'}`);
+  lines.push(`completion_outcome: ${state.completion_outcome ?? 'null'}`);
+  lines.push(`completion_reason: ${state.completion_reason ?? 'null'}`);
   lines.push(`revision: ${state.revision ?? 'null'}`);
   lines.push('');
   lines.push('# === Hashes (fast staleness detection) ===');
@@ -92,26 +85,9 @@ export function writeState(changeDir, state) {
   lines.push(`last_transition_to: ${state.last_transition_to ?? 'null'}`);
   lines.push('');
   lines.push('# === Decision points ===');
-  lines.push(`dp_0_decisions: ${state.dp_0_decisions ?? 'null'}`);
-  lines.push(`dp_0_result: ${state.dp_0_result ?? 'null'}`);
-  lines.push(`dp_0_confirmed: ${state.dp_0_confirmed ?? 'null'}`);
-  lines.push(`dp_0_timestamp: ${state.dp_0_timestamp ?? 'null'}`);
-  lines.push(`dp_1_result: ${state.dp_1_result ?? 'null'}`);
-  lines.push(`dp_1_timestamp: ${state.dp_1_timestamp ?? 'null'}`);
-  lines.push(`dp_2_result: ${state.dp_2_result ?? 'null'}`);
-  lines.push(`dp_2_timestamp: ${state.dp_2_timestamp ?? 'null'}`);
-  lines.push(`dp_3_result: ${state.dp_3_result ?? 'null'}`);
-  lines.push(`dp_3_timestamp: ${state.dp_3_timestamp ?? 'null'}`);
-  lines.push(`dp_4_result: ${state.dp_4_result ?? 'null'}`);
-  lines.push(`dp_4_timestamp: ${state.dp_4_timestamp ?? 'null'}`);
-  lines.push(`dp_5_result: ${state.dp_5_result ?? 'null'}`);
-  lines.push(`dp_5_timestamp: ${state.dp_5_timestamp ?? 'null'}`);
-  lines.push(`dp_5_decisions: ${state.dp_5_decisions ?? 'null'}`);
-  lines.push(`dp_5_confirmed: ${state.dp_5_confirmed ?? 'null'}`);
-  lines.push(`dp_6_result: ${state.dp_6_result ?? 'null'}`);
-  lines.push(`dp_6_timestamp: ${state.dp_6_timestamp ?? 'null'}`);
-  lines.push(`dp_7_result: ${state.dp_7_result ?? 'null'}`);
-  lines.push(`dp_7_timestamp: ${state.dp_7_timestamp ?? 'null'}`);
+  for (const field of Object.keys(BUILTIN_DEFAULTS).filter(key => key.startsWith('dp_'))) {
+    lines.push(`${field}: ${state[field] ?? 'null'}`);
+  }
 
   fs.writeFileSync(filePath, lines.join('\n') + '\n', 'utf-8');
 }

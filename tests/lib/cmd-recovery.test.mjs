@@ -279,7 +279,7 @@ describe('ssf resume and switch', () => {
 
     const result = runSsf(['resume', change, '--json']);
 
-    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.status, 1, result.stderr);
     assert.deepEqual(JSON.parse(result.stdout).continuation, {
       kind: 'blocked',
       wave: null,
@@ -287,7 +287,7 @@ describe('ssf resume and switch', () => {
     });
 
     const text = runSsf(['resume', change]);
-    assert.equal(text.status, 0, text.stderr);
+    assert.equal(text.status, 1, text.stderr);
     assert.match(text.stdout, /Continuation: blocked: A current execution plan is required/);
   });
 

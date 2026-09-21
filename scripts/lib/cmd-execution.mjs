@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util';
-import { adjudicateWave, createPlan, describeWaves, EXECUTION_MODES, readPlan, recordReview, resolveRecommendationPlanRevision, resyncPlan, validatePlan, writePlan } from './execution-plan.mjs';
+import { adjudicateWave, createPlan, describeWaves, describeReviews, EXECUTION_MODES, readPlan, recordReview, resolveRecommendationPlanRevision, resyncPlan, validatePlan, writePlan, writePlanRevision } from './execution-plan.mjs';
 import {
   createRecommendationReceipt,
   readCurrentRecommendationReceipt,
@@ -14,6 +14,7 @@ export function run(args, io = { stdout: process.stdout, stderr: process.stderr 
     args,
     options: {
       mode: { type: 'string' },
+      'review-policy': { type: 'string' },
       reason: { type: 'string' },
       wave: { type: 'string', multiple: true },
       confirm: { type: 'boolean', default: false },
@@ -22,6 +23,7 @@ export function run(args, io = { stdout: process.stdout, stderr: process.stderr 
       head: { type: 'string' },
       report: { type: 'string' },
       verdict: { type: 'string' },
+      issue: { type: 'string' },
       decision: { type: 'string' },
       json: { type: 'boolean', default: false },
       help: { type: 'boolean', default: false },
@@ -86,11 +88,9 @@ function createAndPrintPlan(changeDir, values, revise, io) {
   const existing = readPlan(changeDir);
   if (revise) {
     if (!existing) throw new Error('Cannot revise an execution plan before it is created');
-    if (values.mode !== 'sdd') {
-      throw new Error('Execution plan revisions must retain or upgrade to sdd; execution-plan downgrades are not allowed');
-    }
+
   } else if (existing) {
-    throw new Error('An execution plan already exists; use "ssf execution revise" to create a new SDD revision');
+    throw new Error('An execution plan already exists; use "ssf execution revise" to create a new revision');
   }
   const recommendationReceipt = readCurrentRecommendationReceipt(changeDir, waves, revise ? existing.revision : null);
   const recommendation = recommendationReceipt.recommendation;
@@ -102,17 +102,22 @@ function createAndPrintPlan(changeDir, values, revise, io) {
     throw new Error('Execution mode selection requires --confirm after reviewing "ssf execution recommend" output');
   }
   const followedRecommendation = values.mode === recommendation.recommendation.mode;
-  if (!revise) {
-    if (!followedRecommendation && !values['acknowledge-recommendation']) {
-      throw new Error(`${values.mode} differs from the ${recommendation.recommendation.mode} recommendation; pass --acknowledge-recommendation to record the informed choice`);
-    }
-    if (followedRecommendation && values['acknowledge-recommendation']) {
-      throw new Error('--acknowledge-recommendation is only valid when selecting a non-recommended mode');
-    }
+  if (!followedRecommendation && !values['acknowledge-recommendation']) {
+    throw new Error(`${values.mode} differs from the ${recommendation.recommendation.mode} recommendation; pass --acknowledge-recommendation to record the informed choice`);
   }
+  if (followedRecommendation && values['acknowledge-recommendation']) {
+    throw new Error('--acknowledge-recommendation is only valid when selecting a non-recommended mode');
+  }
+
+  const modeChanged = revise && existing.mode !== values.mode;
+  const reviewPolicy = values['review-policy']
+    ?? (modeChanged ? (values.mode === 'sdd' ? 'wave' : 'final')
+      : revise ? existing.review_policy ?? (values.mode === 'sdd' ? 'wave' : 'final')
+        : values.mode === 'sdd' ? 'wave' : 'final');
 
   const plan = createPlan(changeDir, {
     mode: values.mode,
+    reviewPolicy,
     source: revise ? 'user-confirmed-revision' : 'user-confirmed',
     rationale: values.reason,
     waves,
@@ -121,14 +126,11 @@ function createAndPrintPlan(changeDir, values, revise, io) {
     selection: {
       confirmed: true,
       followed_recommendation: followedRecommendation,
-      // Records an *informed* departure from the recommendation, not merely the
-      // --acknowledge-recommendation flag. On the plan path the flag guarantees
-      // it; on the revise path --confirm plus the forced sdd upgrade guarantees it.
       acknowledged_non_recommendation: !followedRecommendation,
     },
     revision: revise ? existing.revision + 1 : undefined,
   });
-  const saved = writePlan(changeDir, plan);
+  const saved = revise ? writePlanRevision(changeDir, plan, existing) : writePlan(changeDir, plan);
   writeExecutionSummary(changeDir, saved);
   print(values.json, { ok: true, plan: saved }, `Execution plan revision ${saved.revision} recorded (${saved.mode}).`, io);
 }
@@ -155,7 +157,7 @@ function showPlan(changeDir, json, io) {
   const validation = validatePlan(changeDir, plan);
   const current = validation.valid;
   const waves = describeWaves(changeDir, plan);
-  print(json, { ok: current, current, plan, valid: current, failures: validation.failures, waves },
+  print(json, { ok: current, current, plan, valid: current, failures: validation.failures, waves, reviews: describeReviews(changeDir, plan) },
     validation.valid ? `Execution plan revision ${plan.revision} is current.` : validation.failures.join('\n'), io);
   return { exitCode: validation.valid ? 0 : 1 };
 }
@@ -169,6 +171,7 @@ function recordAndPrintReview(changeDir, values, io) {
   if (!['pass', 'fail'].includes(values.verdict)) throw new Error("--verdict must be 'pass' or 'fail'");
   const receipt = recordReview(changeDir, values.wave[0], {
     status: values.verdict,
+    issue: values.issue,
     base: values.base,
     head: values.head,
     report: values.report,
@@ -247,10 +250,10 @@ function print(json, value, message, io) {
 function printHelp(io) {
   io.stdout.write(`Usage:
   ssf execution recommend <dir> [--wave <id>:<strategy>:<task,...>[:<depends-on,...>]] [--json]
-  ssf execution plan <dir> --mode <mode> --confirm --reason <text> --wave <id>:<strategy>:<task,...>[:<depends-on,...>] [--acknowledge-recommendation]
+  ssf execution plan <dir> --mode <mode> [--review-policy final|wave] --confirm --reason <text> --wave <id>:<strategy>:<task,...>[:<depends-on,...>] [--acknowledge-recommendation]
   ssf execution show <dir> [--json]
-  ssf execution revise <dir> --mode sdd --confirm --reason <text> --wave <id>:<strategy>:<task,...>[:<depends-on,...>] [--acknowledge-recommendation]
-  ssf execution review <dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict pass|fail
+  ssf execution revise <dir> --mode <mode> [--review-policy final|wave] --confirm --reason <text> --wave <id>:<strategy>:<task,...>[:<depends-on,...>] [--acknowledge-recommendation]
+  ssf execution review <dir> --wave <id> --base <sha> --head <sha> --report <path> --verdict pass|fail [--issue <finding-id>]
   ssf execution adjudicate <dir> --wave <id> --decision allow-review --confirm --reason <text>
   ssf execution resync <dir> --confirm --reason <text>\n`);
 }

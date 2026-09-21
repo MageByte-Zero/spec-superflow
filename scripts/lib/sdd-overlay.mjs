@@ -1,3 +1,4 @@
+import { parseTasks } from './task-parser.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync,
@@ -68,10 +69,9 @@ export function getCurrentPlanScopedPaths(changeDir) {
 
 export function computeTaskHash(changeDir, taskId) {
   const tasks = readFileSync(join(changeDir, 'tasks.md'), 'utf8');
-  const escaped = taskId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = tasks.match(new RegExp(`^- \\[([ xX])\\] ${escaped}\\s+.+$`, 'm'));
-  if (!match) throw new Error(`Task '${taskId}' was not found in tasks.md`);
-  return `sha256:${createHash('sha256').update(normalizeTaskCheckboxes(match[0])).digest('hex')}`;
+  const task = parseTasks(tasks).find(task => task.id === taskId);
+  if (!task) throw new Error(`Task '${taskId}' was not found in tasks.md`);
+  return `sha256:${createHash('sha256').update(normalizeTaskCheckboxes(task.line)).digest('hex')}`;
 }
 
 export function saveCheckpoint(changeDir, input) {

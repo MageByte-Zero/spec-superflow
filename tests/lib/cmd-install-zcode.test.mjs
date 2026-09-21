@@ -30,9 +30,9 @@ describe('BUG/#29: install-zcode deploys skills', () => {
     const guardPath = join(cwd, '.zcode', 'rules', 'phase-guard.mdc');
     assert.equal(existsSync(guardPath), true, 'phase guard should be written');
     const guard = readFileSync(guardPath, 'utf-8');
-    assert.match(guard, /Full 或 legacy Hotfix/);
-    assert.match(guard, /Quick、direct Hotfix、tweak/);
-    assert.match(guard, /test_result: pass/);
+    assert.match(guard, /opt-in/i);
+    assert.match(guard, /\.spec-superflow\.yaml/);
+    assert.doesNotMatch(guard, /所有工作必须/);
   });
 
   it('SHALL give contract-builder the portable execution-contract asset command', () => {

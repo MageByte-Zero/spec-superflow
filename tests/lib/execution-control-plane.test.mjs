@@ -10,6 +10,18 @@ const root = process.cwd();
 const read = path => readFileSync(join(root, path), 'utf8');
 
 describe('execution control plane instructions', () => {
+  it('publishes the lean v2 path as the homepage default', () => {
+    for (const path of ['README.md', 'docs/README_en.md']) {
+      const content = read(path);
+      assert.match(content, /workflow start.*--path direct/is);
+      assert.match(content, /workflow start.*--path planned/is);
+      assert.match(content, /inline.*final/is);
+      assert.match(content, /worktree.*(?:显式|explicit|opt)/is);
+      assert.match(content, /accepted-risk/is);
+      assert.doesNotMatch(content, /use workflow-start to begin/i);
+    }
+  });
+
   it('recovers only a legacy checkpoint whose hash and revision prove it belongs to the current plan', () => {
     const changeDir = mkdtempSync(join(tmpdir(), 'execution-control-plan-'));
     const currentHash = `sha256:${'c'.repeat(64)}`;
@@ -53,8 +65,6 @@ describe('execution control plane instructions', () => {
 
   it('documents receipt-bound planless debugging for every direct workflow path', () => {
     for (const path of [
-      'README.md',
-      'docs/README_en.md',
       'docs/state-machine.md',
       'docs/decision-points.md',
     ]) {
@@ -69,7 +79,7 @@ describe('execution control plane instructions', () => {
   });
 
   it('publishes direct-path semantics in user documentation', () => {
-    for (const path of ['README.md', 'INSTALL.md', 'docs/README_en.md', 'docs/state-machine.md', 'docs/artifact-contract.md', 'docs/decision-points.md']) {
+    for (const path of ['INSTALL.md', 'docs/state-machine.md', 'docs/artifact-contract.md', 'docs/decision-points.md']) {
       const content = read(path);
       assert.match(content, /Quick/);
       assert.match(content, /direct Hotfix/i);
@@ -79,8 +89,6 @@ describe('execution control plane instructions', () => {
   });
   it('documents #45 guarded execution', () => {
     const documents = [
-      'README.md',
-      'docs/README_en.md',
       'INSTALL.md',
       'templates/execution-contract.md',
       'docs/state-machine.md',
@@ -106,7 +114,7 @@ describe('execution control plane instructions', () => {
   });
 
   it('documents implemented #47 recovery commands without adding states', () => {
-    const chineseDocuments = ['README.md', 'INSTALL.md'];
+    const chineseDocuments = ['INSTALL.md'];
     for (const path of chineseDocuments) {
       const content = read(path);
       for (const command of ['/ssf:resume', '/ssf:switch', '/ssf:save']) {
@@ -124,22 +132,6 @@ describe('execution control plane instructions', () => {
       assert.match(content, /CodeBuddy\/WorkBuddy.*不为其他平台承诺完全相同的 slash 名称/is,
         `${path} scopes slash adapters to CodeBuddy/WorkBuddy`);
     }
-
-    const english = read('docs/README_en.md');
-    for (const command of ['/ssf:resume', '/ssf:switch', '/ssf:save']) {
-      assert.match(english, new RegExp(command.replace('/', '\\/')),
-        `docs/README_en.md publishes ${command}`);
-    }
-    assert.match(english, /ssf resume.*exactly one active change/is,
-      'English docs limit resume auto-selection to the sole active change');
-    assert.match(english, /ssf switch.*read-only recovery context/is,
-      'English docs describe switch as read-only recovery context');
-    assert.match(english, /switch.*never changes cwd, a TUI session, or a hidden pointer.*CLI itself does not.*conversation focus/is,
-      'English docs keep switch from mutating environment or conversation focus');
-    assert.match(english, /save.*existing checkpoint.*never commits, pushes, or syncs automatically/is,
-      'English docs limit save to the existing checkpoint without automatic Git or sync effects');
-    assert.match(english, /CodeBuddy\/WorkBuddy.*not promised identical slash names/is,
-      'English docs scope slash adapters to CodeBuddy/WorkBuddy');
 
     for (const path of [
       'README.md',
@@ -209,8 +201,6 @@ describe('execution control plane instructions', () => {
 
   it('documents only the persisted execution-plan contract that #45 implements', () => {
     const documents = [
-      'README.md',
-      'docs/README_en.md',
       'INSTALL.md',
       'templates/execution-contract.md',
       'docs/state-machine.md',
@@ -226,21 +216,15 @@ describe('execution control plane instructions', () => {
         `${path} does not claim an unpersisted write-conflict check`);
     }
 
-    for (const path of ['README.md', 'docs/README_en.md', 'INSTALL.md']) {
-      const content = read(path);
-      assert.match(content, /execution revise/i, `${path} documents execution revise`);
-      assert.match(content,
-        /retains?\/upgrades?.*sdd.*replan|inline\/batch-inline.*(?:upgrades?|升级).*sdd.*(?:or|或).*(?:replans?|重规划).*sdd/is,
-        `${path} allows SDD replanning while retaining the no-downgrade contract`);
-      assert.match(content, /downgrade|降级/i, `${path} keeps SDD downgrade rejection explicit`);
+    for (const path of ['INSTALL.md']) {
+      assert.match(read(path), /execution revise.*(?:retain|change|切换)/is);
     }
+    assert.match(read('scripts/lib/cmd-execution.mjs'), /review-policy/);
 
-    assert.match(read('scripts/spec-superflow.mjs'), /upgrade inline\/batch.*replan existing sdd.*new revision/is,
-      'CLI help describes SDD replanning instead of only inline upgrades');
   });
 
   it('documents portable and auditable review receipt evidence', () => {
-    const localizedDocuments = ['README.md', 'INSTALL.md'];
+    const localizedDocuments = ['INSTALL.md'];
 
     for (const path of localizedDocuments) {
       const content = read(path);
@@ -261,22 +245,6 @@ describe('execution control plane instructions', () => {
         `${path} requires review reports to be regular, non-empty, non-symlink files`);
     }
 
-    const english = read('docs/README_en.md');
-    assert.match(english,
-      /--report.*resolved relative to.*<change>.*must remain under.*<change>\/.superpowers\/sdd\/reviews/is,
-      'English documentation resolves review reports from the change directory into its reviews overlay');
-    assert.match(english, /--base.*--head.*real commits/is,
-      'English documentation requires real commits for review ranges');
-    assert.match(english, /<change>.*Git worktree/is,
-      'English documentation binds review ranges to the change worktree');
-    assert.match(english, /base.*ancestor.*head/is,
-      'English documentation requires base to precede head');
-    assert.match(english,
-      /<change>\/.superpowers\/sdd\/reviews\/.*physical.*non-symlink/is,
-      'English documentation requires physical, non-symlink review overlay directories');
-    assert.match(english,
-      /report.*regular.*non-empty.*non-symlink.*file/is,
-      'English documentation requires review reports to be regular, non-empty, non-symlink files');
   });
 
   it('keeps execution mode and review gates machine-backed in every entry point', () => {
@@ -285,23 +253,18 @@ describe('execution control plane instructions', () => {
     const codeReviewer = read('skills/code-reviewer/SKILL.md');
     const inject = read('scripts/lib/cmd-inject.mjs');
 
-    assert.match(workflowStart, /execution show <change-dir> --json/);
-    assert.match(workflowStart, /execution plan <change-dir>/);
+    assert.match(workflowStart, /ssf resume <change-dir> --json/);
     assert.match(buildExecutor, /execution recommend/i);
-    assert.match(buildExecutor, /user.*confirm|用户.*确认/is);
-    assert.match(buildExecutor, /acknowledge-recommendation/i);
-    assert.match(buildExecutor, /parallel.*wave/is);
-    assert.match(buildExecutor, /concurren(?:cy|t).*unavailable/i);
-    assert.match(buildExecutor, /retryable.*replacement.*pass/is);
-    assert.doesNotMatch(buildExecutor, />3 tasks, same module/);
+    assert.match(buildExecutor, /review-policy final/);
+    assert.match(buildExecutor, /Old plans with no policy retain wave/i);
+    assert.match(buildExecutor, /platform support.*otherwise report/is);
+    assert.match(buildExecutor, /Critical\/Important.*fail.*repair.*pass/is);
     assert.match(codeReviewer, /execution review <change-dir>.*--verdict <pass\|fail>/s);
-    assert.match(codeReviewer, /Critical\/Important.*fail.*receipt/is);
-    assert.match(inject, /execution plan/);
-    assert.match(inject, /pass.*review receipts.*closing/is);
-    assert.match(buildExecutor, /<wave-id>:<parallel\|serial>:<task,.+>\[:<depends-on/i);
+    assert.match(inject, /review_policy/);
+
   });
 
-  it('gives every packaged installer the same planned-execution gate', () => {
+  it('gives every packaged installer the same opt-in activation gate', () => {
     for (const path of [
       'scripts/lib/install.mjs',
       'scripts/lib/cmd-install-workbuddy.mjs',
@@ -309,9 +272,9 @@ describe('execution control plane instructions', () => {
       'scripts/install-zcode.mjs',
     ]) {
       const content = read(path);
-      assert.match(content, /Full.*legacy Hotfix/is);
-      assert.match(content, /Quick.*direct Hotfix.*tweak/is);
-      assert.match(content, /test_result: pass/);
+      assert.match(content, /phase-guard-content\.mjs/);
+      assert.match(content, /createPhaseGuardContent/);
+      assert.doesNotMatch(content, /所有工作必须/);
     }
   });
 

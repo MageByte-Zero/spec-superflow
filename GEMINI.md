@@ -1,14 +1,12 @@
-# spec-superflow
+# spec-superflow v2.0.0 | opt-in
 
 Use the bundled agent skills in `skills/` to run the spec-superflow workflow.
 
 Start from `workflow-start` when a user wants to start, continue, resume, plan, implement, review, debug, close, or inspect a spec-superflow change.
 
-The workflow is self-contained and does not require OpenSpec or Superpowers at runtime. It uses OpenSpec-style planning artifacts and Superpowers-style execution discipline through the `execution-contract.md` handoff.
+The workflow is self-contained and does not require OpenSpec or Superpowers at runtime. It uses OpenSpec-style planning artifacts and Superpowers-style execution discipline with direct or planned execution; contracts are legacy compatibility only.
 
 
 <!-- spec-superflow-phase-guard-start -->
-# spec-superflow v1.2.0 | 阶段: {{state}} | 工作流: {{workflow}}
-当前阶段允许的操作由 workflow-start 路由规则定义。
-禁止跨越 DP gate 进入下一阶段。变更范围以 execution-contract.md 的 Intent Lock 为准。
+Use workflow-start only for an explicit spec-superflow request or a request to continue an active change containing `.spec-superflow.yaml`. Otherwise this workflow adds no constraints.
 <!-- spec-superflow-phase-guard-end -->

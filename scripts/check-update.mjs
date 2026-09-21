@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 // scripts/check-update.mjs — compare local spec-superflow version with npm latest
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { homedir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 
 function readLocalVersion() {
   const candidates = ['package.json', 'plugin.json'];
   for (const file of candidates) {
-    const path = join(process.cwd(), file);
+    const path = join(dirname(fileURLToPath(import.meta.url)), '..', file);
     if (existsSync(path)) {
       try {
         const json = JSON.parse(readFileSync(path, 'utf-8'));
@@ -40,15 +42,24 @@ function readInstalledPluginVersion() {
 }
 
 function readNpmLatest() {
+  const cache = join(homedir(), '.cache', 'spec-superflow', 'update.json');
+  try {
+    const saved = JSON.parse(readFileSync(cache, 'utf8'));
+    if (Date.now() - saved.checked_at < 24 * 60 * 60 * 1000) return saved.version;
+  } catch {}
+  let version = null;
   try {
     const out = execFileSync('npm', ['view', 'spec-superflow', 'version'], {
       encoding: 'utf-8',
       timeout: 10_000,
     });
-    return out.trim();
-  } catch {
-    return null;
-  }
+    version = out.trim();
+  } catch {}
+  try {
+    mkdirSync(dirname(cache), { recursive: true });
+    writeFileSync(cache, JSON.stringify({ checked_at: Date.now(), version }));
+  } catch {}
+  return version;
 }
 
 function compareVersions(a, b) {
@@ -64,7 +75,7 @@ function compareVersions(a, b) {
 }
 
 function main() {
-  const localVersion = readInstalledPluginVersion() || readLocalVersion();
+  const localVersion = readLocalVersion() || readInstalledPluginVersion();
   const latestVersion = readNpmLatest();
 
   if (!localVersion || !latestVersion) {

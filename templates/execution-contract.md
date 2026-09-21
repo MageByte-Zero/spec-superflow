@@ -1,99 +1,56 @@
-# 执行合同
+# 执行合同（Legacy）
+
+仅供已有 legacy 任务使用。新 planned 任务以 proposal.md + tasks.md 为源，由 workflow start 生成执行记录，不创建此文件。
 
 ## Intent Lock
 
-- **变更名称**：
-- **要解决的问题**：
-- **范围内**：
+- **问题与范围**：引用 proposal.md 的已批准范围，保留一句摘要。
 - **范围外**：
 
 ## Approved Behavior
 
-- **已批准需求摘要**：
-- **关键场景**：
-- **验收检查**：
+| 需求 / 场景引用 | 任务 ID | 验证证据 |
+|---|---|---|
+| | | |
+
+不复制 specs 全文；没有行为变化时注明 specs 省略的理由。
 
 ## Design Constraints
 
-- **架构约束**：
-- **接口约束**：
-- **依赖约束**：
-- **数据约束**：
+引用 design.md 中适用的决策与约束；省略 design 时写明必要约束。
 
 ## Execution Plan
 
-full/hotfix 先运行 `ssf execution recommend`，按任务量和 wave 策略列出可用方式并
-推荐一种，同时保存匹配当前 wave 的 recommendation receipt。Agent 展示候选项和理由，
-`plan` 和 `revise` 均只接受仍匹配 artifact、contract 和 wave 的凭据；用户通过 `--confirm` 明确确认；选择非推荐方式时
-还必须记录 `--acknowledge-recommendation`。Batch Inline 是串行模式，不得描述为并行。批准后，
-`ssf execution plan` 会把当前执行计划保存到
-`<change>/.superpowers/sdd/execution-plan.json`；该 JSON 是计划的持久化控制面，
-不是本 execution contract 的一部分。
+推荐凭据（recommendation receipt）绑定当前产物；计划保存在 `.superpowers/sdd/execution-plan.json`。审查证据为 review receipt。
 
-## Execution Waves
+### Execution Waves
 
-每个 wave 必须有唯一 ID；只有依赖 wave 的 review receipt 为 `pass` 后，后续
-wave 才可以开始。`parallel` 只表示允许在宿主支持并发派发时同时执行；不支持并发时
-必须明确报告该能力不可用，而不能把 `parallel` 计划悄然改写成串行执行。
+任务与依赖以 tasks.md 为准，不再抄写每个任务。列出确有必要的集成边界。
 
-### Wave 1
+- **执行方式**：默认 Native（持久化为 `inline`）；`batch-inline` 兼容串行；SDD 仅在用户明确选择委派且有独立工作收益时启用；默认不派发实现、探索或审查子代理。
+- **审查策略**：Native 默认 `final`，SDD 默认 `wave`；旧计划无策略字段仍按 wave。任务数量不触发 SDD。
+- **边界与理由**：
 
-- **Wave ID**：
-- **任务**：
-- **依赖 wave**：无
-- **策略**：`parallel` | `serial`
-- **目标**：
-- **输入**：
-- **输出**：
-- **完成标准**：
-- **Review gate**：review report 路径、base/head SHA、review receipt（`pass` | `fail`）
-
-### Wave 2
-
-- **Wave ID**：
-- **任务**：
-- **依赖 wave**：
-- **策略**：`parallel` | `serial`
-- **目标**：
-- **输入**：
-- **输出**：
-- **完成标准**：
-- **Review gate**：review report 路径、base/head SHA、review receipt（`pass` | `fail`）
+确认已有用户选择后运行 `ssf execution recommend <dir> --wave <id>:serial:<tasks>`，再通过 `ssf execution plan <dir> --mode <mode> --review-policy <final|wave> --confirm --reason <text> --wave <id>:serial:<tasks>` 记录。非推荐选择加 `--acknowledge-recommendation`。已有选择不重复询问。
 
 ## Test Obligations
 
-- **必须先从失败测试开始的行为**：
-- **必需的边界情况**：
-- **回归敏感区域**：
-
-## Execution Mode
-
-- **可用方式与推荐**：`ssf execution recommend <change-dir> [--wave <id>:<parallel|serial>:<task,...>[:<depends-on,...>]]`
-- **用户确认的模式**：`sdd` | `inline` | `batch-inline`
-- **推荐理由 / 项目事实**：
-- **非推荐选择的风险确认**：`--acknowledge-recommendation`（若适用）
-- **执行计划命令**：`ssf execution plan <change-dir> --mode <mode> --confirm --reason <text> --wave <id>:<parallel|serial>:<task,...>[:<depends-on,...>] [--acknowledge-recommendation]`
-- **允许的修订**：将已有计划保留/升级为 `sdd`；先重新 recommend，并以 `--confirm` 生成新 revision 和清除旧 receipt；不允许降级：`ssf execution revise <change-dir> --mode sdd --confirm --reason <text> --wave <id>:<parallel|serial>:<task,...>[:<depends-on,...>] [--acknowledge-recommendation]`
-- **计划 revision / artifact hash**：
-
-## Verification Dimensions
-
-| 维度 | 状态 | 发现 |
-|------|------|------|
-| Completeness | Pending | — |
-| Correctness | Pending | — |
-| Coherence | Pending | — |
-
-**总体结论**：Pending
+- **行为回归与边界**：
+- **任务级验证**：仅受影响测试。
+- **集成 / 最终验证**：必要命令，结果绑定代码与环境；不按任务重复全量测试。
 
 ## Review Gates
 
-- **强制审查点**：每个 Execution Wave 完成后记录 `ssf execution review` 的 review receipt
-- **阻塞类别**：依赖未通过、review receipt 为 `fail`、缺失或过期
-- **收口条件**：所有当前 wave 都有 `pass` review receipt
+- **final**：完成后由当前执行者做一次全量审查，`ssf execution review --wave final` 绑定实际 Git range；不启动 reviewer 子代理。
+- **wave**：每个 wave 一次审查，依赖以通过回执为门禁。
+- Critical/Important：失败回执 → 修复 → 聚焦复审 → 通过。不可用任务勾选替代审查。
 
 ## Escalation Rules
 
-- **何时回退到 `specifying`**：
-- **何时回退到 `bridging`**：
-- **何时不得继续实现**：
+- 范围变化：回到 specifying；契约偏移：回到 bridging。
+- 非语义修正：resync，保留失败链和历史；语义变更：重新批准后 revise，允许保留或切换执行模式。
+- 三次未解决失败：人工裁决，不自动清空失败次数。
+
+## Approval
+
+DP-3 批准记录与限定条件：

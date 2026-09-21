@@ -9,13 +9,13 @@ describe('marketplace release documentation', () => {
   const currentVersion = JSON.parse(read('package.json')).version;
 
   it('uses the real Codex selectors and upgrade flow', () => {
-    for (const text of [read('README.md'), read('INSTALL.md')]) {
-      assert.match(text, /spec-superflow@awesome-codex-plugins/);
-      assert.match(text, /spec-superflow@spec-superflow/);
-      assert.match(text, /codex plugin marketplace upgrade awesome-codex-plugins/);
-      assert.doesNotMatch(text, /codex plugin update/);
-      assert.match(text, /codex plugin list/);
-    }
+    const install = read('INSTALL.md');
+    assert.match(install, /spec-superflow@awesome-codex-plugins/);
+    assert.match(install, /spec-superflow@spec-superflow/);
+    assert.match(install, /codex plugin marketplace upgrade awesome-codex-plugins/);
+    assert.doesNotMatch(install, /codex plugin update/);
+    assert.match(install, /codex plugin list/);
+    assert.match(read('README.md'), /spec-superflow@spec-superflow/);
   });
 
   it('uses the current release tag for direct Codex marketplace installation', () => {
@@ -38,7 +38,7 @@ describe('marketplace release documentation', () => {
     const readme = read('README.md');
     const checklist = read('docs/release-checklist.md');
     assert.match(readme, new RegExp(`v${currentVersion.replaceAll('.', '\\.')}`));
-    assert.match(readme, /Quick、direct Hotfix、Tweak 或 Full/);
+    assert.match(readme, /`direct` 或 `planned`/);
     assert.match(checklist, /AI Agent Marketplace Delivery/);
     assert.match(checklist, /verify-marketplace-release/);
     assert.match(checklist, /同步 PR/);

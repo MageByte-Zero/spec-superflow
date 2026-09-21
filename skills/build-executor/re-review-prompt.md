@@ -6,7 +6,7 @@ to the declared repair and preserves the normal review receipt gate.
 ```
 Subagent (general-purpose):
   description: "Focused re-review of wave [WAVE_ID], repair round [REPAIR_ROUND]"
-  model: [MODEL — REQUIRED: resolve the review profile]
+  model: [MODEL — resolve review profile, or inherit host model when unconfigured]
   prompt: |
     You are re-reviewing a focused repair for wave [WAVE_ID].
 

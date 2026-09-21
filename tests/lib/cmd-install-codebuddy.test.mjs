@@ -98,6 +98,9 @@ describe('cmd-install-codebuddy', () => {
     // phase-guard rule with alwaysApply:false frontmatter
     const phaseGuard = readFileSync(join(configDir, 'rules', 'phase-guard.md'), 'utf-8');
     assert.match(phaseGuard, /^---\nalwaysApply: false\n---/);
+    assert.match(phaseGuard, /opt-in/i);
+    assert.match(phaseGuard, /\.spec-superflow\.yaml/);
+    assert.doesNotMatch(phaseGuard, /所有工作必须/);
 
     // user-level hooks.json must NOT be written (CodeBuddy does not load it)
     assert.ok(!existsSync(join(configDir, 'hooks', 'hooks.json')));
@@ -281,19 +284,37 @@ describe('cmd-install-codebuddy', () => {
 describe('hooks/session-start output format', () => {
   const scriptPath = join(process.cwd(), 'hooks', 'session-start');
 
-  it('outputs hookSpecificOutput under CODEBUDDY_PROJECT_DIR', () => {
+  it('outputs nothing when no active state file exists', t => {
+    const project = mkdtempSync(join(tmpdir(), 'ssf-hook-inactive-'));
+    t.after(() => rmSync(project, { recursive: true, force: true }));
     const out = execFileSync('bash', [scriptPath], {
-      env: { ...process.env, CODEBUDDY_PROJECT_DIR: '/tmp/cb-project' },
+      cwd: project,
+      env: { ...process.env, CODEBUDDY_PROJECT_DIR: project, PWD: project },
+    }).toString();
+    assert.equal(out, '');
+  });
+
+  it('outputs hookSpecificOutput for active CodeBuddy state', t => {
+    const project = mkdtempSync(join(tmpdir(), 'ssf-hook-codebuddy-'));
+    t.after(() => rmSync(project, { recursive: true, force: true }));
+    writeFileSync(join(project, '.spec-superflow.yaml'), 'state: executing\n');
+    const out = execFileSync('bash', [scriptPath], {
+      cwd: project,
+      env: { ...process.env, CODEBUDDY_PROJECT_DIR: project, PWD: project },
     }).toString();
     assert.match(out, /"hookSpecificOutput"/);
     assert.match(out, /"hookEventName": "SessionStart"/);
     assert.match(out, /"additionalContext"/);
   });
 
-  it('falls back to top-level additionalContext when no platform env is set', () => {
+  it('falls back to top-level additionalContext for active generic state', t => {
+    const project = mkdtempSync(join(tmpdir(), 'ssf-hook-generic-'));
+    t.after(() => rmSync(project, { recursive: true, force: true }));
+    writeFileSync(join(project, '.spec-superflow.yaml'), 'state: executing\n');
     const { PATH = '' } = process.env;
     const out = execFileSync('bash', [scriptPath], {
-      env: { PATH },
+      cwd: project,
+      env: { PATH, PWD: project },
     }).toString();
     // No CURSOR/CLAUDE/CODEBUDDY env → else branch → top-level additionalContext.
     assert.match(out, /"additionalContext"/);

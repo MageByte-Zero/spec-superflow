@@ -198,6 +198,27 @@ describe('ssf workflow', () => {
     assert.equal(guard.json.pass, true);
   });
 
+  it('repairs a lost Quick receipt without changing the persisted workflow', () => {
+    assert.equal(recommend().exitCode, 0);
+    assert.equal(runSsf(['workflow', 'accept', changeDir,
+      '--source', 'direct-request', '--verification', 'bounded']).exitCode, 0);
+    rmSync(getOverlayPaths(changeDir).workflowSelection);
+
+    const blocked = runSsf(['resume', changeDir, '--json']);
+    assert.equal(blocked.exitCode, 1, blocked.stderr);
+    assert.equal(blocked.json.blockers[0].code, 'WORKFLOW_RECEIPT_REQUIRED');
+    assert.equal(blocked.json.blockers[0].command, null);
+
+    const repeatedRecommendation = recommend();
+    assert.equal(repeatedRecommendation.exitCode, 0, repeatedRecommendation.stderr);
+    assert.equal(repeatedRecommendation.json.recommendation.mode, 'quick');
+    const repaired = runSsf(['workflow', 'accept', changeDir,
+      '--source', 'direct-request', '--verification', 'bounded', '--json']);
+    assert.equal(repaired.exitCode, 0, repaired.stderr);
+    assert.equal(repaired.json.record.selection.mode, 'quick');
+    assert.equal(readState(changeDir).workflow, 'quick');
+  });
+
   it('infers a persisted Quick workflow when runtime guard omits --workflow', () => {
     const recommended = recommend();
     assert.equal(recommended.exitCode, 0, recommended.stderr);
