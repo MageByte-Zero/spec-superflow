@@ -44,11 +44,19 @@ const COMMANDS = {
   'uninstall-codebuddy': () => import('./lib/cmd-uninstall-codebuddy.mjs'),
 };
 
-const HELP = `spec-superflow (ssf) — Spec-first workflow CLI
+const HELP = `spec-superflow (ssf) — Lean spec workflow CLI
 
 Usage: ssf <command> [options]
 
 Commands:
+  workflow start <dir> --path direct --scope <request>
+                        Start bounded work without a planning pack
+  workflow start <dir> --path planned --confirm --reason <approval> [--mode sdd]
+                        Start one approved plan; defaults to inline execution and final review
+  workflow complete <dir> --verification-command <command>
+                        Run final verification once and record verified completion
+  workflow complete <dir> --accept-risk --confirm --reason <decision>
+                        Record accepted risk without forging verification success
   list                  List all changes and their status
   validate <dir>        Validate artifacts in a change directory
   doctor                Health check (versions, hooks, skills, docs)
@@ -101,10 +109,10 @@ Commands:
                         Recover an explicit change context without changing the shell
   runtime check-update  Run a portable update check for canonical skills
   runtime infer <dir>   Infer workflow mode without a plugin-root path
-  workflow recommend <change-dir> [--task-count <n>] [--file-count <n>] [--config-doc-only yes|no|unknown] [--schema-api-change yes|no|unknown] [--new-module yes|no|unknown] [--behavioral-constraint-change yes|no] [--cross-module-change yes|no] [--uncertainty low|high|unknown] [--request-kind standard|incident] [--affected-path <path>] [--production-behavior yes|no|unknown] [--public-boundary yes|no|unknown] [--installer yes|no|unknown] [--state-machine yes|no|unknown] [--external-side-effect yes|no|unknown] [--data-permission-config-semantics yes|no|unknown] [--expected-behavior-clear yes|no|unknown] [--verification-reproducible yes|no|unknown] [--impact-paths-complete yes|no|unknown]
-                        Persist observed intake facts and recommend full, hotfix, tweak, quick, or lightweight without selecting one
-  workflow select <change-dir> --mode full|hotfix|tweak|quick|lightweight --confirm --reason <text> [--scope-confirmation <text>] [--acknowledge-recommendation] [--verification tdd|new-test|bounded]
-                        Persist a user-confirmed path; a risk-acknowledged Quick requires a verification choice
+  workflow recommend <change-dir> [legacy options]
+                        Recover a v1 path recommendation
+  workflow select <change-dir> --mode full|hotfix|tweak|quick|lightweight ...
+                        Recover or repair a v1 path selection
   workflow accept <change-dir> --source direct-request --verification tdd|new-test|bounded
                         Directly accept a recommended quick or hotfix workflow with the user's chosen verification
   workflow show <change-dir> [--json]

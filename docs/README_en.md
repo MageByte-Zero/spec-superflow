@@ -1,8 +1,6 @@
 <h1 align="center">spec-superflow</h1>
 
-<p align="center">
-  <strong>An AI coding workflow that uses lightweight or full controls based on change risk</strong>
-</p>
+<p align="center"><strong>A lean, recoverable, evidence-based workflow for AI coding</strong></p>
 
 <p align="center">
   <a href="../LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
@@ -11,84 +9,159 @@
 </p>
 
 <p align="center">
-  <a href="#quick-start">Quick Start</a> |
-  <a href="#installation">Install</a> |
-  <a href="#why">Why</a> |
-  <a href="#core-skills">Skills</a> |
-  <a href="#workflow">Workflow</a> |
-  <a href="../README.md">中文</a> |
-  <a href="showcase.html">Showcase</a> |
-  <a href="#faq">FAQ</a>
+  <a href="#quick-start">Quick start</a> · <a href="#two-execution-paths">Execution paths</a> · <a href="#installation">Installation</a> · <a href="#commands">Commands</a> · <a href="../README.md">中文</a>
 </p>
 
 ---
 
-## Default flow: direct or planned
+spec-superflow combines OpenSpec-style planning with Superpowers-style verification discipline in one self-contained plugin. v2 gives new work two entry points: execute a clear, bounded change directly, or approve one short plan before implementation.
 
-New tasks use two paths, without a recommendation questionnaire:
+Current: `v2.0.0`
 
-- Direct: `ssf workflow start <dir> --path direct --scope "requested outcome and bounds"`. No planning pack or execution plan.
-- Planned: write proposal.md and tasks.md together; add specs/design only when needed. With approval of this concrete plan, run `ssf workflow start <dir> --path planned --confirm --reason "existing approval"`. It enters executing with a generated Native/final plan. No handwritten contract, execution recommendation or phase-by-phase approval.
-- Deliver: `ssf workflow complete <dir> --verification-command "npm test"` runs final checks once. Planned work also needs its current review, completed tasks and any delta publication. Ordinary debugging stays in executing.
-- Only explicit acceptance of known issues permits `workflow complete --accept-risk --confirm --reason "decision and remaining issues"`. The outcome is accepted-risk, failures remain failures, and integration is not automatic.
+The defaults minimize overhead: execute in the current session, review once at the end, verify once at completion, and keep ordinary debugging inside execution. Subagents, per-wave reviews, and worktrees are explicit choices.
 
-Feature branches are the default. Worktrees and SDD each require explicit selection. Failed reviews use a stable `--issue <finding-id>`; three unresolved failures for that issue require adjudication, unrelated findings do not share the budget.
+## Why v2
 
-The older paths, DPs and commands below remain compatibility documentation for existing changes; they are not additional steps for new tasks.
+The old flow classified work into several modes and copied state across planning, contracts, execution, and reviews. It could constrain complex work, but charged the same fixed cost to ordinary changes and could bounce between phases when receipts were stale or damaged.
 
-## Quick Start
+v2 removes the intake questionnaire and handwritten `execution-contract.md` for new work. One execution plan is the authorization source of truth.
 
-Once installed, just tell your agent:
+| Previous default | v2 default |
+|---|---|
+| Five workflow modes | `direct` or `planned` |
+| Four planning documents plus a contract | `proposal.md` + `tasks.md`; specs/design only when needed |
+| Approval at several phases | One approval of the concrete plan |
+| SDD/subagents and task reviews | Current-session execution and one final review |
+| Automatic worktree | Feature branch in the current checkout; worktree by request |
+| Separate debugging state | Ordinary diagnosis stays in `executing` |
+| Several caches can veto a plan | The schema v2 execution plan is authoritative |
 
+Existing changes keep their original state, approvals, and review evidence. They are not silently migrated or reset.
+
+## Quick start
+
+Node.js 20+ is required.
+
+```bash
+npm install -g spec-superflow
+mkdir -p changes/fix-login-timeout
 ```
-use workflow-start to begin
+
+Use direct execution when the outcome, boundary, and verification are already clear:
+
+```bash
+ssf workflow start changes/fix-login-timeout \
+  --path direct \
+  --scope "Fix login timeout without changing the authentication protocol"
+
+ssf workflow complete changes/fix-login-timeout \
+  --verification-command "npm test"
 ```
 
-The agent inspects your current artifacts, performs **content-level detection** (comparing proposal scope vs. contract intent lock, not just file timestamps), determines your workflow stage, and routes to the correct next skill.
+When scope needs agreement, create two short files:
 
-- New change → `use workflow-start to begin`
-- Resume work → `continue the workflow`
-- Unsure → `check what state we're in`
+```text
+changes/add-session-refresh/
+├── proposal.md   # outcome, boundaries, acceptance, risks
+└── tasks.md      # ordered checkbox tasks and their evidence
+```
+
+After the user approves that concrete plan:
+
+```bash
+ssf workflow start changes/add-session-refresh \
+  --path planned \
+  --confirm \
+  --reason "The user approved proposal.md and tasks.md"
+
+ssf workflow complete changes/add-session-refresh \
+  --verification-command "npm test"
+```
+
+Planned work defaults to an `inline + final` execution plan. Add `--mode sdd` only when delegation is wanted. Run `ssf isolate <dir> --worktree` only when the change needs a separate checkout.
+
+## Two execution paths
+
+### Direct
+
+Direct fits work with a clear intent, bounded impact, and reproducible verification. It creates no planning pack, recommendation receipt, or execution contract. It records the requested scope and final verification.
+
+If the scope grows, add `proposal.md` and `tasks.md`, then upgrade to planned with one explicit approval. No state-machine restart is required.
+
+### Planned
+
+Planned fits cross-module changes, public interfaces, data semantics, installers, state machines, or any work that needs scope agreement first.
+
+- `proposal.md`: outcome, non-goals, acceptance criteria, and major risks.
+- `tasks.md`: uniquely numbered checkbox tasks with completion evidence.
+- `specs/`: add when behavioral constraints or the published baseline changes.
+- `design.md`: add only when a real technical trade-off needs a decision.
+
+Implementation is serial in the current session by default, followed by a review of the complete Git range. Failed reviews use stable issue IDs. Only three unresolved failures for the same issue require human adjudication; unrelated findings do not share a retry budget.
+
+## Completion and recovery
+
+`workflow complete` runs final verification once. Planned work also requires completed tasks, a current final review, and synchronization of any delta specs. A failure remains in execution for repair and never becomes a forged pass.
+
+To end with a known issue after an explicit human decision:
+
+```bash
+ssf workflow complete changes/example \
+  --accept-risk \
+  --confirm \
+  --reason "Accept the documented compatibility limit for separate follow-up"
+```
+
+The outcome is `accepted-risk`; existing failures remain recorded, and the branch is not integrated automatically.
+
+Recover existing work with:
+
+```bash
+ssf resume changes/example
+ssf checkpoint list changes/example
+```
+
+Missing or damaged authorization, review, or Git evidence fails explicitly. Defaults never synthesize success. See the [state-machine reference](state-machine.md) for legacy and recovery rules.
+
+## Git isolation
+
+The default creates a feature branch in the current checkout:
+
+```bash
+ssf isolate changes/example
+```
+
+Opt into a worktree only when concurrent checkouts are useful:
+
+```bash
+ssf isolate changes/example --worktree
+```
+
+The repository, branch, and path are recorded and checked during recovery. `ssf finish` only integrates a verified isolation branch. Failed verification preserves the branch and checkout for repair.
 
 ## Installation
 
-### Claude Code (Marketplace)
-
-Claude Code's primary installation path is the plugin marketplace:
+### Claude Code
 
 ```bash
 /plugin marketplace add MageByte-Zero/spec-superflow
 /plugin install spec-superflow@spec-superflow
-/plugin update spec-superflow@spec-superflow   # upgrade
 ```
-
-### Cursor (Skills directories / GitHub import)
-
-```bash
-npx spec-superflow@latest install-cursor
-
-# Or run the installer directly:
-curl -fsSL https://raw.githubusercontent.com/MageByte-Zero/spec-superflow/main/scripts/install-cursor.mjs | node -
-```
-
-Cursor discovers `.cursor/skills/`, `.agents/skills/`, `~/.cursor/skills/`, and compatible Claude/Codex skill directories. You can also import a GitHub repo from Customize → Rules → Remote Rule (Github).
 
 ### OpenAI Codex CLI / App
 
-Codex uses the Plugin Directory / marketplace model. This repo ships `.codex-plugin/plugin.json` and `.agents/plugins/marketplace.json`.
-
 ```bash
-codex
-/plugins
-
-# Or add the community marketplace and install:
-codex plugin marketplace add hashgraph-online/awesome-codex-plugins
+codex plugin marketplace add MageByte-Zero/spec-superflow --ref v2.0.0
 codex plugin add spec-superflow@spec-superflow
 ```
 
-In the Codex app, open **Plugins** and install or enable `spec-superflow`. If installed from the CLI, restart the app and enable it in the Plugins panel.
+Codex does not enable SessionStart injection; invoke `workflow-start` only when needed, or recover an existing spec-superflow change.
 
-> Codex loads the plugin's declared skills, but this plugin does not enable SessionStart hooks; invoke `workflow-start` explicitly in each new session.
+### Cursor
+
+```bash
+npx spec-superflow@latest install-cursor
+```
 
 ### GitHub Copilot CLI
 
@@ -101,328 +174,49 @@ copilot plugin install spec-superflow@spec-superflow
 
 ```bash
 gemini extensions install https://github.com/MageByte-Zero/spec-superflow
-gemini extensions update spec-superflow   # upgrade
 ```
 
-### Other supported platforms
+The project supports 19 AI coding platforms. See [INSTALL.md](../INSTALL.md) for every installer and uninstall path, and the [platform matrix](platform-matrix.md) for capability differences.
 
-| Platform | Method | Status |
-|----------|--------|--------|
-| **OpenCode** | `.opencode/plugins/spec-superflow.js` or `.agents/skills -> skills/` | Entry provided |
-| **WorkBuddy** | `npx spec-superflow@latest install-workbuddy` | Installer provided |
-| **CodeBuddy Code CLI** | `npx spec-superflow@latest install-codebuddy` | Installer provided |
-| **Trae IDE / TRAE Work** | `.trae/skills/`, `~/.trae/skills/`, or zip/.skill upload | Manual/import |
-| **Cline** | `npx spec-superflow@latest install-cline` | Installer provided |
-| **Kiro** | `npx spec-superflow@latest install-kiro` | Installer provided |
-| **Windsurf** | `npx spec-superflow@latest install-windsurf` | Installer provided |
-| **Qwen Code** | `npx spec-superflow@latest install-qwen` | Installer provided |
-| **Amazon Q Developer** | `npx spec-superflow@latest install-amazon-q` | Installer provided |
-| **Roo Code** | `npx spec-superflow@latest install-roocode` | Installer provided |
-| **Continue** | `npx spec-superflow@latest install-continue` | Installer provided |
-| **Pi** | `npx spec-superflow@latest install-pi` | Installer provided |
-| **Qoder** | `npx spec-superflow@latest install-qoder` | Installer provided |
-| **ZCODE** | `ssf install-zcode` | Installer provided |
-
-> spec-superflow supports 19 platforms. See [INSTALL.md](../INSTALL.md) and the [platform matrix](platform-matrix.md) for the full matrix.
-
-### CLI Toolchain
-
-```bash
-npm install -g spec-superflow
-```
+## Commands
 
 | Command | Purpose |
-|---------|---------|
-| `ssf list` | List all changes and status |
-| `ssf validate <dir>` | Validate artifact completeness |
-| `ssf doctor` | Health check (versions, hooks, skills, docs) |
-| `ssf version <semver>` | Sync version across all manifests |
-| `ssf state <sub> <dir>` | Manage `.spec-superflow.yaml` state file |
-| `ssf inject <dir>` | Generate phase-guard artifacts; omit `--platforms` only when exactly one platform marker is detected |
-| `ssf audit <dir>` | Generate decision-point audit report |
-| `ssf checkpoint save <dir> --task <id> --next <text>` | Save a task-level recovery checkpoint |
-| `ssf checkpoint list <dir>` | List checkpoints and stale status |
-| `ssf checkpoint show <dir> <id>` | Show one recovery checkpoint |
-| `ssf resume [change]` | Read-only recovery summary; auto-selects the only active change |
-| `ssf switch <change>` | Read-only recovery context for an explicit change; an adapter may use it to focus the current AI conversation |
-| `ssf save <change> --task <id> --next <text>` | Manually reuses the existing checkpoint protocol; never commits, pushes, or syncs automatically |
-| `ssf handoff create <dir> --type <type> ...` | Create a prototype/research/experiment handoff |
-| `ssf handoff list <dir>` | List handoff lifecycle status |
-| `ssf handoff finish <dir> <id>` | Validate a handoff result |
-| `ssf handoff resolve <dir> <id> --decision <decision>` | Record an explicit handoff decision |
-| `ssf isolate <dir>` | Enforce git isolation before implementation: uses a feature branch in the current checkout by default; only explicit `--worktree` creates a worktree (with recursive submodule init), and appends a cwd-persistence warning to the progress ledger |
-| `ssf finish <dir> [--test-cmd <command>]` | Merge and verify on the recorded target; worktree isolation removes the worktree and branch, while branch-only isolation removes only the branch; failures preserve the isolation context |
-| `ssf install-cursor` | Deploy to `.cursor/` directory |
-| `ssf install-workbuddy` | Deploy to WorkBuddy marketplace and enable skills |
-| `ssf install-codebuddy` | Deploy to `~/.codebuddy/` (CodeBuddy Code CLI) |
-| `ssf uninstall-codebuddy` | Remove spec-superflow from `~/.codebuddy/` (CodeBuddy Code CLI) |
-
-> **CodeBuddy install & PATH**: `npx spec-superflow@latest install-codebuddy` works without a global install — the installer deploys skills/rules/hooks into `~/.codebuddy/` and generates a `ssf` command shim under `~/.codebuddy/spec-superflow/bin/` (`ssf.cmd`/`ssf.ps1` on Windows). By default it registers the bin dir on the user PATH (user-level environment variable on Windows, shell rc file on POSIX), so a new terminal can call `ssf` directly; `--no-path` skips the PATH change (shims are still written), and `--dry-run` only prints the plan without touching the disk.
-
-### Version
-
-- Current: `v1.2.0`
-- v1.0: Quick, direct Hotfix, Tweak, and Full paths keep small changes bounded while reserving planning, contracts, and reviews for complex work.
-- Self-contained — no OpenSpec or Superpowers runtime required
-- Upstream: [Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec), [obra/superpowers](https://github.com/obra/superpowers)
-- Changelog: [CHANGELOG.md](../CHANGELOG.md)
-
-`ssf inject` examples:
-
-```bash
-ssf inject changes/my-change --platforms cursor
-ssf inject changes/my-change --platforms all
-```
-
-If `--platforms` is omitted, injection only proceeds when exactly one project marker is detected. Ambiguous projects must use `--platforms <platform>` or `--platforms all`.
-
-Session recovery and optional prototypes:
-
-```bash
-ssf resume                         # auto-select only when exactly one change is active
-ssf resume changes/my-change       # read-only summary for one explicit change
-ssf switch changes/another-change  # read-only recovery context for one explicit change
-ssf save changes/my-change --task 1.1 --next "Run focused tests"
-ssf checkpoint save changes/my-change --task 1.1 --next "Run focused tests"
-ssf checkpoint list changes/my-change
-ssf handoff create changes/my-change --type research --objective "Compare approaches" --expected-output "Recommendation" --acceptance "Evidence recorded"
-```
-
-`resume` and `switch` are read-only recovery operations; `resume` auto-selects a target only when exactly one active change exists. `switch` only returns the explicit target's recovery context and never changes cwd, a TUI session, or a hidden pointer; the CLI itself does not mutate conversation focus, while a CodeBuddy/WorkBuddy adapter or host agent may use that context to focus the conversation. `save` only manually reuses the existing checkpoint protocol; it never commits, pushes, or syncs automatically. `/ssf:resume`, `/ssf:switch`, and `/ssf:save` are Markdown command adapters for CodeBuddy/WorkBuddy that dispatch to the same CLI guards; other platforms are not promised identical slash names.
-
-Prototype work starts only after explicit user confirmation. Backend, CLI,
-configuration, and internal-refactor work does not enter the prototype route
-automatically. Handoff results never edit `design.md` or `tasks.md` automatically.
-
-Canonical delta specs live at `specs/<capability>/spec.md`; flat `specs/<capability>.md` and root-level `specs/spec.md` are not valid canonical paths.
-
-The canonical requirement heading is `### Requirement: name`. For existing Chinese artifacts, the parser also accepts `### 需求：name` and `### REQ-<ID>: name`; other level-three headings are not requirements. `ssf sync` validates every delta before publishing the batch, so an invalid delta never writes a baseline or publication receipt.
-
-### Active specs and published baselines
-
-An active workflow has one source of truth: `changes/<change>/`, whose `specs/` directory contains auditable delta specs. Root `specs/` is the published specification baseline and never drives active change transitions. `ssf sync changes/<change>` applies ADDED/MODIFIED/REMOVED/RENAMED operations to the baseline's `## Requirements` and writes a recomputable publication receipt to the change state. Closing verifies both the delta and baseline; editing either after sync requires another sync, and `spec_merged: true` cannot bypass this check.
-
-### Plugin repository versus consuming project
-
-This repository ships the workflow, templates, scripts, tests, and documentation; it does not ship the runtime output of one real change. It therefore does not commit `changes/<change>/`, `.spec-superflow.yaml`, `.superpowers/`, or root `specs/` generated by `ssf sync`; those paths are ignored by default. End-to-end examples belong in curated, sanitized `docs/examples/` fixtures.
-
-In a **project that uses this plugin**, `changes/<change>/specs/` remains the active input and root `specs/` remains an optional published baseline. That project may choose whether to version its own artifacts for audit or release purposes, without changing the rule that active workflow transitions read only the change.
-
----
-
-## Why
-
-AI coding sessions commonly fail in two ways:
-
-- **The AI starts coding before you've decided what to build.** You say "add authorization" and it touches 40 files before you realize — RBAC or ABAC?
-
-- **The plan is solid, but execution drifts.** The proposal, specs, and design are written, but nobody enforces testing, nobody gates reviews, and by merge time the behavior doesn't match.
-
-spec-superflow handles these cases differently: it first assesses change risk; small changes stay within a clear boundary and verification step, while complex changes use intent, specs, an execution contract, implementation, and review. This keeps routine work short without skipping the checks that matter for risky work.
-
-| Principle | Meaning |
 |---|---|
-| Choose the path first | Select Quick, Hotfix, Tweak, or Full from scope and risk |
-| Align complex work | Full uses specs and an execution contract to agree scope and acceptance |
-| Verify implementation | Every path requires tests or checks proportionate to risk |
-| Diagnose before changing | Reproduce and locate failures before attempting a fix |
-| Self-contained | No OpenSpec or Superpowers runtime is required |
+| `ssf workflow start <dir> --path direct|planned` | Start new work |
+| `ssf workflow complete <dir> ...` | Verify and record delivery |
+| `ssf isolate <dir> [--worktree]` | Create a feature branch or explicit worktree |
+| `ssf resume [dir]` | Read recovery context |
+| `ssf checkpoint save|list|show` | Save or read task recovery points |
+| `ssf validate <dir>` | Validate planning artifacts and delta specs |
+| `ssf sync <dir>` | Atomically publish delta specs to the baseline |
+| `ssf doctor` | Check installation, versions, and assets |
+| `ssf finish <dir>` | Verify and merge recorded isolation |
 
-### When to Use
+Run `ssf --help` for the full command list. `workflow recommend/select/accept`, legacy execution plans, and the eight-state router remain only for v1 recovery.
 
-**✅ Recommended:** Large features, multi-person collaboration, long-term maintenance, brownfield projects needing TDD + review gates.
+## Design boundaries
 
-**❌ Skip:** One-off scripts, pure Q&A conversations.
+- **Planning on demand:** small changes do not pay the fixed cost of full SDD.
+- **One authorization source:** the schema v2 plan carries approval and execution mode for new planned work.
+- **Evidence first:** empty Git ranges, truncated scopes, damaged hashes, and stale reviews cannot pass.
+- **Visible human decisions:** users may accept risk, but the reason remains recorded and verification is never forged.
+- **Zero runtime dependencies:** the CLI uses Node.js standard libraries; TypeScript is build-only.
+- **Context on demand:** ordinary sessions should not receive the full workflow through global rules or SessionStart hooks.
 
-> **Four workflow modes:** Quick (≤3 low-risk code files/tasks), direct Hotfix (incident, ≤2), and Tweak (≤4 config/docs files) execute with bounded verification; Full and legacy Hotfix retain planning, contract, and review controls.
+The project draws from [OpenSpec](https://github.com/Fission-AI/OpenSpec) for specification structure and [Superpowers](https://github.com/obra/superpowers) for TDD, debugging, and review discipline. Neither is a runtime dependency.
 
----
-
-## Core Skills
-
-| # | Skill | Stage | Purpose |
-|---|-------|-------|---------|
-| 1 | `workflow-start` | Entry | Content-level state detection, 8-state routing, blocks illegal transitions |
-| 2 | `need-explorer` | Exploring | One question at a time, approach comparison, recommendation |
-| 3 | `spec-writer` | Specifying | Generate proposal/specs/design/tasks with Schema engine validation |
-| 4 | `contract-builder` | Bridging | Parse 4 artifacts → compress into execution-contract.md |
-| 5 | `build-executor` | Executing | TDD Iron Law + SDD subagent-driven + Review Gates |
-| 6 | `bug-investigator` | Debugging | 4-phase root cause analysis; 3+ failures → escalate |
-| 7 | `code-reviewer` | Review | Structured review with 3-level severity classification |
-| 8 | `release-archivist` | Pre-closing within executing | Verification-before-completion + archive + risk summary |
-| 9 | `spec-merger` | Pre-closing within executing | Delta spec → main spec merge with conflict detection |
-
----
-
-## Workflow
-
-```text
-You: "add authorization to the API"
-       │
-       ▼
-   workflow-start     ← Single entry. Content-level detection, routes to correct skill
-       │
-       ▼
-   exploring          need-explorer: "RBAC or ABAC? What granularity?"
-       ▼
-   specifying         spec-writer generates 4 artifacts + Schema validation
-       ▼
-   bridging           contract-builder auto-extracts → execution-contract.md
-       │
-  ◇ User Approval ◇   ← The only human gate
-       │
-       ▼
-   executing          build-executor: TDD → SDD → Review Gate
-       │
-       ├──[bug]──→ debugging  → bug-investigator
-       │
-       ▼
-   pre-closing (a wrap-up step within executing, not a ninth state)
-       │ release-archivist verifies → spec-merger sync → archive confirmation
-       ▼
-   closing            CLOSED successful terminal state (no next skill)
-```
-
-**Path selection:** Quick, direct Hotfix, and Tweak remain lightweight: record the boundary and verification only. Full and legacy Hotfix require an execution contract, execution plan, and review receipt. Risks are explained for the user to choose from; they do not silently upgrade a path.
-
-**DP-5 debugging gate:** Record every failed fix with `ssf debug attempt record` and distinct, verifiable evidence. Full/legacy Hotfix requires a current execution plan; Quick, direct Hotfix, Tweak, and lightweight use a valid workflow receipt matching the current selection, with the ledger bound to its stable authorization identity. Wave Review failures do not count as debugging attempts. DP-5 is persisted only after at least three failed attempts in that execution context and an explicit `ssf debug escalate ... --confirm`; generic `state set` cannot write or inject `dp_5_*`.
-
-### Guarded execution plans
-
-For Full/legacy Hotfix, DP-4 is a persisted, current execution plan at
-`<change>/.superpowers/sdd/execution-plan.json`, rather than an arbitrary text
-field or content stored in `execution-contract.md`. Run `ssf execution recommend`
-first: it lists `inline`, `batch-inline`, and `sdd` from task count and wave
-strategy, with auditable reasons, and saves a recommendation receipt at
-`<change>/.superpowers/sdd/execution-recommendation.json`. The agent presents that recommendation and the
-user records a choice with `--confirm`; `plan` and `revise` require a receipt matching the current
-artifacts, contract, and waves. A non-recommended choice also requires
-`--acknowledge-recommendation`. Batch Inline remains serial and never claims
-parallel work.
-Quick, direct Hotfix, and Tweak are exempt from contract, execution-plan, and review-receipt gates during their normal bounded path; they persist `test_result: pass` after verification. If Quick, direct Hotfix, Tweak, or lightweight reaches DP-5 debugging, a valid workflow receipt authorizes planless attempts and binds the ledger to the selection's stable authorization identity. Full/legacy Hotfix continues to require a current execution plan.
+## Development
 
 ```bash
-ssf execution recommend changes/my-change \
-  --wave foundation:parallel:1.1,1.2 \
-  --wave integration:serial:2.1:foundation --json
-ssf execution plan changes/my-change --mode sdd --confirm --acknowledge-recommendation --reason "independent work" \
-  --wave foundation:parallel:1.1,1.2 \
-  --wave integration:serial:2.1:foundation
-ssf execution show changes/my-change --json
-# Revisions may retain or switch modes, preserving applicable evidence and open failures.
-ssf execution recommend changes/my-change \
-  --wave foundation:parallel:1.1,1.2 \
-  --wave integration:serial:2.1:foundation --json
-ssf execution revise changes/my-change --mode sdd --confirm --acknowledge-recommendation --reason "need parallel work" \
-  --wave foundation:parallel:1.1,1.2 \
-  --wave integration:serial:2.1:foundation
-ssf execution review changes/my-change --wave foundation --base <sha> --head <sha> \
-  --report .superpowers/sdd/reviews/foundation.md --verdict pass
-ssf execution adjudicate changes/my-change --wave foundation --decision allow-review \
-  --confirm --reason "reviewed the unresolved findings and authorizes one focused review"
+npm install
+npm run build
+npm test
+npm run validate
+npm run check-versions
 ```
 
-The `--report` path is resolved relative to `<change>` and must remain under
-`<change>/.superpowers/sdd/reviews/`. `--base` and `--head` must be real commits
-in the `<change>` Git worktree, and `base` must be an ancestor of `head`. A passing receipt requires an actual non-empty diff. Final review uses the recorded immutable isolation `review_base` (an unambiguous target merge-base for legacy/manual isolation) through current HEAD, never `HEAD~1`.
-The `<change>/.superpowers/sdd/reviews/` directory hierarchy must be physical,
-non-symlink directories. The report itself must be a regular, non-empty,
-non-symlink file.
+See [CONTRIBUTING.md](../CONTRIBUTING.md) and [CHANGELOG.md](../CHANGELOG.md).
 
-Every planned wave needs a current `pass` review receipt before dependent
-waves or closing may proceed; revising a plan invalidates earlier receipts.
-Adjudication never creates a pass or releases dependents. A failed authorized
-review returns the wave to `adjudication-required` and needs a new human decision.
-Recovery, switching, and manual save form a control-plane overlay, not a ninth
-workflow state; their CLI and CodeBuddy/WorkBuddy Markdown adapters keep the
-same guards.
+## License
 
-### Fast Paths (Quick / Hotfix / Tweak)
-
-- **Quick** — ≤3 single-module code files/tasks → direct acceptance when low risk; for PRD, Spec/Design, API, data/permission, or cross-module impact, show the risk and let the user choose Quick or Full. A chosen Quick records `tdd`, `new-test`, or `bounded` verification.
-- **direct Hotfix** — incident, ≤2 files/tasks → direct path plus original-symptom regression.
-- **legacy Hotfix** — no direct receipt → minimal contract, DP-3, execution plan, and review remain required.
-- **tweak** — ≤4 files, config/docs only → skip planning + bridging, direct edit
-
----
-
-## Model Profiles (Optional Configuration)
-
-Configure platform model IDs for execution roles in the project-root `spec-superflow.config.json`:
-
-```json
-{
-  "models": {
-    "mechanical": "vendor-small",
-    "standard": "vendor-standard",
-    "strong": "vendor-strong",
-    "review": "vendor-review"
-  }
-}
-```
-
-| Profile | Role |
-|---|---|
-| `mechanical` | Low-cost, routine edits |
-| `standard` | Integration and judgment work |
-| `strong` | Architecture, design, and final review |
-| `review` | Code review that matches the diff |
-
-Resolve a profile in read-only mode:
-
-```bash
-ssf config --resolve-model mechanical
-```
-
-This command only resolves local configuration, does not call platform APIs, and does not switch models in the current session. The controller explicitly passes the returned model ID only to platforms whose dispatch supports a `model` field. A `configured: false` result means automatic selection is unavailable: never invent a provider model and continue to meet the existing explicit `model` requirement.
-
----
-
-## FAQ
-
-<details>
-<summary><strong>How is this different from OpenSpec or Superpowers?</strong></summary>
-
-spec-superflow is a source-level fusion, not side-by-side installation. It absorbs OpenSpec's Schema/validation/parsing engine and Superpowers' TDD/SDD/debugging/review discipline, while adding a unique contract-builder bridge layer and 8-state routing. Self-contained — no upstream runtimes needed.
-
-</details>
-
-<details>
-<summary><strong>Can I use this alongside existing OpenSpec or Superpowers?</strong></summary>
-
-Not recommended in the same session. Projects with existing OpenSpec artifacts can be adopted directly — `contract-builder` reads your existing proposal/specs/design/tasks to generate the execution contract.
-
-</details>
-
-<details>
-<summary><strong>How does the execution contract detect staleness?</strong></summary>
-
-Content-level detection, not timestamps: proposal scope changed, approved spec behavior changed, design constraints changed, or task batches changed → contract marked stale → route back to `contract-builder`.
-
-</details>
-
-<details>
-<summary><strong>How does SDD (Subagent-Driven Development) work?</strong></summary>
-
-For Full/legacy Hotfix, `ssf execution recommend` first presents Inline, Batch Inline,
-and SDD with evidence from the change, then recommends one. The user confirms a
-selection with `--confirm`; a different selection requires
-`--acknowledge-recommendation`. The saved execution plan at
-`<change>/.superpowers/sdd/execution-plan.json` names waves, dependencies, and
-strategies before dispatching implementers. Native defaults to `inline` with one `final` review; explicit `wave` and legacy plans require a report and receipt per wave. Batch Inline remains serial, and the progress ledger
-prevents session-compression loss.
-
-</details>
-
----
-
-**Star the repo — find it when you need it.**
-
-Execution efficiency: Native = `inline`, default review policy `final`; SDD = optional delegation with `wave` review. `execution revise` may retain or change mode. Reports are immutable snapshots. `closing` is logical completion; recorded pending physical finish remains resumable. `finish` uses the recorded target and never force-removes work.
-
-
-### Recovery and execution cost boundaries
-
-Default isolation uses a feature branch in the current checkout; worktrees require explicit `--worktree`. Native execution reuses unchanged approvals and requires explicit authorization for delegation. Final reviews cover the full change through repairs. Unfinished physical finish remains recoverable and revalidates once per attempt.
-
-See [root causes and recovery boundaries](workflow-efficiency-root-causes.md).
+[MIT](../LICENSE)

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# v1.2.0: conditional injection
+# v2.0.0: conditional injection
 # Keep the installed workflow dormant unless its own state file is present.
 # Explicit user requests are handled by the installed skill catalog after the
 # session starts, so inactive sessions need no injected reminder at all.

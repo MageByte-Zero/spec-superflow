@@ -1,51 +1,42 @@
 # spec-superflow
 
-## Overview
-spec-superflow is a self-contained workflow integration plugin for Claude Code, Cursor, OpenAI Codex CLI/App, GitHub Copilot CLI, Gemini CLI, OpenCode, WorkBuddy, and Trae. It merges spec-driven planning artifacts (proposal, specs, design, tasks) with disciplined execution guardrails (TDD, review gates, controlled handoff) into one unified workflow.
+spec-superflow is a self-contained, zero-runtime-dependency workflow plugin for AI coding tools.
 
-Current version: v1.2.0.
+Current version: v2.0.0.
 
-## Key Documents
-- README.md: Chinese homepage with full usage guide and FAQ
-- docs/README_en.md: English documentation
-- INSTALL.md: Multi-platform installation guide
-- docs/state-machine.md: Workflow state machine (exploring -> specifying -> bridging -> approved-for-build -> executing -> closing)
-- docs/artifact-contract.md: Artifact mapping from planning to execution contract
-- docs/decision-points.md: Standard decision-point protocol
-- CHANGELOG.md: Version history
-- CONTRIBUTING.md: Contribution guidelines
+## Default v2 flow
 
-## Core Skills (in skills/)
-- workflow-start: Entry point, content-level state detection, 8-state routing, blocks illegal transitions
-- need-explorer: Clarifies intent, scope, constraints, and success criteria
-- spec-writer: Generates proposal, specs, design, and tasks with Schema validation
-- contract-builder: Parses 4 artifacts and compresses into execution-contract.md
-- build-executor: Enforces TDD, SDD subagent execution, and Review Gates
-- bug-investigator: 4-phase root cause analysis, escalates after repeated failures
-- code-reviewer: Structured review with Critical / Important / Minor severity
-- release-archivist: Verification-before-completion, archiving, risk summary
-- spec-merger: Merges delta specs into main specs with conflict detection
+- New work has two paths: direct or planned.
+- Direct records the requested scope and requires final verification.
+- Planned requires proposal.md and tasks.md, one approval, an authoritative schema-2 execution plan, one final review, and final verification.
+- specs/ and design.md are created only when the change needs them.
+- Current-session inline execution is the default. SDD/subagents and wave reviews are opt-in.
+- A feature branch in the current checkout is the default isolation. Worktrees are opt-in.
+- Ordinary diagnosis stays in executing. Failed evidence is never rewritten as success.
+- Existing v1 changes retain their legacy workflow, approvals, contracts, and recovery rules.
 
-## Templates (in templates/)
-- proposal.md: Change proposal template
-- spec.md: Capability specification template
-- design.md: Technical design template
-- tasks.md: Implementation tasks template
-- execution-contract.md: Bridge artifact template
+## Primary commands
 
-## Examples (in docs/examples/)
-- add-dark-mode: New UI feature example (dark mode)
-- refactor-auth-boundary: Brownfield backend refactor example (auth layer)
+- `ssf workflow start <dir> --path direct --scope <request>`
+- `ssf workflow start <dir> --path planned --confirm --reason <approval> [--mode sdd]`
+- `ssf workflow complete <dir> --verification-command <command>`
+- `ssf workflow complete <dir> --accept-risk --confirm --reason <decision>`
+- `ssf isolate <dir> [--worktree]`
+- `ssf resume [dir]`
+- `ssf validate <dir>`
+- `ssf sync <dir>`
+- `ssf finish <dir>`
 
-## Installation
-See INSTALL.md for platform-specific instructions. Quick install for Claude Code:
-```
-/plugin marketplace add MageByte-Zero/spec-superflow
-/plugin install spec-superflow@spec-superflow
-```
+## Key documents
 
-Cursor: `npx spec-superflow@latest install-cursor`
-WorkBuddy: `npx spec-superflow@latest install-workbuddy`
+- README.md: Chinese v2 overview and usage
+- docs/README_en.md: English v2 overview and usage
+- INSTALL.md: installation for 19 supported platforms
+- docs/state-machine.md: full legacy and recovery state reference
+- docs/artifact-contract.md: artifact roles and compatibility contracts
+- CHANGELOG.md: version history
+- CONTRIBUTING.md: contribution guide
 
-## Usage
-For an explicit spec-superflow request or an active change containing `.spec-superflow.yaml`, start from workflow-start. Ordinary tasks do not activate the workflow.
+## Activation
+
+Use the workflow only when the user explicitly requests spec-superflow or when the active change contains `.spec-superflow.yaml`. Codex manifests suppress SessionStart hooks, so ordinary Codex sessions receive no automatic workflow injection.
