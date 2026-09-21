@@ -12,6 +12,7 @@ export const SETTABLE_FIELDS = [
 const BUILTIN_DEFAULTS = {
   state: 'exploring',
   workflow: 'auto',
+  workflow_variant: null,
   revision: null,
   artifacts_hash: null,
   contract_hash: null,
@@ -57,6 +58,7 @@ export function writeState(changeDir, state) {
   lines.push('# === Core state ===');
   lines.push(`state: ${state.state || 'exploring'}`);
   lines.push(`workflow: ${state.workflow || 'auto'}`);
+  lines.push(`workflow_variant: ${state.workflow_variant ?? 'null'}`);
   lines.push(`revision: ${state.revision ?? 'null'}`);
   lines.push('');
   lines.push('# === Hashes (fast staleness detection) ===');

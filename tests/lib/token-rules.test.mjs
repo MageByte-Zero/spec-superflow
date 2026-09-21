@@ -175,7 +175,7 @@ describe('planning document readability contract', () => {
 
     assert.match(writer, /without pausing between individual artifacts/i);
     assert.match(writer, /one DP-2/i);
-    assert.match(writer, /five-question blind reader check/i);
+    assert.match(writer, /Self-check five questions once/i);
     assert.match(proposal, /完成证明/);
     assert.match(proposal, /Scope[\s\S]*In Scope[\s\S]*Out of Scope/);
     assert.match(design, /后果/);

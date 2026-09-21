@@ -9,7 +9,7 @@ Use only for an explicit spec-superflow request or an existing change. Ordinary 
 
 ## Resume
 
-Run `ssf resume <change-dir> --json` once. It combines state, handoffs, checkpoints and current-plan inspection. Follow `next_action`; do not repeat all component commands unless diagnosing that result. Read only the artifacts relevant to the next action.
+Run `ssf resume <change-dir> --json` once. It combines state, handoffs, checkpoints and current-plan inspection. Use the returned absolute `change.path` for all subsequent operations: recovery may redirect a stale source copy into its recorded worktree. Follow `next_action`; do not repeat all component commands unless diagnosing that result. A blocked continuation is not a retry instruction; resolve its named cause before running it again. Read only the artifacts relevant to the next action.
 
 - `debugging`: diagnose first, even if a plan is stale. Never dispatch an eligible wave during diagnosis.
 - `closing`: logical completion. If a recorded isolation still has physical finish pending, route to release-archivist for that remaining action, subject to existing merge authorization. Otherwise stop.

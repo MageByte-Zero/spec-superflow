@@ -21,6 +21,41 @@ export function writeIsolationContext(changeDir, record) {
   fs.renameSync(`${file}.tmp`, file);
 }
 
+// Resolve recovery against the actual checkout. Never silently fall back to
+// stale source artifacts when a recorded worktree disappeared or was replaced.
+export function resolveIsolationChange(changeDir) {
+  const context = readIsolationContext(changeDir);
+  if (!context || context.finish_status === 'complete') return changeDir;
+  if (context.kind === 'branch') {
+    const branch = execFileSync('git', ['-C', changeDir, 'branch', '--show-current'], { encoding: 'utf8', stdio: 'pipe' }).trim();
+    const finishing = context.finish_status === 'cleanup-pending';
+    if (branch !== context.isolation_branch && !(finishing && branch === context.target_branch)) {
+      throw new Error(`Return to recorded isolation branch ${context.isolation_branch} before implementation recovery`);
+    }
+    return changeDir;
+  }
+  if (context.kind !== 'worktree') throw new Error('Unknown isolation kind; recover recorded provenance');
+  if (context.finish_status === 'cleanup-pending' && !fs.existsSync(context.isolation_root)) return changeDir;
+  if (context.setup_status === 'initializing') throw new Error('Isolation setup is incomplete; retry initialization before recovery');
+  const rel = context.change_relative_path;
+  if (!rel || isAbsolute(rel) || rel.split(/[\\/]/).some(part => part === '..' || part === '.')) {
+    throw new Error('Isolation change path is missing or unsafe; recover its provenance');
+  }
+  const git = (root, args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8', stdio: 'pipe' }).trim();
+  const common = root => fs.realpathSync.native(resolve(root, git(root, ['rev-parse', '--git-common-dir'])));
+  if (common(changeDir) !== common(context.isolation_root)
+    || git(context.isolation_root, ['branch', '--show-current']) !== context.isolation_branch) {
+    throw new Error('Recorded isolation worktree no longer matches this repository and branch');
+  }
+  let target = context.isolation_root;
+  for (const part of rel.split(/[\\/]/)) {
+    target = join(target, part);
+    if (!fs.existsSync(target) || fs.lstatSync(target).isSymbolicLink()) throw new Error('Recorded isolation change is missing or traverses a symlink');
+  }
+  if (!fs.statSync(target).isDirectory()) throw new Error('Recorded isolation change is not a directory');
+  return fs.realpathSync.native(target);
+}
+
 // Ignored planning files do not travel through Git merge. Preserve and verify
 // them before removing their only worktree, retaining the old target too.
 export function archiveIsolationChange(changeDir, context) {

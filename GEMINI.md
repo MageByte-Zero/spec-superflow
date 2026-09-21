@@ -8,5 +8,5 @@ The workflow is self-contained and does not require OpenSpec or Superpowers at r
 
 
 <!-- spec-superflow-phase-guard-start -->
-Use workflow-start only for an explicit spec-superflow request or an active change containing `.spec-superflow.yaml`. Otherwise this workflow adds no constraints.
+Use workflow-start only for an explicit spec-superflow request or a request to continue an active change containing `.spec-superflow.yaml`. Otherwise this workflow adds no constraints.
 <!-- spec-superflow-phase-guard-end -->

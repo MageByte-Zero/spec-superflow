@@ -9,13 +9,13 @@ Read the workflow receipt first. Full/legacy Hotfix require the approved executi
 
 ## Preflight
 
-Full/legacy Hotfix run `ssf isolate <change-dir>` before edits and use the returned absolute worktree path for every command. Failure blocks edits in protected branches; preserve an existing isolation and diagnose initialization failures. Direct paths do not require isolation or physical finish.
+Full/legacy Hotfix run `ssf isolate <change-dir>` before edits and use the returned absolute checkout path for every command. The default is a feature branch in the current checkout; create a worktree only when the user explicitly selects `--worktree`. Failure blocks edits in protected branches; preserve an existing isolation and diagnose initialization failures. Direct paths do not require isolation or physical finish.
 
-For Full, honor DP-3 approval. Do not reconstruct permission from chat when the record is absent, and do not request approval again when already recorded. Enter `executing` only with a current plan and passing guard; skip the transition if already executing.
+For Full, honor DP-3 approval. When the record is missing but the user explicitly approved this exact contract in the conversation, persist that existing decision and continue. Never infer approval of unseen or changed behavior, or request the same unchanged approval again. Enter `executing` only with a current plan and passing guard; skip the transition if already executing.
 
 ## Native first
 
-Native means the current agent implements continuously; persisted mode is `inline`. Task count, file count and number of waves do not justify delegation. `batch-inline` remains compatible serial execution. Select SDD only when independently scoped delegation has a concrete benefit and the user has authorized it.
+Native means the current agent implements continuously; persisted mode is `inline`. Task count, file count and number of waves do not justify delegation. `batch-inline` remains compatible serial execution. Select SDD only when the user explicitly chooses delegation for this change and independently scoped work has a concrete benefit. Tool availability, many tasks, a long context, or generic implementation approval never authorize subagents. This includes reviewer and exploratory subagents.
 
 ```bash
 ssf execution recommend <dir> --wave <id>:serial:<task,...>[:<dependencies>] --json
@@ -26,12 +26,16 @@ Reuse the user's existing mode choice. For a nonrecommended choice add `--acknow
 
 Use `ssf execution show <dir> --json` to resolve uncertainty, interruptions and repair status, not as a ritual before every edit. A Native wave's dependencies are completed tasks; checked tasks never substitute for the final whole-range review.
 
+## One bounded preflight
+
+Before the first edit, inspect only shared producer/consumer interfaces and the test entry points the approved tasks depend on. Check that named symbols, payload fields and acceptance tests can be located. Record mismatches in the existing progress entry; resolve implementation details within approved behavior. Ask only when resolving a mismatch changes behavior, scope, permissions or external effects. Do not dispatch an exploration agent or create another planning pack for this check.
+
 ## Implementation loop
 
 1. Implement tasks in dependency order. Full/legacy Hotfix use a failing behavioral regression, confirm RED, make the minimal fix, then confirm GREEN. Documentation changes use format/link/build checks instead of invented unit tests.
 2. Run affected tests per task, integration tests at meaningful boundaries, and the required complete checks once at the final code snapshot. Reuse a result only when code, environment and command match; changes invalidate affected evidence.
 3. Mark completed tasks and append a brief progress entry: outcome, files/commit, verification, next action, unresolved risk. Do not create a task book, delivery report and checkpoint for every small task. Save `ssf checkpoint save` when interruption or long-running work needs recovery.
-4. Continue without requesting permission between authorized tasks. A pending task or review is not a reason to end the controller turn. Give concise progress commentary; do not promise autonomous background execution.
+4. Continue without requesting permission between authorized tasks. A pending task or review is not a reason to end the controller turn. Reuse existing authorizations; never ask “continue?” for the next authorized task. Give concise progress commentary; do not promise autonomous background execution.
 
 If a real defect is encountered, enter `debugging` and use bug-investigator. Expected RED is test evidence, not an unexpected defect. Scope changes rewind Full to specifying; contract drift to bridging. Short paths refresh their risk receipt instead of inventing a contract.
 

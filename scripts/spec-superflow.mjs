@@ -81,6 +81,7 @@ Commands:
                         Validate a handoff result
   handoff resolve <change-dir> <id> --decision <accept|reject|defer>
                         Record the explicit handoff decision
+  ssf isolate <change-dir> [--worktree]   Use a feature branch by default; opt into a worktree explicitly
   ssf finish <change-dir>   Merge the isolated branch to its recorded target, verify, and clean up recorded isolation
   execution recommend <change-dir> [--wave <id>:<strategy>:<task,...>]
                         List execution modes and an evidence-based recommendation

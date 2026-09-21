@@ -1,3 +1,4 @@
+import { assertNonEmptyDiff, assertFinalReviewRange } from './review-range.mjs';
 import { parseTasks } from './task-parser.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -164,6 +165,8 @@ export function recordReview(changeDir, waveId, receipt, options = {}) {
   if (receipt.status === 'pass' && base === head) {
     throw new Error('Passing review receipt must cover a non-empty Git range; base and head must differ');
   }
+  if (receipt.status === 'pass') assertNonEmptyDiff(changeDir, base, head);
+  if (plan.review_policy === 'final') assertFinalReviewRange(changeDir, base, head);
   warnIfCwdOutsideIsolation(changeDir);
   assertReviewHeadBranch(changeDir, head, options.runGit);
   const currentReview = readCurrentReviewEvidence(changeDir, waveId, plan);
@@ -191,7 +194,7 @@ export function recordReview(changeDir, waveId, receipt, options = {}) {
     previousReceipt,
     previousRepair,
     { status: receipt.status, base, head, report: reportEvidence.path },
-    { allowRepeatedRange: authorization === null },
+    { allowRepeatedRange: authorization === null, final: plan.review_policy === 'final', changeDir },
   );
 
   // Seal a separate snapshot: callers may reuse their working report filename.
@@ -627,7 +630,7 @@ function readCurrentReviewEvidence(changeDir, waveId, plan = readPlan(changeDir)
     if (receipt?.plan_hash !== plan.hash || receipt?.plan_revision !== plan.revision) return { receipt: null, blocker: null };
     const range = validateReviewRange(changeDir, receipt?.base, receipt?.head);
     if (receipt.base !== range.base || receipt.head !== range.head) return { receipt: null, blocker: null };
-    if (receipt.status === 'pass' && receipt.base === receipt.head) return { receipt: null, blocker: null };
+    if (receipt.status === 'pass') assertNonEmptyDiff(changeDir, receipt.base, receipt.head);
     // Reports remain evidence only while their safety and content identity can
     // be re-established. A missing hash is accepted for legacy receipts, but
     // all newly written receipts bind the report body to the review result.
@@ -638,6 +641,7 @@ function readCurrentReviewEvidence(changeDir, waveId, plan = readPlan(changeDir)
     if (waveId === 'final' && plan.review_policy === 'final' && receipt.status === 'pass') {
       const currentHead = execFileSync('git', ['-C', changeDir, 'rev-parse', 'HEAD'], { encoding: 'utf8', stdio: 'pipe' }).trim();
       if (currentHead !== receipt.head) return { receipt: null, blocker: null };
+      assertFinalReviewRange(changeDir, receipt.base, receipt.head);
     }
     return { receipt, blocker: null };
   } catch (error) {
@@ -707,13 +711,20 @@ function describeExecutionUnits(changeDir, plan, units, forReview = false) {
   });
 }
 
-function validateRepairContinuity(previousReceipt, previousRepair, nextReceipt, { allowRepeatedRange = true } = {}) {
+function validateRepairContinuity(previousReceipt, previousRepair, nextReceipt, { allowRepeatedRange = true, final = false, changeDir } = {}) {
   if (previousReceipt?.status !== 'fail') return;
   const previousHead = previousRepair?.previous_head ?? previousReceipt.head;
   if (!previousHead) throw new Error('Repair state is missing the previous review head');
 
   if (!allowRepeatedRange && nextReceipt.base === nextReceipt.head) {
     throw new Error('Authorized repair review must include a non-empty Git range; base and head must differ');
+  }
+
+  if (final) {
+    if (nextReceipt.base !== previousReceipt.base) throw new Error('Final repair must retain the complete review base');
+    validateReviewRange(changeDir, previousHead, nextReceipt.head);
+    if (!allowRepeatedRange && previousHead === nextReceipt.head) throw new Error('Authorized repair requires a new head');
+    return;
   }
 
   // A failed re-review must examine a repair that starts at the prior review
@@ -840,7 +851,10 @@ function validateRepairStateEvidence(changeDir, plan, waveId, state, currentRece
     if (failure.base !== range.base || failure.head !== range.head) {
       throw new Error(`${label} must use immutable Git commit IDs`);
     }
-    if (previousFailure && failure.base !== previousFailure.head) {
+    if (previousFailure && plan.review_policy === 'final') {
+      if (failure.base !== previousFailure.base) throw new Error(`${label} must retain the complete final review base`);
+      validateReviewRange(changeDir, previousFailure.head, failure.head);
+    } else if (previousFailure && failure.base !== previousFailure.head) {
       throw new Error(`${label} base must equal the previous failure head so repair ranges are continuous`);
     }
     const report = validateReviewReportEvidence(changeDir, failure.report);
@@ -863,6 +877,10 @@ function validateRepairStateEvidence(changeDir, plan, waveId, state, currentRece
     const resolutionRange = validateReviewRange(changeDir, resolution.base, resolution.head);
     if (resolution.base !== resolutionRange.base || resolution.head !== resolutionRange.head) {
       throw new Error('Repair state resolution must use immutable Git commit IDs');
+    }
+    if (plan.review_policy === 'final') {
+      if (resolution.base !== finalFailure.base) throw new Error('Final resolution must retain the complete review base');
+      validateReviewRange(changeDir, finalFailure.head, resolution.head);
     }
     const resolutionReport = validateReviewReportEvidence(changeDir, resolution.report);
     if (resolution.report !== resolutionReport.path || resolution.report_sha256 !== resolutionReport.sha256) {

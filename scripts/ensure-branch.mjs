@@ -4,23 +4,26 @@
 // cannot create an isolated context and no --force approval was given, so the
 // agent MUST stop and ask the user instead of silently editing main/master.
 //
-// Usage: node ensure-branch.mjs <change-dir> [change-name] [--force]
+// Usage: node ensure-branch.mjs <change-dir> [change-name] [--worktree] [--force]
 //
 // Security: every git invocation uses execFileSync with a LITERAL command
 // ('git') and a LITERAL argument array (no shell, no variable args array) —
 // the same form proven safe by install-cursor.mjs / install.mjs. There is no
 // string-form shell command, no variable command, and no dynamic args array.
 import { readIsolationContext, writeIsolationContext } from './lib/isolation-context.mjs';
+import { parseArgs } from 'node:util';
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, cpSync, existsSync, mkdirSync } from 'node:fs';
+import { appendFileSync, cpSync, existsSync, mkdirSync, lstatSync, realpathSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 
-const changeDir = process.argv[2];
-const changeName = process.argv[3];
-const force = process.argv.includes('--force');
+const { positionals, values } = parseArgs({ allowPositionals: true, options: {
+  force: { type: 'boolean', default: false }, worktree: { type: 'boolean', default: false },
+} });
+const [changeDir, changeName] = positionals;
+const force = values.force;
 
 if (!changeDir) {
-  console.error('Usage: node ensure-branch.mjs <change-dir> [change-name] [--force]');
+  console.error('Usage: node ensure-branch.mjs <change-dir> [change-name] [--worktree] [--force]');
   process.exit(2);
 }
 
@@ -69,7 +72,13 @@ try {
   process.exit(1);
 }
 
+if (!changeRelativePath || changeRelativePath.split(/[\\/]/).some(part => part === '..' || part === '.')) {
+  console.error('ensure-branch: change must be a directory strictly inside its repository.');
+  process.exit(1);
+}
+
 const sourceChangeDir = resolve(changeDir);
+assertPhysicalChangePath(repoRoot);
 const repoName = basename(repoRoot) || 'repo';
 // 默认隔离分支名 = change 目录名（与 ssf finish / review 的匹配假设一致：
 // finish 与 R5 WARN 均按 refs/heads/<change-dir-basename> 查找隔离 worktree）。
@@ -80,12 +89,26 @@ if (!isSafePathSegment(name)) {
 }
 const worktreePath = join(dirname(repoRoot), `${repoName}-${name}`);
 
-function copyActiveChange(worktreeRoot) {
+function assertPhysicalChangePath(root) {
+  let current = root;
+  for (const part of changeRelativePath.split(/[\\/]/)) {
+    current = join(current, part);
+    if (existsSync(current) && lstatSync(current).isSymbolicLink()) throw new Error('Change path must not traverse symlinks');
+  }
+}
+
+function copyActiveChange(worktreeRoot, preserveExisting = false) {
   if (!existsSync(sourceChangeDir)) return;
+  assertPhysicalChangePath(worktreeRoot);
   const targetChangeDir = join(worktreeRoot, changeRelativePath);
   mkdirSync(dirname(targetChangeDir), { recursive: true });
   cpSync(sourceChangeDir, targetChangeDir, {
     recursive: true,
+    force: !preserveExisting,
+    filter: (_source, target) => {
+      if (existsSync(target) && lstatSync(target).isSymbolicLink()) throw new Error('Change copy must not overwrite symlinks');
+      return true;
+    },
     dereference: false,
     verbatimSymlinks: true,
   });
@@ -139,7 +162,21 @@ function writeProgressWarning(contextDir) {
 }
 
 const existingContext = readIsolationContext(changeDir);
-if (!PROTECTED.includes(branch)) {
+if (!PROTECTED.includes(branch) && (!values.worktree || existingContext)) {
+  if (existingContext?.kind === 'worktree' && existingContext.finish_status !== 'complete'
+    && realpathSync.native(existingContext.isolation_root) === realpathSync.native(repoRoot)) {
+    if (existingContext.isolation_branch !== branch) {
+      console.error('ensure-branch: recorded isolation branch has changed; recover provenance before edits.');
+      process.exit(1);
+    }
+    if (existingContext.setup_status === 'initializing') {
+      if (!initSubmodules(repoRoot)) process.exit(1);
+      writeProgressWarning(repoRoot);
+      writeIsolationContext(changeDir, { ...existingContext, setup_status: 'ready' });
+    }
+    console.log(`ensure-branch: existing git worktree at ${repoRoot} is ready. Proceed with implementation edits there.`);
+    process.exit(0);
+  }
   if (existingContext?.kind === 'branch'
     && existingContext.finish_status !== 'complete'
     && existingContext.isolation_branch === branch) {
@@ -152,6 +189,10 @@ if (!PROTECTED.includes(branch)) {
       console.log(`ensure-branch: already isolated on branch '${branch}'. Proceed with implementation edits.`);
     }
     process.exit(0);
+  }
+  if (existingContext && existingContext.finish_status !== 'complete') {
+    console.error('ensure-branch: current branch differs from recorded isolation; return to the recorded branch before edits.');
+    process.exit(1);
   }
   console.log(`ensure-branch: already isolated on branch '${branch}'. Proceed with implementation edits.`);
   process.exit(0);
@@ -178,7 +219,7 @@ if (existingContext?.kind === 'worktree'
   if (existingContext.setup_status === 'initializing') {
     if (!initSubmodules(worktreePath)) process.exit(1);
     writeProgressWarning(worktreePath);
-    copyActiveChange(worktreePath);
+    copyActiveChange(worktreePath, true);
     writeIsolationContext(changeDir, { ...existingContext, setup_status: 'ready' });
     console.log(`ensure-branch: resumed existing git worktree at ${worktreePath} on branch '${name}'.`);
   } else {
@@ -187,59 +228,38 @@ if (existingContext?.kind === 'worktree'
   process.exit(0);
 }
 
-// Preferred: git worktree (literal arg array).
-let worktreeCreated = false;
-try {
-  execFileSync('git', ['worktree', 'add', worktreePath, '-b', name], { ...GIT_OPTS, stdio: 'inherit' });
-  worktreeCreated = true;
-} catch (e) {
-  console.error(`ensure-branch: worktree creation failed: ${(e.stderr || e.stdout || e.message || 'unknown').toString().trim()}`);
+if (existingContext && existingContext.finish_status !== 'complete') {
+  console.error('ensure-branch: unfinished isolation no longer matches; recover the recorded checkout instead of creating another.');
+  process.exit(1);
 }
-if (worktreeCreated) {
-  const context = { change_name: basename(sourceChangeDir), change_relative_path: changeRelativePath, target_root: repoRoot, target_branch: branch, isolation_root: worktreePath, isolation_branch: name, kind: 'worktree', finish_status: 'pending', setup_status: 'initializing' };
-  writeIsolationContext(changeDir, context);
-  if (!initSubmodules(worktreePath)) {
-    process.exit(1);
-  }
-  writeProgressWarning(worktreePath);
-  copyActiveChange(worktreePath);
-  writeIsolationContext(changeDir, { ...context, setup_status: 'ready' });
-  console.log(`ensure-branch: created git worktree at ${worktreePath} on branch '${name}' with active change artifacts. Make all implementation edits there.`);
-  process.exit(0);
-}
+const reviewBase = (execFileSync('git', ['rev-parse', 'HEAD'], GIT_OPTS) || '').trim();
 
-// Fallback: local branch (literal arg arrays).
-let branchCreated = false;
+// Default to one checkout. Worktree creation is an explicit opt-in and never
+// silently falls back to switching a different branch after a partial failure.
+const kind = values.worktree ? 'worktree' : 'branch';
+const isolationRoot = values.worktree ? worktreePath : repoRoot;
 try {
-  execFileSync('git', ['switch', '-c', name], { ...GIT_OPTS, stdio: 'inherit' });
-  branchCreated = true;
-} catch (e) {
-  // A failed `git worktree add -b <name>` may have already created the branch
-  // without materializing the worktree directory, so `git switch -c` collides
-  // with the existing name. Fall back to plain `git switch` onto that branch.
-  try {
-    execFileSync('git', ['switch', name], { ...GIT_OPTS, stdio: 'inherit' });
-    branchCreated = true;
-  } catch (e2) {
-    console.error(`ensure-branch: branch creation failed: ${(e2.stderr || e2.stdout || e2.message || 'unknown').toString().trim()}`);
+  if (values.worktree) {
+    execFileSync('git', ['worktree', 'add', worktreePath, '-b', name], { ...GIT_OPTS, stdio: 'inherit' });
+  } else {
+    execFileSync('git', ['switch', '-c', name], { ...GIT_OPTS, stdio: 'inherit' });
   }
-}
-if (branchCreated) {
-  const context = { change_name: basename(sourceChangeDir), change_relative_path: changeRelativePath, target_root: repoRoot, target_branch: branch, isolation_root: repoRoot, isolation_branch: name, kind: 'branch', finish_status: 'pending', setup_status: 'initializing' };
-  writeIsolationContext(changeDir, context);
-  if (!initSubmodules(repoRoot)) {
-    process.exit(1);
+} catch (error) {
+  console.error(`ensure-branch: ${kind} creation failed: ${(error.stderr || error.message).toString().trim()}`);
+  if (force) {
+    console.error('ensure-branch: WARNING — editing protected branch in place with --force.');
+    process.exit(0);
   }
-  writeProgressWarning(repoRoot);
-  writeIsolationContext(changeDir, { ...context, setup_status: 'ready' });
-  console.log(`ensure-branch: created branch '${name}' via git switch -c. Make implementation edits there.`);
-  process.exit(0);
+  console.error('ensure-branch: preserve existing branches and directories; resolve the conflict or choose a new name.');
+  process.exit(1);
 }
-
-// Both failed → require explicit approval to edit in place.
-if (force) {
-  console.error('ensure-branch: WARNING — editing protected branch in place with --force. This modifies main/master directly.');
-  process.exit(0);
-}
-console.error('ensure-branch: could not create an isolated context and no --force given. STOP and ask the user for explicit approval before editing main/master.');
-process.exit(1);
+const context = { change_name: basename(sourceChangeDir), change_relative_path: changeRelativePath,
+  target_root: repoRoot, target_branch: branch, isolation_root: isolationRoot, isolation_branch: name,
+  kind, finish_status: 'pending', setup_status: 'initializing', review_base: reviewBase };
+writeIsolationContext(changeDir, context);
+if (!initSubmodules(isolationRoot)) process.exit(1);
+writeProgressWarning(isolationRoot);
+if (values.worktree) copyActiveChange(worktreePath);
+writeIsolationContext(changeDir, { ...context, setup_status: 'ready' });
+console.log(`ensure-branch: created ${values.worktree ? 'git worktree' : 'feature branch'} at ${isolationRoot} on branch '${name}'. Make implementation edits there.`);
+process.exit(0);

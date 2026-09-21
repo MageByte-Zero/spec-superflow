@@ -19,7 +19,7 @@ done
 
 [ -n "$active_dir" ] || exit 0
 
-msg="Active spec-superflow state detected. Use workflow-start to resume it."
+msg="Active spec-superflow state detected. Use workflow-start only when asked to continue this change."
 
 # Four platforms share the same message, only output format differs.
 # CodeBuddy Code CLI (detected via CODEBUDDY_PROJECT_DIR) loads hooks from

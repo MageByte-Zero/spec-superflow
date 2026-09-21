@@ -184,6 +184,7 @@ function escalate(changeDir, state, values) {
   const record = escalateLightweightWorkflow(changeDir, { reason: values.reason });
   const fromState = state.state;
   state.workflow = 'full';
+  state.workflow_variant = 'legacy';
   state.state = fromState === 'exploring' ? 'exploring' : 'specifying';
   state.execution_mode = null;
   state.execution_plan_hash = null;
@@ -207,6 +208,7 @@ function escalate(changeDir, state, values) {
 function persistWorkflowSelection(changeDir, state, record) {
   const summary = `workflow_path=${record.selection.mode}; recommended=${record.recommendation.mode}; followed_recommendation=${record.selection.followed_recommendation}`;
   state.workflow = record.selection.mode;
+  state.workflow_variant = isDirectWorkflowReceipt(record, state) ? 'direct' : 'legacy';
   state.dp_0_decisions = appendDecision(state.dp_0_decisions, summary);
   writeState(changeDir, state);
 }

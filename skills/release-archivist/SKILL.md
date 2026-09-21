@@ -26,7 +26,7 @@ Report only the outcome, key verification, unresolved risks and next action. Pre
 
 For authorized Full/legacy Hotfix integration, run `ssf finish <dir> [--test-cmd <command>]`. It uses recorded target checkout/branch, merges if necessary, verifies the target, and safely removes isolation. It verifies an archive of ignored change artifacts and preserves the previous target before cleanup. It never force-removes uncommitted work. Branch-only isolation never deletes the checkout.
 
-Verification failure preserves isolation. Cleanup failure remains cleanup-pending. Resume performs the remaining steps; identical verified target/command can reuse the recorded result. Completed finish is idempotent. A missing or ambiguous target is a real blocker: recover provenance before merging, never guess the target from the current directory.
+Verification failure preserves isolation. For recorded `verify-pending`, recovery offers the guarded `closing -> debugging` transition; diagnose, repair within approved scope, reverify and review before closing again. Completed finish and abandoned changes cannot reopen. Cleanup failure remains cleanup-pending. Resume performs the remaining steps; each unfinished finish retry verifies once again because ignored dependencies, local configuration and external services may have changed even at the same HEAD. Completed finish does not rerun verification. Completed finish is idempotent. A missing or ambiguous target is a real blocker: recover provenance before merging, never guess the target from the current directory.
 
 If the user requested branch delivery without merging, leave the branch/worktree intact and report that status. Do not treat logical closure as permission to merge, push or release.
 

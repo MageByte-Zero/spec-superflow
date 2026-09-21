@@ -15,6 +15,7 @@ import { getCheckpoint, getPlanScopedPaths, listCheckpoints, saveCheckpoint } fr
 import * as sddOverlayModule from '../../scripts/lib/sdd-overlay.mjs';
 import { createGitSeedFixture } from '../helpers/git-seed-fixture.mjs';
 import { canCreateSymlink } from '../helpers/symlink-support.mjs';
+import { writeIsolationContext } from '../../scripts/lib/isolation-context.mjs';
 import { computeArtifactsHash } from '../../scripts/lib/hash.mjs';
 import { hashReceipt, readRecommendationReceipt, writeRecommendationReceipt } from '../../scripts/lib/execution-recommendation.mjs';
 
@@ -49,6 +50,7 @@ beforeEach(() => {
   // （protected），既有 review 用例直接使用该分支上的 head；建立一个指向
   // head 的非 protected 隔离分支，使分支校验放行，保持既有行为不变。
   runGit(changeDir, ['branch', 'test-isolation', fixture.head]);
+  writeIsolationContext(changeDir, { change_name: changeDir.split(/[\\/]/).at(-1), target_branch: 'master', review_base: fixture.base });
 });
 
 afterEach(() => {
@@ -1762,11 +1764,11 @@ describe('resolved final review rounds', () => {
     writePlan(changeDir, plan);
     recordReview(changeDir, 'final', { status: 'fail', ...gitRefs, report: writeReviewReport('round1-fail.md') });
     const repaired = createRepairCommit('round1');
-    recordReview(changeDir, 'final', { status: 'pass', base: gitRefs.head, head: repaired, report: writeReviewReport('round1-pass.md') });
+    recordReview(changeDir, 'final', { status: 'pass', base: gitRefs.base, head: repaired, report: writeReviewReport('round1-pass.md') });
     const changed = createRepairCommit('new-work');
-    recordReview(changeDir, 'final', { status: 'fail', base: repaired, head: changed, report: writeReviewReport('round2-fail.md') });
+    recordReview(changeDir, 'final', { status: 'fail', base: gitRefs.base, head: changed, report: writeReviewReport('round2-fail.md') });
     const fixed = createRepairCommit('round2');
-    recordReview(changeDir, 'final', { status: 'pass', base: changed, head: fixed, report: writeReviewReport('round2-pass.md') });
+    recordReview(changeDir, 'final', { status: 'pass', base: gitRefs.base, head: fixed, report: writeReviewReport('round2-pass.md') });
     assert.equal(readCurrentReview(changeDir, 'final', plan).status, 'pass');
   });
 });

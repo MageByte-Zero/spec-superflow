@@ -873,14 +873,14 @@ ssf finish changes/my-change
 `--report` 相对于 `<change>` 解析，且必须位于
 `<change>/.superpowers/sdd/reviews/` 之下。`--base` 和 `--head` 必须是该
 `<change>` Git 工作树中的真实 commit，且 `base` 必须是 `head` 的祖先。
-`pass` 回执要求 `base` 与 `head` 不同；final review 使用目标分支与 HEAD 的 merge-base，不能用 `HEAD~1`。
+`pass` 回执要求 `base` 与 `head` 之间存在实际文件差异；final review 使用记录的隔离起点 review_base（旧上下文使用明确目标的 merge-base），不能用 `HEAD~1`。
 `<change>/.superpowers/sdd/reviews/` 的目录层级必须是物理、非符号链接目录；
 report 本身必须为普通、非空、非符号链接文件。
 
-`ssf isolate <change-dir>` 创建隔离上下文后会自动递归初始化子模块（存在
+`ssf isolate <change-dir>` 默认使用当前目录中的特性分支，只有显式 `--worktree` 才创建工作树。创建隔离上下文后会自动递归初始化子模块（存在
 `.gitmodules` 时），并向 `<change>/.superpowers/sdd/progress.md` 追加 cwd 不持续警告。
 `ssf execution review` 在记录 receipt 前校验 head 必须被至少一个非 `main`/`master`
-分支包含——head 只落在主干上会被拒绝且不写 receipt。全部 wave 通过后，
+分支包含——head 只落在主干上会被拒绝且不写 receipt。当前 review policy 所要求的审查通过后，
 `ssf finish <change-dir>` 一条命令完成收尾：`merge --no-ff` 回主干、验证主干包含
 隔离分支全部提交；worktree 模式删除 worktree 与分支，branch 模式只删除隔离分支。`finish` 与 `review` 在 cwd 位于
 worktree 之外时会输出含 worktree 绝对路径的 WARN（不阻断执行）。
@@ -942,3 +942,10 @@ Full/legacy 推荐流程：`exploring -> specifying -> bridging -> approved-for-
 Quick（≤3 单模块代码文件/任务）与 direct Hotfix（incident，≤2）走 `exploring -> approved-for-build -> executing`。Quick 低风险时同轮推荐/接受；若涉及 PRD、Spec/Design、API、数据/权限或跨模块，必须展示风险并由用户选择 Quick 或 Full。选择 Quick 时记录 `tdd`、`new-test` 或 `bounded` 验证策略；direct Hotfix 必须复现原症状回归。legacy Hotfix 才走最小契约、DP-3、plan/review 路径。
 
 Execution efficiency: Native = `inline`, default review policy `final`; SDD = optional delegation with `wave` review. `execution revise` may retain or change mode. Reports are immutable snapshots. `closing` is logical completion; recorded pending physical finish remains resumable. `finish` uses the recorded target and never force-removes work.
+
+
+### Recovery and execution cost boundaries
+
+Default isolation uses a feature branch in the current checkout; worktrees require explicit `--worktree`. Native execution reuses unchanged approvals and requires explicit authorization for delegation. Final reviews cover the full change through repairs. Unfinished physical finish remains recoverable and revalidates once per attempt.
+
+See [root causes and recovery boundaries](docs/workflow-efficiency-root-causes.md).

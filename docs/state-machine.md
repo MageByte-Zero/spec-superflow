@@ -108,8 +108,8 @@ state.
 ### `closing`
 
 - successful terminal state（成功终态）；验证、同步和审计证据已在 `executing` 完成
-- 无后续核心状态转换；已完成物理收尾时 next skill 为 `none`。
-- 如 isolation 记录仍有 pending / verify-pending / cleanup-pending，resume 仅恢复 release-archivist 的物理收尾，不重复规划、同步或审计。
+- 已完成物理收尾时 next skill 为 `none`，不能重开。唯一修复出口是 recorded `verify-pending` 的 `closing -> debugging`；保留原批准快照，修复后重新验证和审查。
+- isolation 为 pending / cleanup-pending 时恢复物理收尾；verify-pending 时先诊断，禁止无新证据反复 finish。
 - 合并仍需已有用户授权；branch-only 不删除 checkout。
 
 ### `abandoned`

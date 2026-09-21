@@ -77,12 +77,15 @@ export async function run(args) {
     case 'check': {
       const state = readState(changeDir);
       const currentHash = computeArtifactsHash(changeDir);
-      const consistent = state.artifacts_hash === currentHash;
+      const currentContractHash = computeContractHash(changeDir);
+      const consistent = state.artifacts_hash === currentHash && state.contract_hash === currentContractHash;
       if (values.json) {
         console.log(JSON.stringify({
           consistent,
           stored_hash: state.artifacts_hash,
           current_hash: currentHash,
+          stored_contract_hash: state.contract_hash,
+          current_contract_hash: currentContractHash,
           state: state.state,
         }));
       } else {
@@ -162,8 +165,13 @@ export async function run(args) {
       }
 
       state.state = toState;
-      state.artifacts_hash = computeArtifactsHash(changeDir);
-      state.contract_hash = computeContractHash(changeDir);
+      // Diagnostic and rewind transitions are not artifact approvals. Preserve
+      // the approved snapshot so drift cannot be blessed by entering debugging.
+      if (['exploring', 'specifying'].includes(fromState)) {
+        state.artifacts_hash = computeArtifactsHash(changeDir);
+        state.contract_hash = computeContractHash(changeDir);
+      }
+      if (toState === 'debugging') { state.test_result = null; state.dp_6_result = null; }
       state.last_transition_from = fromState;
       state.last_transition_to = toState;
       state.last_transition = new Date().toISOString();

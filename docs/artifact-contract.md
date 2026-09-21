@@ -112,3 +112,10 @@ For Full/legacy Hotfix, implementation starts only after:
 - closing requires a current `pass` under the final/wave policy; checked tasks alone do not certify code
 
 Execution efficiency: Native = `inline`, default review policy `final`; SDD = optional delegation with `wave` review. `execution revise` may retain or change mode. Reports are immutable snapshots. `closing` is logical completion; recorded pending physical finish remains resumable. `finish` uses the recorded target and never force-removes work.
+
+
+### Recovery and execution cost boundaries
+
+Default isolation uses a feature branch in the current checkout; worktrees require explicit `--worktree`. Native execution reuses unchanged approvals and requires explicit authorization for delegation. Final reviews cover the full change through repairs. Unfinished physical finish remains recoverable and revalidates once per attempt.
+
+See [root causes and recovery boundaries](workflow-efficiency-root-causes.md).

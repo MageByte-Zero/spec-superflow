@@ -63,7 +63,7 @@ When DP-0 has made the scope clear, generate the configured planning pack (propo
 
 ## DP-2: Artifact Review Gate
 
-Present a concise summary of all 4 artifacts, then ask one DP-2 question for material adjustments. For Full changes, run one independent five-question blind reader check (problem, command boundary, invalidation boundary, continuation boundary, and document flow) before recording approval; repair only answers the reader cannot derive. After approval:
+Present a concise summary of the configured artifacts. Self-check five questions once: problem, command boundary, invalidation boundary, continuation boundary, and document flow. Do not dispatch a blind-reader subagent unless the user explicitly requested delegation. Reuse approval already covering these artifacts; ask one consolidated question only for a new material decision or missing artifact approval. Do not add a separate continuation question. After approval:
 ```bash
 ssf state set <change-dir> dp_2_result "approved: <summary>"
 ssf state set <change-dir> dp_2_timestamp now

@@ -6,6 +6,13 @@ The format loosely follows Keep a Changelog.
 
 ## [Unreleased]
 
+- Default isolation to a feature branch in the current checkout; require explicit `--worktree`, reject mismatched branch recovery, and preserve the feature branch after failed verification.
+
+- Keep final reviews bound to the complete isolated change through repair, reject empty diffs, and surface adjudication as a recovery blocker.
+- Preserve approval hashes during diagnosis, recover missing Direct Hotfix evidence, and resolve recovery to the recorded checkout instead of stale source artifacts.
+- Permit diagnosis of unfinished physical verification without reopening completed changes; revalidate unfinished finish retries against mutable inputs.
+- Remove unsolicited OpenCode bootstrap and duplicate approval/delegation instructions; use one bounded interface preflight before Native execution.
+
 - Native-first execution with explicit final/wave review policy; legacy plans retain wave semantics.
 - Fix debugging/recovery routing, state field persistence, template task parsing, report snapshots and repair-chain resync.
 - Record isolation targets and retryable physical finish; remove automatic force cleanup.

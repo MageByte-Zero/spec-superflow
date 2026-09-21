@@ -137,7 +137,7 @@ npm install -g spec-superflow
 | `ssf handoff list <dir>` | List handoff lifecycle status |
 | `ssf handoff finish <dir> <id>` | Validate a handoff result |
 | `ssf handoff resolve <dir> <id> --decision <decision>` | Record an explicit handoff decision |
-| `ssf isolate <dir>` | Enforce git isolation before implementation: creates a worktree (with recursive submodule init) or branch when on main/master, and appends a cwd-persistence warning to the progress ledger |
+| `ssf isolate <dir>` | Enforce git isolation before implementation: uses a feature branch in the current checkout by default; only explicit `--worktree` creates a worktree (with recursive submodule init), and appends a cwd-persistence warning to the progress ledger |
 | `ssf finish <dir> [--test-cmd <command>]` | Merge and verify on the recorded target; worktree isolation removes the worktree and branch, while branch-only isolation removes only the branch; failures preserve the isolation context |
 | `ssf install-cursor` | Deploy to `.cursor/` directory |
 | `ssf install-workbuddy` | Deploy to WorkBuddy marketplace and enable skills |
@@ -311,7 +311,7 @@ ssf execution adjudicate changes/my-change --wave foundation --decision allow-re
 
 The `--report` path is resolved relative to `<change>` and must remain under
 `<change>/.superpowers/sdd/reviews/`. `--base` and `--head` must be real commits
-in the `<change>` Git worktree, and `base` must be an ancestor of `head`. A passing receipt requires a non-empty range. Final review uses the merge-base of the target branch and HEAD, never `HEAD~1`.
+in the `<change>` Git worktree, and `base` must be an ancestor of `head`. A passing receipt requires an actual non-empty diff. Final review uses the recorded immutable isolation `review_base` (an unambiguous target merge-base for legacy/manual isolation) through current HEAD, never `HEAD~1`.
 The `<change>/.superpowers/sdd/reviews/` directory hierarchy must be physical,
 non-symlink directories. The report itself must be a regular, non-empty,
 non-symlink file.
@@ -406,3 +406,10 @@ prevents session-compression loss.
 **Star the repo — find it when you need it.**
 
 Execution efficiency: Native = `inline`, default review policy `final`; SDD = optional delegation with `wave` review. `execution revise` may retain or change mode. Reports are immutable snapshots. `closing` is logical completion; recorded pending physical finish remains resumable. `finish` uses the recorded target and never force-removes work.
+
+
+### Recovery and execution cost boundaries
+
+Default isolation uses a feature branch in the current checkout; worktrees require explicit `--worktree`. Native execution reuses unchanged approvals and requires explicit authorization for delegation. Final reviews cover the full change through repairs. Unfinished physical finish remains recoverable and revalidates once per attempt.
+
+See [root causes and recovery boundaries](workflow-efficiency-root-causes.md).

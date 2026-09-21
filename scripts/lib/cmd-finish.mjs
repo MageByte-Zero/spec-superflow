@@ -146,6 +146,10 @@ export function run(args, io = { stdout: process.stdout, stderr: process.stderr 
       isoHead = context.isolation_head;
       branchExists = false;
     }
+    if (!context.review_base) {
+      context.review_base = git(mainRoot, ['merge-base', 'HEAD', isoHead], io, runGit);
+      persist();
+    }
     let contained = false;
     try { git(mainRoot, ['merge-base', '--is-ancestor', isoHead, 'HEAD'], io, runGit); contained = true; } catch {}
     if (!contained) {
@@ -156,13 +160,25 @@ export function run(args, io = { stdout: process.stdout, stderr: process.stderr 
     const mainHead = git(mainRoot, ['rev-parse', 'HEAD'], io, runGit);
     const verifyCmd = values['test-cmd'] || 'npm test';
     const environment = verificationEnvironmentFingerprint();
-    if (context.verified_head !== mainHead || context.verified_command !== verifyCmd || context.verified_environment !== environment) {
+    // A prior process cannot attest that ignored dependencies, local config or
+    // external services stayed unchanged. Revalidate each unfinished attempt.
+    {
       context.finish_status = 'verify-pending';
       persist();
       io.stdout.write(`finish: merge --no-ff 成功（commit ${mainHead}），开始主干验证…\n`);
       io.stdout.write(`finish: 在主干执行验证命令：${verifyCmd}\n`);
       try { execFileSync(verifyCmd, { cwd: mainRoot, shell: true, timeout: 600000, stdio: 'inherit' }); }
-      catch (error) { throw new Error(`主干验证失败：${error.message}。返回 worktree 修改后重试`); }
+      catch (error) {
+        if (context.kind === 'branch' && !git(mainRoot, ['status', '--porcelain'], io, runGit)) {
+          git(mainRoot, ['switch', name], io, runGit);
+        }
+        throw new Error(`主干验证失败：${error.message}。在记录的隔离分支修复后重试；若验证产生未提交改动，先保留并处理这些改动`);
+      }
+      if (git(mainRoot, ['rev-parse', 'HEAD'], io, runGit) !== mainHead
+        || git(mainRoot, ['branch', '--show-current'], io, runGit) !== context.target_branch
+        || git(mainRoot, ['status', '--porcelain'], io, runGit)) {
+        throw new Error('Verification changed the target checkout; preserve changes and diagnose before cleanup');
+      }
       context.verified_head = mainHead;
       context.verified_command = verifyCmd;
       context.verified_environment = environment;

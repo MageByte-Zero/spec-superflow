@@ -1,8 +1,8 @@
-import { readIsolationContext } from './isolation-context.mjs';
+import { readIsolationContext, resolveIsolationChange } from './isolation-context.mjs';
 import { workflowPolicy } from './workflow-policy.mjs';
 import fs from 'node:fs';
 import { basename, join, resolve } from 'node:path';
-import { describeWaves, readCurrentReview, readPlan, validatePlan } from './execution-plan.mjs';
+import { describeWaves, describeReviews, readPlan, validatePlan } from './execution-plan.mjs';
 import { listCheckpoints, listHandoffs } from './sdd-overlay.mjs';
 import { readState } from './state-loader.mjs';
 
@@ -39,11 +39,20 @@ export function resolveChangeTarget(input, cwd = process.cwd()) {
 
 export function createRecoverySummary(changeDir) {
   const state = readState(changeDir);
+  const stateFile = join(changeDir, '.spec-superflow.yaml');
+  const knownStates = ['exploring', 'specifying', 'bridging', 'approved-for-build', 'executing', 'debugging', 'closing', 'abandoned'];
+  if (!fs.existsSync(stateFile) || !/^state:\s*\S+/m.test(fs.readFileSync(stateFile, 'utf8')) || !knownStates.includes(state.state)) {
+    const reason = 'Workflow state is missing or invalid; recover recorded state and approvals before continuing';
+    return { ok: false, change: { name: basename(changeDir), path: resolve(changeDir) }, state: state.state, workflow: state.workflow, terminal: false,
+      checkpoint: null, handoffs: { active: [], result_ready: [], resolved: [] }, execution: { required: false, current: false, failures: [reason] },
+      blockers: [{ code: 'STATE_RECOVERY_REQUIRED', message: reason }], next_action: { skill: 'none', command: null, reason },
+      continuation: { kind: 'blocked', wave: null, reason } };
+  }
   const terminal = ['closing', 'abandoned'].includes(state.state);
-  const checkpoints = listCheckpoints(changeDir)
+  const checkpoints = (terminal ? [] : listCheckpoints(changeDir))
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-  const handoffs = partitionHandoffs(listHandoffs(changeDir));
-  const execution = inspectExecution(changeDir, state);
+  const handoffs = partitionHandoffs(terminal ? [] : listHandoffs(changeDir));
+  const execution = terminal ? { required: false, present: false, current: false, failures: [] } : inspectExecution(changeDir, state);
   const blockers = terminal ? [] : buildBlockers(changeDir, handoffs, execution);
   if (!terminal && workflowPolicy(changeDir, state).missingDirectReceipt) {
     blockers.unshift({
@@ -53,7 +62,7 @@ export function createRecoverySummary(changeDir) {
     });
   }
 
-  const nextAction = selectNextAction(changeDir, state, terminal, checkpoints[0], blockers);
+  const nextAction = selectNextAction(changeDir, state, terminal, checkpoints[0], blockers, execution);
   return {
     ok: blockers.length === 0,
     change: { name: basename(changeDir), path: resolve(changeDir) },
@@ -103,11 +112,14 @@ function inspectExecution(changeDir, state) {
 
     const validation = validatePlan(changeDir, plan);
     const waves = validation.valid ? describeWaves(changeDir, plan) : [];
+    const reviews = validation.valid ? describeReviews(changeDir, plan) : [];
     return {
       required,
       present: true,
       current: validation.valid,
       revision: plan.revision ?? null,
+      review_policy: plan.review_policy ?? 'wave',
+      waves, reviews,
       next_eligible_wave: waves.find(wave => wave.eligible)?.id ?? null,
       failures: validation.failures,
     };
@@ -130,7 +142,17 @@ function buildBlockers(changeDir, handoffs, execution) {
     message: `Handoff '${handoff.id}' is ready for review`,
     command: `ssf handoff resolve ${changeDir} ${handoff.id} --decision <accept|reject|defer>`,
   }));
-  if (!execution.required || execution.current) return handoffBlockers;
+  if (execution.current) {
+    const reviewBlockers = (execution.reviews ?? []).flatMap(review => {
+      if (review.blockers.length) return [{ code: 'REVIEW_EVIDENCE_INVALID', message: review.blockers.join('; '), wave: review.id }];
+      if (review.repair.status === 'adjudication-required' && !review.adjudication?.active) {
+        return [{ code: 'REVIEW_ADJUDICATION_REQUIRED', wave: review.id, message: `Review '${review.id}' requires human adjudication before retry` }];
+      }
+      return [];
+    });
+    return [...handoffBlockers, ...reviewBlockers];
+  }
+  if (!execution.required) return handoffBlockers;
 
   return [
     ...handoffBlockers,
@@ -144,9 +166,12 @@ function buildBlockers(changeDir, handoffs, execution) {
   ];
 }
 
-function selectNextAction(changeDir, state, terminal, checkpoint, blockers) {
+function selectNextAction(changeDir, state, terminal, checkpoint, blockers, execution) {
   if (terminal && state.state === 'closing') {
     const isolation = readIsolationContext(changeDir);
+    if (isolation?.finish_status === 'verify-pending') {
+      return { skill: 'bug-investigator', command: `ssf state transition ${changeDir} debugging`, reason: 'Physical verification is unfinished; diagnose before retrying finish' };
+    }
     if (isolation && isolation.finish_status !== 'complete') {
       return { skill: 'release-archivist', command: `ssf finish ${changeDir}`, reason: `Physical finish is ${isolation.finish_status}` };
     }
@@ -164,6 +189,13 @@ function selectNextAction(changeDir, state, terminal, checkpoint, blockers) {
   if (state.state === 'debugging') {
     return { skill: 'bug-investigator', command: null, reason: 'Diagnose the failure before resuming implementation' };
   }
+  if (blockers[0]?.code === 'EXECUTION_PLAN_STALE') {
+    const failures = execution.failures.join('; ');
+    const stage = failures.includes('artifacts hash mismatch') ? 'specifying'
+      : failures.includes('contract hash mismatch') ? 'bridging' : null;
+    if (stage) return { skill: stage === 'bridging' ? 'contract-builder' : 'spec-writer',
+      command: `ssf state transition ${changeDir} ${stage}`, reason: `Approved inputs changed; recover ${stage} before revising the existing plan` };
+  }
   if (blockers[0]?.code === 'EXECUTION_PLAN_REQUIRED' || blockers[0]?.code === 'EXECUTION_PLAN_STALE') {
     return {
       skill: 'build-executor',
@@ -172,12 +204,10 @@ function selectNextAction(changeDir, state, terminal, checkpoint, blockers) {
     };
   }
 
-  const execution = inspectExecution(changeDir, state);
   if (execution.present && execution.current) {
-    const plan = readPlan(changeDir);
-    const waves = describeWaves(changeDir, plan);
-    if (plan.review_policy === 'final' && waves.every(wave => wave.completed)) {
-      const reviewed = readCurrentReview(changeDir, 'final', plan)?.status === 'pass';
+    const waves = execution.waves;
+    if (execution.review_policy === 'final' && waves.every(wave => wave.completed)) {
+      const reviewed = execution.reviews.find(review => review.id === 'final')?.receipt?.status === 'pass';
       return { skill: reviewed ? 'release-archivist' : 'code-reviewer', command: null, reason: reviewed ? 'Final review passed; close out the change' : 'Implementation completed; final whole-range review required' };
     }
     const eligibleWave = waves.find(wave => wave.eligible);
@@ -223,7 +253,8 @@ function selectContinuation(terminal, blockers, execution, nextAction) {
       ? { kind: 'blocked', wave: null, command: nextAction.command, reason: nextAction.reason }
       : { kind: 'terminal', wave: null, reason: 'Change is terminal' };
   }
-  if (nextAction.skill === 'bug-investigator') {
+  if (nextAction.skill === 'bug-investigator' && !blockers.some(blocker =>
+    ['REVIEW_ADJUDICATION_REQUIRED', 'REVIEW_EVIDENCE_INVALID', 'WORKFLOW_RECEIPT_REQUIRED'].includes(blocker.code))) {
     return { kind: 'automatic', wave: null, reason: nextAction.reason };
   }
   if (blockers.length > 0) {
@@ -288,6 +319,8 @@ function isDirectory(candidate) {
 }
 
 function describeChange(changeDir, selection) {
+  try { changeDir = resolveIsolationChange(changeDir); }
+  catch (error) { throw new RecoveryError('ISOLATION_RECOVERY_REQUIRED', error.message); }
   return {
     name: basename(changeDir),
     path: changeDir,

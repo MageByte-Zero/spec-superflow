@@ -150,7 +150,7 @@ npx spec-superflow list          # 或通过 npx 使用
 | `ssf handoff list <dir>` | 列出 handoff 生命周期状态 |
 | `ssf handoff finish <dir> <id>` | 校验 handoff 结果 |
 | `ssf handoff resolve <dir> <id> --decision <decision>` | 记录显式 handoff 决策 |
-| `ssf isolate <dir>` | 实现前强制 git 隔离：在 main/master 时创建 worktree（含递归初始化子模块）或分支，并向 progress 账本写入 cwd 不持续警告 |
+| `ssf isolate <dir>` | 实现前强制 git 隔离：默认在当前目录创建特性分支；仅显式 `--worktree` 创建工作树（含递归初始化子模块），并向 progress 账本写入 cwd 不持续警告 |
 | `ssf finish <dir> [--test-cmd <command>]` | 一键收尾：merge --no-ff 回主干并验证；worktree 模式清理 worktree 与分支，分支模式只清理隔离分支；失败保留隔离上下文 |
 | `ssf execution recommend <dir> ...` | 基于任务量、wave 和工作流列出可用执行方式并给出推荐 |
 | `ssf execution plan <dir> ...` | 在用户确认选择后，为 Full/legacy Hotfix 保存受 guard 保护的执行计划 |
@@ -258,7 +258,7 @@ ssf execution adjudicate changes/my-change --wave foundation --decision allow-re
 
 `--report` 相对于 `<change>` 解析，且必须位于
 `<change>/.superpowers/sdd/reviews/` 之下。`--base` 和 `--head` 必须是该
-`<change>` Git 工作树中的真实 commit，且 `base` 必须是 `head` 的祖先；`pass` 回执要求二者不同。final review 的 base 使用目标分支与 HEAD 的 merge-base，不能用 `HEAD~1`。
+`<change>` Git 工作树中的真实 commit，且 `base` 必须是 `head` 的祖先；`pass` 回执要求二者之间存在实际文件差异。final review 的 base 使用记录的隔离起点 review_base（旧上下文使用明确目标的 merge-base），不能用 `HEAD~1`。
 `<change>/.superpowers/sdd/reviews/` 的目录层级必须是物理、非符号链接目录；
 report 本身必须为普通、非空、非符号链接文件。
 
@@ -422,3 +422,10 @@ Full/legacy Hotfix 先由 `ssf execution recommend` 根据任务量和 wave 策�
 **Star 一下，下次需要的时候能找到。**
 
 Execution efficiency: Native = `inline`, default review policy `final`; SDD = optional delegation with `wave` review. `execution revise` may retain or change mode. Reports are immutable snapshots. `closing` is logical completion; recorded pending physical finish remains resumable. `finish` uses the recorded target and never force-removes work.
+
+
+### Recovery and execution cost boundaries
+
+Default isolation uses a feature branch in the current checkout; worktrees require explicit `--worktree`. Native execution reuses unchanged approvals and requires explicit authorization for delegation. Final reviews cover the full change through repairs. Unfinished physical finish remains recoverable and revalidates once per attempt.
+
+See [root causes and recovery boundaries](docs/workflow-efficiency-root-causes.md).

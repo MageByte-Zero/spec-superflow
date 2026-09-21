@@ -11,15 +11,15 @@ export async function run(args) {
   const { positionals, values } = parseArgs({
     args,
     allowPositionals: true,
-    options: { force: { type: 'boolean', default: false } },
+    options: { force: { type: 'boolean', default: false }, worktree: { type: 'boolean', default: false } },
   });
   const changeDir = positionals[0];
   const changeName = positionals[1];
   if (!changeDir) {
-    console.error('Usage: ssf isolate <change-dir> [change-name] [--force]');
+    console.error('Usage: ssf isolate <change-dir> [change-name] [--worktree] [--force]');
     process.exit(2);
   }
-  const extra = values.force ? ['--force'] : [];
+  const extra = [...(values.force ? ['--force'] : []), ...(values.worktree ? ['--worktree'] : [])];
   // Literal command ('node') + literal argument array, no shell — same safe form
   // as cmd-install-*.mjs. execFileSync throws on non-zero exit; propagate its status.
   const nodeArgs = [ENSURE, changeDir];

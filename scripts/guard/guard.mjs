@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // scripts/guard/guard.mjs — dimension-based phase transition guard
 // Usage: node guard.mjs check <change-dir> <from-state> <to-state> [--workflow <mode>] [--json]
+import { readIsolationContext, resolveIsolationChange } from '../lib/isolation-context.mjs';
 import { workflowPolicy, artifactPolicy } from '../lib/workflow-policy.mjs';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -39,6 +40,7 @@ const TRANSITION_CHECKS = {
   'debugging:executing':            ['contract-fresh', 'execution-plan-ready'],
   'debugging:specifying':           [],
   'debugging:bridging':             [],
+  'closing:debugging':              ['finish-verification-pending'],
 
   // Fast-path transitions are workflow-gated; full workflow must reject them explicitly.
   'exploring:bridging':             [],
@@ -317,8 +319,8 @@ export function runGuard(args, {
   }
 
   const key = `${fromState}:${toState}`;
-  const { directShortPath } = workflowPolicy(changeDir);
-  const dimensions = resolveDimensions(key, workflow, directShortPath);
+  const policy = workflowPolicy(changeDir);
+  const dimensions = resolveDimensions(key, workflow, policy.directShortPath || (workflow === 'hotfix' && policy.missingDirectReceipt));
 
   if (!dimensions) {
     const valid = Object.keys(TRANSITION_CHECKS).join(', ');
@@ -366,6 +368,14 @@ export function runGuard(args, {
   }
 
   const CHECK_RUNNERS = {
+    'finish-verification-pending': dir => {
+      try {
+        const context = readIsolationContext(dir);
+        if (context?.finish_status !== 'verify-pending') return { pass: false, failures: ['Only unfinished physical verification may reopen closing'] };
+        resolveIsolationChange(dir);
+        return { pass: true, failures: [] };
+      } catch (error) { return { pass: false, failures: [error.message] }; }
+    },
     'planning-config': dir => { const failures = artifactPolicy(dir).failures; return { pass: !failures.length, failures }; },
     'artifacts-exist': (dir) => checkArtifactsExist(dir),
     'schema-valid': (dir) => checkSchemaValid(dir),

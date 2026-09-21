@@ -27,7 +27,9 @@ describe('workflow-start path recommendation protocol', () => {
     const decisions = read('docs/decision-points.md');
 
     assert.match(decisions, /full.*hotfix.*tweak/s);
-    assert.match(decisions, /Inline.*Batch Inline.*SDD/s);
+    assert.match(decisions, /默认 Native/);
+    assert.match(decisions, /只有用户明确选择委派才启用 `SDD`/);
+    assert.match(decisions, /`Batch Inline` 保留串行兼容/);
     assert.match(decisions, /\.superpowers\/sdd\/workflow-selection\.json/);
     assert.match(decisions, /\.spec-superflow\.yaml[^\n]*dp_0_[^\n]*(?:scope|artifact_language)/);
   });

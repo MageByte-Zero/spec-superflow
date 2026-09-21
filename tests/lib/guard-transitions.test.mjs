@@ -235,6 +235,10 @@ describe('Terminal state protection — closing', () => {
       assert.doesNotThrow(() => { response = JSON.parse(result.stdout); },
         `Closing → ${target} must return parseable JSON: ${result.stdout}`);
       assert.equal(response.pass, false, `Closing → ${target} response must fail`);
+      if (target === 'debugging') {
+        assert.ok(response.checks.some(check => !check.pass));
+        return;
+      }
       assert.deepEqual(response.checks, [], `Closing → ${target} must not run transition checks`);
       assert.match(response.error, new RegExp(`^${expectedError.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}`),
         `Closing → ${target} must report the authoritative unknown-transition error`);

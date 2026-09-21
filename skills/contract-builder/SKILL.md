@@ -47,10 +47,11 @@ Must make obvious: approved behavior, out-of-scope, constraints, batches, test o
 
 ## Approval Model (DP-3)
 
-After drafting: summarize handoff rules, identify ambiguity, flag unmapped requirements, ask user to approve explicitly. After approval:
+After drafting: summarize handoff rules, identify ambiguity and flag unmapped requirements. Reuse explicit approval already covering this exact contract; otherwise request it once, together with any still-pending planning decisions and the default Native execution choice. Approval of scope alone does not approve a contract that has not been shown. Never ask the user to approve the same unchanged contract twice. After approval:
 ```bash
 ssf state set <change-dir> dp_3_result "approved: <summary>"
 ssf state set <change-dir> dp_3_timestamp now
+ssf state rebuild <change-dir>
 ```
 
 Advance the state after approval:
@@ -77,9 +78,7 @@ Generate a minimal contract only for a legacy Hotfix: Intent Lock (one sentence)
 
 ## Post-Generation
 
-Run `ssf state init <change-dir>` to create `.spec-superflow.yaml` with hashes.
-
-For a legacy Hotfix, after writing the minimal contract, run `ssf state init <change-dir>` or `ssf state rebuild <change-dir>` so `contract_hash` is recorded. DP-3 remains mandatory before build.
+The approved contract is recorded by `state rebuild` in the DP-3 sequence above, before the guarded transition. This applies to Full and legacy Hotfix. Do not refresh hashes merely to suppress an unapproved content change.
 
 ## Exception Handling
 

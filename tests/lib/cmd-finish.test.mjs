@@ -73,7 +73,7 @@ function createIsolatedWorktree(base, name, repoOpts) {
   makeRepo(main, repoOpts);
   const changeDir = join(main, 'changes', name);
   mkdirSync(changeDir, { recursive: true });
-  const r = spawnSync(process.execPath, [ENSURE, changeDir, name], {
+  const r = spawnSync(process.execPath, [ENSURE, changeDir, name, '--worktree'], {
     encoding: 'utf8',
     timeout: 20000,
     env: { ...process.env, GIT_ALLOW_PROTOCOL: 'file', ...GIT_IDENTITY_ENV },
@@ -150,7 +150,7 @@ function runFinishInProcess(changeDir, cwd, { blockRemove = 'plain' } = {}) {
 }
 
 describe('ssf finish — force fallback 与 merge 即时反馈（closing-finish-alignment R2/R3）', () => {
-  it('cleanup failure preserves isolation and retries only remaining cleanup', () => {
+  it('cleanup failure preserves isolation and revalidates before retrying cleanup', () => {
     const base = mkdtempSync(join(tmpdir(), 'ssf-finish-cleanup-'));
     tempDirs.push(base);
     const { main, changeDir, worktree } = createIsolatedWorktree(base, 'finish-cleanup');
@@ -163,7 +163,7 @@ describe('ssf finish — force fallback 与 merge 即时反馈（closing-finish-
     const retried = runFinish(changeDir, main);
     assert.equal(retried.status, 0, retried.all);
     assert.equal(git(main, 'rev-parse', 'HEAD'), merged);
-    assert.doesNotMatch(retried.all, /开始主干验证/);
+    assert.match(retried.all, /开始主干验证/);
     assert.equal(existsSync(worktree), false);
     assert.equal(runFinish(changeDir, main).status, 0);
   });
@@ -352,7 +352,7 @@ describe('ssf finish — 一键收尾（worktree-lifecycle R3/R5）', () => {
     const r = runFinish(changeDir, main, ['--test-cmd', 'node -e "process.exit(1)"']);
 
     assert.notEqual(r.status, 0, r.all);
-    assert.match(r.all, /返回 worktree 修改/);
+    assert.match(r.all, /在记录的隔离分支修复后重试/);
     assert.match(r.all, /验证/);
     // merge 已执行但验证失败 → 不删 worktree/分支
     assert.equal(existsSync(worktree), true, 'worktree must survive failed verification');
@@ -411,7 +411,7 @@ describe('ssf finish — 一键收尾（worktree-lifecycle R3/R5）', () => {
     assert.notEqual(r.status, 0, r.all);
     assert.ok(r.stdout.includes('验证命令：npm test'), `must run npm test by default, got: ${r.stdout}`);
     assert.match(r.all, /验证失败/);
-    assert.match(r.all, /返回 worktree 修改/);
+    assert.match(r.all, /在记录的隔离分支修复后重试/);
     // merge 已执行但默认验证失败 → 不删 worktree/分支
     assert.equal(existsSync(worktree), true, 'worktree must survive failed default verification');
     assert.notEqual(git(main, 'branch', '--list', 'finish-default-fail'), '', 'branch must survive');

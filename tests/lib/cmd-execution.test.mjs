@@ -1117,7 +1117,7 @@ describe('ssf execution review — cwd 越界 WARN（worktree-lifecycle R5）', 
     const gitBase = runGit(main, ['rev-parse', 'HEAD']);
     createReviewPlan(changePath);
 
-    const r = spawnSync(process.execPath, [ENSURE, changePath, name], {
+    const r = spawnSync(process.execPath, [ENSURE, changePath, name, '--worktree'], {
       encoding: 'utf8',
       timeout: 20000,
       env: { ...process.env, GIT_ALLOW_PROTOCOL: 'file' },
@@ -1157,7 +1157,7 @@ describe('ssf execution review — cwd 越界 WARN（worktree-lifecycle R5）', 
     const gitBase = runGit(main, ['rev-parse', 'HEAD']);
     createReviewPlan(changePath);
 
-    const r = spawnSync(process.execPath, [ENSURE, changePath, name], {
+    const r = spawnSync(process.execPath, [ENSURE, changePath, name, '--worktree'], {
       encoding: 'utf8',
       timeout: 20000,
       env: { ...process.env, GIT_ALLOW_PROTOCOL: 'file' },

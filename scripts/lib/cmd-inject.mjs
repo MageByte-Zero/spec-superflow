@@ -60,8 +60,8 @@ const PHASE_TEMPLATES = {
 **当前阶段**: {{state}} | **工作流**: {{workflow}}
 
 ## ✅ 允许操作
-- 运行 ssf execution recommend <change-dir> [--wave ...]，完成 DP-4 执行模式选择，列出可用模式与推荐并写入当前推荐凭据
-- 向用户展示候选项、项目事实与推荐，取得明确选择
+- 运行 ssf execution recommend <change-dir> [--wave ...]，记录 DP-4 推荐凭据；默认 Native + final，复用已有执行授权，只有用户明确委派才使用 SDD
+- 复用当前范围已有的明确选择；只有缺少实质决定时才向用户合并询问
 - 运行 ssf execution plan <change-dir> --mode <mode> --confirm ... 生成 execution plan；它必须使用匹配当前 artifact、contract 和 wave 的推荐凭据，非推荐选择需 --acknowledge-recommendation
 - 运行 ssf execution show <change-dir> --json 核对 current、revision、mode、waves[].eligible 和 receipts
 - 准备执行环境
@@ -72,7 +72,7 @@ const PHASE_TEMPLATES = {
 - 修改 proposal.md, specs/, design.md, tasks.md
 
 ## 🔔 决策点
-- DP-4 执行模式选择：先运行 execution recommend 并展示可用模式和推荐；用户用 --confirm 确认，非推荐选择额外使用 --acknowledge-recommendation。plan/revise 需要当前匹配的推荐凭据。仅当 execution show 报告 current: true 后才可转换到 executing；tweak 免除此 plan/receipt gate`,
+- DP-4 执行模式选择：先运行 execution recommend，默认 Native + final；已有执行授权可直接记录 --confirm，不重复询问模式菜单，非推荐选择额外使用 --acknowledge-recommendation。plan/revise 需要当前匹配的推荐凭据。仅当 execution show 报告 current: true 后才可转换到 executing；tweak 免除此 plan/receipt gate`,
 
   'executing': `# Phase Guard: {{change_name}}
 
@@ -113,9 +113,9 @@ const PHASE_TEMPLATES = {
 
 ## ⛔ 终止状态
 - 此变更已成功关闭；验证、规范同步和归档确认均已完成
-- 不允许任何进一步操作或状态转换
-- 不得重跑实现、验证、归档或 delta spec 合并
-- 恢复时只报告 CLOSED；next skill 为 none`,
+- 已完成 finish 不允许重开；仅 recorded verify-pending 允许 closing -> debugging 诊断修复
+- 运行 resume 读取 recorded isolation；pending / cleanup-pending 时仅恢复 finish，verify-pending 先诊断
+- 合并需要已有授权；finish 已完成则停止，不重复验证或清理`,
 
   'abandoned': `# Phase Guard: {{change_name}}
 
@@ -138,7 +138,7 @@ const SHORT_PATH_TEMPLATES = {
 
 ## ⛔ 禁止操作
 - 不得要求 execution plan、wave review 或 DP-4
-- 发现第 4 个文件、接口/权限/依赖/数据迁移、新模块、高不确定性或验证失败时，停止并升级到 Full
+- 范围或风险变化时刷新 receipt 并确认路径；边界内验证失败进入 debugging，不自动升级 Full
 
 ## 🔔 验证要求
 - 保持改动在已推荐的文件与任务边界内`,
@@ -187,7 +187,7 @@ function generatePhaseGuard(state, { directShortPath = false } = {}) {
     ? '已选择的 Tweak 路径'
     : 'valid direct receipt（direct receipt）';
   const verification = workflow === 'hotfix' ? '原症状回归验证' : '定向测试或语法/静态检查';
-  return template
+  return template.replace(/^(# Phase Guard:.*)$/m, '$1\n\n仅在用户明确要求继续本 change 时应用；其他任务忽略本规则。已有授权继续有效，只有新的实质决定才暂停。')
     .replace(/\{\{change_name\}\}/g, state.change_name || 'unknown')
     .replace(/\{\{state\}\}/g, state.state || 'exploring')
     .replace(/\{\{workflow\}\}/g, workflow)
