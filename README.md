@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="#快速开始">快速开始</a> · <a href="#两个执行路径">执行路径</a> · <a href="#安装">安装</a> · <a href="#命令">命令</a> · <a href="docs/README_en.md">English</a>
+  <a href="#快速开始">快速开始</a> · <a href="#两个执行路径">执行路径</a> · <a href="#9-个-skills">Skills</a> · <a href="#安装">安装</a> · <a href="#命令">命令</a> · <a href="docs/README_en.md">English</a>
 </p>
 
 ---
@@ -98,6 +98,34 @@ ssf workflow complete changes/add-session-refresh \
 - `design.md`：存在真实技术取舍时添加。
 
 实现默认在当前会话串行完成，最后审查完整 Git range。失败审查必须使用稳定 issue ID；同一问题连续三次仍未解决时才进入人工裁决，不把无关问题累计成死循环。
+
+## 9 个 Skills
+
+Skill 是按需加载的职责模块，不是每次都要走完的九个阶段。新任务只调用当前工作需要的 skill；旧状态机和契约规则仅用于恢复已有变更。
+
+| Skill | 作用 | v2 中何时使用 |
+|---|---|---|
+| `workflow-start` | 识别新任务或恢复已有 change，选择 `direct` / `planned` 并建立执行上下文 | 显式启用 spec-superflow 时的入口；普通编码会话不自动激活 |
+| `need-explorer` | 澄清问题、范围、非目标和成功标准，比较可选方案 | 需求模糊或需要先做取舍时按需使用 |
+| `spec-writer` | 编写 `proposal.md` 与 `tasks.md`；只在需要时增加 specs/design | `planned` 路径需要形成可批准计划时使用 |
+| `build-executor` | 按已授权范围实现、运行相关验证并记录必要进度 | `direct` 和已批准的 `planned` 都进入这里；默认当前会话连续执行 |
+| `bug-investigator` | 复现问题、追踪根因、验证最小修复，避免试错循环 | 执行中遇到缺陷或测试失败时调用；新任务仍停留在 `executing` |
+| `code-reviewer` | 审查完整 Git range，验证范围、正确性和实现质量 | Native 默认只做一次最终审查；逐波审查仅在显式选择时使用 |
+| `spec-merger` | 将 change 中的 delta specs 原子同步到主规格库并检测冲突 | 只有实际存在 delta specs 时，在完成前使用 |
+| `release-archivist` | 运行最终验证，记录 `verified` 或 `accepted-risk`，处理已授权的物理收尾 | 实现完成时使用；失败保留原证据并返回执行阶段修复 |
+| `contract-builder` | 维护旧变更的 `execution-contract.md` 和既有审批义务 | 仅兼容 legacy change；新 `direct` / `planned` 不调用 |
+
+典型调用链保持短小：
+
+```text
+Direct:  workflow-start → build-executor → release-archivist
+Planned: need-explorer? → spec-writer → workflow-start → build-executor
+         → code-reviewer → spec-merger? → release-archivist
+Bug:     build-executor → bug-investigator → build-executor
+Legacy:  按已有状态恢复；必要时才进入 contract-builder
+```
+
+其中 `?` 表示只有满足条件才调用。默认链路不创建子代理、不逐任务审查，也不自动创建 worktree。
 
 ## 收口与恢复
 
