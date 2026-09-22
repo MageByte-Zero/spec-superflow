@@ -17,7 +17,7 @@ describe('cross-platform skill commands', () => {
     for (const [file, field] of timestampSkills) {
       const content = readFileSync(join(process.cwd(), file), 'utf8');
       assert.doesNotMatch(content, /\$\(date -u /, `${file} must not require a POSIX shell timestamp`);
-      assert.match(content, new RegExp(`ssf state set <change-dir> ${field} now`));
+      assert.match(content, new RegExp(`SSF state set <change-dir> ${field} now`));
     }
   });
 });

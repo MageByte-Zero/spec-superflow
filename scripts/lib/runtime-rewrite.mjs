@@ -35,13 +35,15 @@ export const SSF_SUBCOMMANDS = [
 
 /**
  * Matches any portable runtime invocation in a skill/command body:
+ *   - the canonical `SSF <subcommand>` token
+ *   - `node "<plugin-root>/scripts/spec-superflow.mjs"`
  *   - `npx --yes --package spec-superflow@<ver> ssf`
  *   - `node scripts/spec-superflow.mjs`
  *   - a bare `ssf <subcommand>`
  */
 export function portableRuntimePattern() {
   return new RegExp(
-    `(?:npx --yes --package spec-superflow@\\d+\\.\\d+\\.\\d+ ssf|node scripts\\/spec-superflow\\.mjs|\\bssf(?=\\s+(?:${SSF_SUBCOMMANDS.join('|')})\\b))`,
+    `(?:\\bSSF(?=\\s+(?:${SSF_SUBCOMMANDS.join('|')})\\b)|node ["']<plugin-root>\\/scripts\\/spec-superflow\\.mjs["']|npx --yes --package spec-superflow@\\d+\\.\\d+\\.\\d+ ssf|node scripts\\/spec-superflow\\.mjs|\\bssf(?=\\s+(?:${SSF_SUBCOMMANDS.join('|')})\\b))`,
     'g',
   );
 }

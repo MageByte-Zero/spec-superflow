@@ -90,6 +90,7 @@ const RUNTIME_FILES = [
   'build-executor', 'code-reviewer', 'bug-investigator', 'release-archivist', 'spec-merger',
 ].map(skill => `skills/${skill}/SKILL.md`).concat([
   'skills/build-executor/implementer-prompt.md',
+  'skills/build-executor/re-review-prompt.md',
   'skills/build-executor/task-reviewer-prompt.md',
   'skills/code-reviewer/code-reviewer-prompt.md',
   'commands/ssf/resume.md',
@@ -104,9 +105,11 @@ for (const file of RUNTIME_FILES) {
   }
   const content = readFileSync(fp, 'utf8');
   if (/npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf/.test(content)) {
-    errors.push({ file, found: 'FIXED_NPM_RUNTIME_FOUND', expected: 'ssf <command>' });
-  } else if (!/\bssf\s+(?:audit|checkpoint|config|execution|handoff|inject|isolate|resume|runtime|save|state|switch|sync|validate|workflow)\b/.test(content)) {
-    errors.push({ file, found: 'SOURCE_RUNTIME_COMMAND_NOT_FOUND', expected: 'ssf <command>' });
+    errors.push({ file, found: 'FIXED_NPM_RUNTIME_FOUND', expected: 'bundled runtime' });
+  } else if (/\bssf\s+(?:audit|checkpoint|config|debug|doctor|execution|finish|handoff|inject|isolate|list|resume|runtime|save|state|switch|sync|validate|version|workflow)\b/.test(content)) {
+    errors.push({ file, found: 'PATH_RUNTIME_FOUND', expected: 'bundled runtime' });
+  } else if (!content.includes('node "<plugin-root>/scripts/spec-superflow.mjs"') || !/\bSSF\s+(?:audit|checkpoint|config|debug|doctor|execution|finish|handoff|inject|isolate|list|resume|runtime|save|state|switch|sync|validate|version|workflow)\b/.test(content)) {
+    errors.push({ file, found: 'SOURCE_RUNTIME_COMMAND_NOT_FOUND', expected: 'bundled SSF runtime' });
   }
 }
 

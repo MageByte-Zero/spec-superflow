@@ -19,16 +19,19 @@ function read(path) {
 }
 
 const VERSION = JSON.parse(read('package.json')).version;
+const BUNDLED_RUNTIME = 'SSF';
+const BUNDLED_RUNTIME_DEFINITION = 'node "<plugin-root>/scripts/spec-superflow.mjs"';
 
 function executableSsfCommands(content) {
-  return [...content.matchAll(/`([^`\n]*\bssf\s+(?:resume|switch|save)\b[^`]*)`/g)]
+  return [...content.matchAll(/`([^`\n]*\bSSF\s+(?:resume|switch|save)\b[^`]*)`/g)]
     .map(match => match[1]);
 }
 
 function assertNoCheckoutAbsolutePaths(content) {
+  const withoutPortableRuntime = content.replaceAll('<plugin-root>/scripts/spec-superflow.mjs', '<bundled-runtime>');
   for (const pattern of CHECKOUT_ABSOLUTE_PATHS) {
     pattern.lastIndex = 0;
-    const match = pattern.exec(content);
+    const match = pattern.exec(withoutPortableRuntime);
     assert.equal(
       match,
       null,
@@ -55,12 +58,14 @@ function assertNoUnquotedArguments(content) {
 
 describe('SSF recovery command assets', () => {
   for (const name of ['resume', 'switch', 'save']) {
-    it(`${name} uses the portable ssf command without hidden state writes`, () => {
+    it(`${name} uses the bundled CLI without hidden state writes`, () => {
       const content = read(`commands/ssf/${name}.md`);
 
       assert.match(content, /^---\n[\s\S]+description:/);
       assert.match(content, /argument-hint:/);
-      assert.match(content, new RegExp(`\\bssf ${name}\\b`));
+      assert.match(content, /allowed-tools: Bash\(node:\*\)/);
+      assert.ok(content.includes(BUNDLED_RUNTIME_DEFINITION));
+      assert.match(content, new RegExp(`${BUNDLED_RUNTIME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} ${name}\\b`));
       assert.match(content, /\$ARGUMENTS/);
       assert.doesNotMatch(content, /state set|state transition|active-change|\bcd\s/);
       assertNoCheckoutAbsolutePaths(content);
@@ -97,15 +102,15 @@ describe('SSF recovery command assets', () => {
   });
 
   it('rejects unquoted raw arguments after executable command flags', () => {
-    const unsafeResume = 'Run `ssf resume --json $ARGUMENTS`.';
-    const unsafeSwitch = 'Run `ssf switch --flag $ARGUMENTS`.';
+    const unsafeResume = `Run \`${BUNDLED_RUNTIME} resume --json $ARGUMENTS\`.`;
+    const unsafeSwitch = `Run \`${BUNDLED_RUNTIME} switch --flag $ARGUMENTS\`.`;
 
     assert.throws(() => assertNoUnquotedArguments(unsafeResume), /\$ARGUMENTS/);
     assert.throws(() => assertNoUnquotedArguments(unsafeSwitch), /\$ARGUMENTS/);
   });
 
   it('accepts quoted argument input and prose-only argument mentions', () => {
-    const safeResume = 'Run `ssf resume --json "$ARGUMENTS"`. $ARGUMENTS is conversational input.';
+    const safeResume = `Run \`${BUNDLED_RUNTIME} resume --json "$ARGUMENTS"\`. $ARGUMENTS is conversational input.`;
 
     assert.doesNotThrow(() => assertNoUnquotedArguments(safeResume));
     assert.doesNotThrow(() => assertNoUnquotedArguments(read('commands/ssf/save.md')));
@@ -128,8 +133,8 @@ describe('SSF recovery command assets', () => {
     }
   });
 
-  it('does not mistake the unversioned local entrypoint for a checkout path', () => {
-    const portable = 'Run `ssf resume --json "$ARGUMENTS"`.';
+  it('does not mistake the bundled runtime placeholder for a checkout path', () => {
+    const portable = `Run \`${BUNDLED_RUNTIME} resume --json "$ARGUMENTS"\`.`;
 
     assert.doesNotThrow(() => assertNoCheckoutAbsolutePaths(portable));
   });
@@ -138,7 +143,7 @@ describe('SSF recovery command assets', () => {
     for (const name of ['resume', 'switch']) {
       const content = read(`commands/ssf/${name}.md`);
 
-      assert.match(content, new RegExp(`ssf ${name} --json "\\$ARGUMENTS"`));
+      assert.match(content, new RegExp(`${BUNDLED_RUNTIME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} ${name} --json "\\$ARGUMENTS"`));
       assert.match(content, /非空/);
     }
   });
@@ -147,7 +152,7 @@ describe('SSF recovery command assets', () => {
     const content = read('commands/ssf/save.md');
 
     assert.match(content, /提取.*change.*task.*next/s);
-    assert.match(content, /ssf save "<change>" --task "<task-id>" --next "<next-step>".*--json/);
-    assert.doesNotMatch(content, /ssf save \$ARGUMENTS/);
+    assert.match(content, new RegExp(`${BUNDLED_RUNTIME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} save "<change>" --task "<task-id>" --next "<next-step>".*--json`));
+    assert.doesNotMatch(content, /spec-superflow\.mjs" save \$ARGUMENTS/);
   });
 });
