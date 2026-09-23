@@ -107,6 +107,7 @@ For each example in `docs/examples/`:
 ## AI Agent Marketplace Delivery
 
 - Review `README.md`, `INSTALL.md`, and `CHANGELOG.md` so their installation, upgrade, and release messages match.
+- Before requesting marketplace review, use the Plugin Scanner result for the exact merged source commit and put its SHA, version, numeric score/grade, `policy_pass`, `verify_pass`, severity counts, and run URL in the PR body. Existing-entry updates can skip the catalog scan; a missing numeric score is still a review blocker.
 - Verify external marketplace delivery instead of treating a tag or npm publish as completion:
 
   ```bash
