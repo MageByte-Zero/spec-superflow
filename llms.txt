@@ -2,7 +2,7 @@
 
 spec-superflow is a self-contained, zero-runtime-dependency workflow plugin for AI coding tools.
 
-Current version: v2.0.1.
+Current version: v2.0.2.
 
 ## Default v2 flow
 
