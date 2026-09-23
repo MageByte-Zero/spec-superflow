@@ -1,6 +1,6 @@
 <h1 align="center">spec-superflow</h1>
 
-<p align="center"><strong>A lean, recoverable, evidence-based workflow for AI coding</strong></p>
+<p align="center"><strong>A lean, recoverable AI coding workflow from agreed scope to verified completion</strong></p>
 
 <p align="center">
   <a href="../LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
@@ -26,7 +26,7 @@ Marketplace and platform installers upgrade each skill together with its same-ve
 
 The old flow classified work into several modes and copied state across planning, contracts, execution, and reviews. It could constrain complex work, but charged the same fixed cost to ordinary changes and could bounce between phases when receipts were stale or damaged.
 
-v2 removes the intake questionnaire and handwritten `execution-contract.md` for new work. One execution plan is the authorization source of truth.
+v2 removes the intake questionnaire and handwritten `execution-contract.md` for new work. One execution plan is the sole basis for implementation.
 
 | Previous default | v2 default |
 |---|---|
@@ -36,9 +36,9 @@ v2 removes the intake questionnaire and handwritten `execution-contract.md` for 
 | SDD/subagents and task reviews | Current-session execution and one final review |
 | Automatic worktree | Feature branch in the current checkout; worktree by request |
 | Separate debugging state | Ordinary diagnosis stays in `executing` |
-| Several caches can veto a plan | The schema v2 execution plan is authoritative |
+| Several caches can veto a plan | The approved schema v2 execution plan is the only decision record |
 
-Existing changes keep their original state, approvals, and review evidence. They are not silently migrated or reset.
+Existing changes keep their original state, approval records, and review results. They are not silently migrated or reset.
 
 ## Quick start
 
@@ -65,7 +65,7 @@ When scope needs agreement, create two short files:
 ```text
 changes/add-session-refresh/
 ├── proposal.md   # outcome, boundaries, acceptance, risks
-└── tasks.md      # ordered checkbox tasks and their evidence
+└── tasks.md      # ordered checkbox tasks and the check result for each task
 ```
 
 After the user approves that concrete plan:
@@ -95,7 +95,7 @@ If the scope grows, add `proposal.md` and `tasks.md`, then upgrade to planned wi
 Planned fits cross-module changes, public interfaces, data semantics, installers, state machines, or any work that needs scope agreement first.
 
 - `proposal.md`: outcome, non-goals, acceptance criteria, and major risks.
-- `tasks.md`: uniquely numbered checkbox tasks with completion evidence.
+- `tasks.md`: uniquely numbered checkbox tasks with completion criteria and check results.
 - `specs/`: add when behavioral constraints or the published baseline changes.
 - `design.md`: add only when a real technical trade-off needs a decision.
 
@@ -104,6 +104,8 @@ Implementation is serial in the current session by default, followed by a review
 ## Completion and recovery
 
 `workflow complete` runs final verification once. Planned work also requires completed tasks, a current final review, and synchronization of any delta specs. A failure remains in execution for repair and never becomes a forged pass.
+
+“Completion” means saving results that a person can check: the verification command, its exit code, the Git range covered by review, and whether each check passed. A successful verification records `verified`. Only an explicit human decision to ship with a known issue records `accepted-risk`. A failed check, empty review range, or damaged record cannot count as completion.
 
 To end with a known issue after an explicit human decision:
 
@@ -114,7 +116,7 @@ ssf workflow complete changes/example \
   --reason "Accept the documented compatibility limit for separate follow-up"
 ```
 
-The outcome is `accepted-risk`; existing failures remain recorded, and the branch is not integrated automatically.
+The outcome is `accepted-risk`; the original failures remain recorded, and the branch is not integrated automatically.
 
 Recover existing work with:
 
@@ -123,7 +125,7 @@ ssf resume changes/example
 ssf checkpoint list changes/example
 ```
 
-Missing or damaged authorization, review, or Git evidence fails explicitly. Defaults never synthesize success. See the [state-machine reference](state-machine.md) for legacy and recovery rules.
+Missing or damaged approval records, review results, or Git range information fail explicitly. Defaults never synthesize success. See the [state-machine reference](state-machine.md) for legacy and recovery rules.
 
 ## Git isolation
 
