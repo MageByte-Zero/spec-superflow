@@ -16,7 +16,7 @@
 
 spec-superflow combines OpenSpec-style planning with Superpowers-style verification discipline in one self-contained plugin. v2 gives new work two entry points: execute a clear, bounded change directly, or approve one short plan before implementation.
 
-Current: `v2.0.1`
+Current: `v2.0.2`
 
 The defaults minimize overhead: execute in the current session, review once at the end, verify once at completion, and keep ordinary debugging inside execution. Subagents, per-wave reviews, and worktrees are explicit choices.
 

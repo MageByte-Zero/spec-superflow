@@ -6,6 +6,12 @@ The format loosely follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-09-23
+
+### Fixed
+
+- Use the operating system's temporary directory for WorkBuddy release downloads, clone into an uncreated child path, and remove temporary files if cloning fails. This addresses the Windows installation failure reported in #89.
+
 ## [2.0.1] - 2026-09-22
 
 ### Fixed
