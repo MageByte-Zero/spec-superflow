@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readState, writeState, updateField, rebuildState, SETTABLE_FIELDS } from './state-loader.mjs';
+import { readState, writeState, updateField, rebuildState, SETTABLE_FIELDS, WRITE_ONCE_FIELDS } from './state-loader.mjs';
 import { computeArtifactsHash, computeContractHash } from './hash.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -221,6 +221,12 @@ export async function run(args) {
       }
       if (!SETTABLE_FIELDS.includes(field)) {
         console.error(`⛔ Field '${field}' is not settable (use 'transition' for state, or check SETTABLE_FIELDS)`);
+        process.exit(1);
+      }
+      // 开工锚点只写一次：允许为存量变更补写，但不允许把已记录的锚点改成更晚的
+      // 提交或清空，否则审查范围可以被悄悄缩小。
+      if (WRITE_ONCE_FIELDS.includes(field) && readState(changeDir)[field] != null) {
+        console.error(`⛔ '${field}' records this change's start anchor and is write-once; it cannot be overwritten or cleared through 'ssf state set'`);
         process.exit(1);
       }
       const resolvedValue = /^dp_[0-7]_timestamp$/.test(field) && value === 'now'

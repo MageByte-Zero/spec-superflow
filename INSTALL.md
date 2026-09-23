@@ -891,6 +891,10 @@ ssf finish changes/my-change
 `pass` 回执要求 `base` 与 `head` 之间存在实际文件差异；final review 的起点是**开工锚点** `review_base`——`ssf workflow start` 进入 executing 时记录当时的 commit 与分支（受保护主干另由隔离上下文记录），因此主干名不是 `main`/`master`、以及工作直接提交在该主干上的仓库同样可以终评；只有既无开工锚点也无可识别主干的旧/手工分支才回退到明确目标的 merge-base。不能用 `HEAD~1`。
 `<change>/.superpowers/sdd/reviews/` 的目录层级必须是物理、非符号链接目录；
 report 本身必须为普通、非空、非符号链接文件。
+在记录开工锚点之前就已进入执行的变更，可以用
+`ssf state set <change-dir> review_base <开工提交>` 补写一次（`target_branch` 同）。
+`review_base` 与 `target_branch` 只写一次：已记录的值不能通过 `ssf state set` 覆盖或清空，
+否则审查范围可以被悄悄缩小；锚点确实写错时只能在状态文件中显式更正。
 
 `ssf isolate <change-dir>` 默认使用当前目录中的特性分支，只有显式 `--worktree` 才创建工作树。创建隔离上下文后会自动递归初始化子模块（存在
 `.gitmodules` 时），并向 `<change>/.superpowers/sdd/progress.md` 追加 cwd 不持续警告。

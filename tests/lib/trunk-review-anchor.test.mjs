@@ -50,7 +50,15 @@ function developTrunkFixture(t) {
     fs.writeFileSync(file, 'Review completed without blocking findings.\n');
     return file;
   };
-  return { root, dir, git, commit, start, report };
+  // Reproduces a change whose state file was written before the anchor existed.
+  const forgetAnchor = () => {
+    const file = join(dir, '.spec-superflow.yaml');
+    const kept = fs.readFileSync(file, 'utf8').split('\n')
+      .filter(line => !/^(review_base|target_branch):/.test(line) && !line.includes('Review anchor'));
+    fs.writeFileSync(file, kept.join('\n'));
+  };
+  const setState = (field, value) => spawnSync(process.execPath, [CLI, 'state', 'set', dir, field, value], { encoding: 'utf8' });
+  return { root, dir, git, commit, start, report, forgetAnchor, setState };
 }
 
 test('workflow start records the commit and branch the change started from', t => {
@@ -116,6 +124,37 @@ test('the start anchor outranks an isolation base recorded later', t => {
   const report = f.report();
   assert.throws(() => recordReview(f.dir, 'final', { status: 'pass', base: midFlight, head, report }), /complete target merge-base/);
   assert.equal(recordReview(f.dir, 'final', { status: 'pass', base: anchor, head, report }).status, 'pass');
+});
+
+test('a change created before the anchor existed can record it once and then review', t => {
+  const f = developTrunkFixture(t);
+  f.start();
+  const anchor = readState(f.dir).review_base;
+  f.forgetAnchor();
+  assert.equal(readState(f.dir).review_base, null);
+  const head = f.commit('impl.txt', 'impl\n');
+  // Without a recorded anchor and without a main/master trunk there is nothing
+  // to derive the range from, so the review stays blocked until it is recorded.
+  assert.throws(() => recordReview(f.dir, 'final', { status: 'pass', base: anchor, head, report: f.report() }), /unambiguous recorded target branch/);
+  const backfill = f.setState('review_base', anchor);
+  assert.equal(backfill.status, 0, backfill.stderr);
+  assert.equal(readState(f.dir).review_base, anchor);
+  assert.equal(recordReview(f.dir, 'final', { status: 'pass', base: anchor, head, report: f.report() }).status, 'pass');
+});
+
+test('the recorded start anchor is write-once through ssf state set', t => {
+  const f = developTrunkFixture(t);
+  f.start();
+  const anchor = readState(f.dir).review_base;
+  f.forgetAnchor();
+  assert.equal(f.setState('review_base', anchor).status, 0);
+  const head = f.commit('impl.txt', 'impl\n');
+  const overwrite = f.setState('review_base', head);
+  assert.equal(overwrite.status, 1);
+  assert.match(overwrite.stderr, /write-once/);
+  const clear = f.setState('review_base', 'null');
+  assert.equal(clear.status, 1);
+  assert.equal(readState(f.dir).review_base, anchor);
 });
 
 test('the review anchor never redirects a merge onto another equal-commit branch', t => {

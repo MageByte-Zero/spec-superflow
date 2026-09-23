@@ -6,8 +6,14 @@ const STATE_FILE = '.spec-superflow.yaml';
 
 export const SETTABLE_FIELDS = [
   'workflow', 'test_result', 'batches_completed', 'spec_merged',
+  // 开工锚点：允许为修复前就已进入执行的存量变更补写一次（见 WRITE_ONCE_FIELDS）。
+  'review_base', 'target_branch',
   ...[0, 1, 2, 3, 6, 7].flatMap(n => ['result', 'timestamp', 'decisions', 'confirmed'].map(field => `dp_${n}_${field}`)),
 ];
+
+// 只写一次的字段：已记录的值不得被覆盖或清空，否则锚点可以被改成更晚的提交来
+// 缩小审查范围。首次写入的信任级别与隔离记录一致（均为本机明文）。
+export const WRITE_ONCE_FIELDS = ['review_base', 'target_branch'];
 
 const BUILTIN_DEFAULTS = {
   state: 'exploring',
