@@ -137,6 +137,10 @@ function safeText(value, label) {
   return value.trim();
 }
 
+function gitLine(dir, args) {
+  return execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', stdio: 'pipe' }).trim();
+}
+
 function checkChangePath(dir) {
   const root = execFileSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', stdio: 'pipe' }).trim();
   const rel = relative(realpathSync.native(root), realpathSync.native(dir));
@@ -197,6 +201,11 @@ function start(dir, values) {
   }
   state.state = 'executing'; state.test_result = null; state.dp_6_result = null;
   state.artifacts_hash = computeArtifactsHash(dir); state.contract_hash = computeContractHash(dir);
+  // 开工锚点：本变更进入 executing 时的 commit 与分支。非 main/master 的主干不会
+  // 产生隔离记录，这是它终评范围的唯一出处。重复 start 或改 scope 重启时保留
+  // 最早的值，使范围始终从第一次进入 executing 起算。
+  if (!state.review_base) state.review_base = gitLine(dir, ['rev-parse', 'HEAD']);
+  if (!state.target_branch) state.target_branch = gitLine(dir, ['branch', '--show-current']) || null;
   state.last_transition = new Date().toISOString();
   writeState(dir, state);
   return print({ ok: true, state: 'executing', path: values.path, mode: readPlan(dir)?.mode ?? 'inline' }, values.json);
