@@ -11,6 +11,7 @@ import { canCreateSymlink } from '../helpers/symlink-support.mjs';
 
 let tempDir;
 let planInstall, installWorkBuddy, cloneRelease;
+const silentCloneLogger = { log() {} };
 
 describe('cmd-install-workbuddy', () => {
   beforeEach(async () => {
@@ -335,7 +336,7 @@ describe('cmd-install-workbuddy', () => {
       mkdirSync(target);
     };
 
-    const result = await cloneRelease('v-test', { clone });
+    const result = await cloneRelease('v-test', { clone, logger: silentCloneLogger });
     try {
       assert.equal(result.pluginRoot, target);
       assert.equal(dirname(result.stagingDir), tmpdir());
@@ -358,9 +359,9 @@ describe('cmd-install-workbuddy', () => {
       localArgs[localArgs.length - 2] = source;
       execFileSync(command, localArgs, { stdio: 'pipe' });
     };
-    const result = await cloneRelease('v-test', { clone });
+    const result = await cloneRelease('v-test', { clone, logger: silentCloneLogger });
     try {
-      assert.equal(readFileSync(join(result.pluginRoot, 'release.txt'), 'utf-8'), 'release asset\n');
+      assert.equal(readFileSync(join(result.pluginRoot, 'release.txt'), 'utf-8').trimEnd(), 'release asset');
     } finally {
       rmSync(result.stagingDir, { recursive: true, force: true });
     }
@@ -373,7 +374,7 @@ describe('cmd-install-workbuddy', () => {
       throw new Error('synthetic clone failure');
     };
 
-    await assert.rejects(cloneRelease('v-test', { clone }), /synthetic clone failure/);
+    await assert.rejects(cloneRelease('v-test', { clone, logger: silentCloneLogger }), /synthetic clone failure/);
     assert.equal(existsSync(stagingDir), false);
   });
 });

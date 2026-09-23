@@ -252,11 +252,11 @@ async function fetchLatestTag() {
   return data.tag_name;
 }
 
-async function cloneRelease(tag, { clone = execFileSync } = {}) {
+async function cloneRelease(tag, { clone = execFileSync, logger = console } = {}) {
   const stagingDir = await mkdtemp(join(tmpdir(), 'spec-superflow-'));
   const pluginRoot = join(stagingDir, 'repo');
   const url = `https://github.com/${GITHUB_REPO}.git`;
-  console.log(`📥 Cloning ${tag} into ${pluginRoot} ...`);
+  logger.log(`📥 Cloning ${tag} into ${pluginRoot} ...`);
   try {
     clone('git', ['clone', '--depth', '1', '--branch', tag, url, pluginRoot], {
       stdio: 'inherit',
