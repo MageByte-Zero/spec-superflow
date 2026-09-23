@@ -1,6 +1,6 @@
 {
   "name": "spec-superflow",
   "description": "Lean spec workflow: direct or planned execution with evidence-based completion",
-  "version": "2.0.2",
+  "version": "2.0.1",
   "contextFileName": "GEMINI.md"
 }
