@@ -253,7 +253,7 @@ describe('execution control plane instructions', () => {
     const codeReviewer = read('skills/code-reviewer/SKILL.md');
     const inject = read('scripts/lib/cmd-inject.mjs');
 
-    assert.match(workflowStart, /ssf resume <change-dir> --json/);
+    assert.match(workflowStart, /SSF resume <change-dir> --json/);
     assert.match(buildExecutor, /execution recommend/i);
     assert.match(buildExecutor, /review-policy final/);
     assert.match(buildExecutor, /Old plans with no policy retain wave/i);

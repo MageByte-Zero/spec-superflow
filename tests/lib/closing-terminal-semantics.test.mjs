@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = process.cwd();
-const RUNTIME_PREFIX = 'ssf';
+const RUNTIME_PREFIX = 'SSF';
 
 function read(relativePath) {
   return readFileSync(join(ROOT, relativePath), 'utf8');
@@ -30,8 +30,8 @@ describe('closing terminal lifecycle', () => {
 
   it('keeps spec synchronization and audit before logical closure', () => {
     const release = read('skills/release-archivist/SKILL.md');
-    assert.ok(release.indexOf('Synchronize actual delta') < release.indexOf('ssf state transition'));
-    assert.ok(release.indexOf('ssf audit') < release.indexOf('ssf state transition'));
+    assert.ok(release.indexOf('Synchronize actual delta') < release.indexOf(`${RUNTIME_PREFIX} state transition`));
+    assert.ok(release.indexOf(`${RUNTIME_PREFIX} audit`) < release.indexOf(`${RUNTIME_PREFIX} state transition`));
     const merger = section(read('skills/spec-merger/SKILL.md'), '## Execution-State Guard');
     assert.match(merger, /exactly.*`executing`/i);
     assert.match(merger, /closing.*STOP/is);

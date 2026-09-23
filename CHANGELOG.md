@@ -6,6 +6,11 @@ The format loosely follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-09-22
+
+### Fixed
+
+- Keep every distributed Skill on the CLI runtime bundled with the same installation, preventing Marketplace updates from invoking an older global `ssf` found on `PATH`.
 
 ## [2.0.0] - 2026-09-21
 

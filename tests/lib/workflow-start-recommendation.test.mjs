@@ -19,7 +19,7 @@ describe('workflow-start path recommendation protocol', () => {
   it('validates and initializes before recommending a new change', () => {
     const skill = read('skills/workflow-start/SKILL.md');
     assert.match(skill, /single safe relative path segment under `changes\//);
-    assert.ok(skill.indexOf('ssf state init') < skill.indexOf('ssf workflow recommend'));
+    assert.ok(skill.indexOf('SSF state init') < skill.indexOf('SSF workflow recommend'));
     assert.match(skill, /Never infer approval from artifact existence/i);
   });
 

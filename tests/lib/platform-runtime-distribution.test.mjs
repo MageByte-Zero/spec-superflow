@@ -12,8 +12,10 @@ import { installPlatform } from '../../scripts/lib/install.mjs';
 
 const ROOT = process.cwd();
 const CLI = join(ROOT, 'scripts', 'spec-superflow.mjs');
-const SOURCE_RUNTIME_COMMAND = 'ssf';
+const SOURCE_RUNTIME_COMMAND = 'SSF';
+const BUNDLED_RUNTIME_DEFINITION = 'node "<plugin-root>/scripts/spec-superflow.mjs"';
 const FIXED_NPM_RUNTIME = /npx --yes --package spec-superflow@\d+\.\d+\.\d+ ssf/;
+const BARE_SSF_RUNTIME = /\bssf\s+(?:audit|checkpoint|config|debug|doctor|execution|finish|handoff|inject|isolate|list|resume|runtime|save|state|switch|sync|validate|version|workflow)\b/;
 const RUNTIME_SKILLS = [
   'workflow-start',
   'need-explorer',
@@ -40,25 +42,31 @@ describe('canonical skill runtime protocol', () => {
     }
   });
 
-  it('uses the unversioned local CLI for every runtime-dependent source skill', () => {
+  it('uses the bundled CLI for every runtime-dependent source skill', () => {
     for (const name of RUNTIME_SKILLS) {
       const content = skill(name);
       assert.match(content, new RegExp(`\\b${SOURCE_RUNTIME_COMMAND}\\s+`),
         `${name} should use the source runtime command`);
+      assert.ok(content.includes(BUNDLED_RUNTIME_DEFINITION), `${name} should resolve the bundled runtime`);
       assert.doesNotMatch(content, FIXED_NPM_RUNTIME,
         `${name} should not pin an npm runtime version`);
+      assert.doesNotMatch(content, BARE_SSF_RUNTIME,
+        `${name} should not resolve an unrelated ssf from PATH`);
       assert.doesNotMatch(content, /\$\{CLAUDE_PLUGIN_ROOT\}|\$\{PLUGIN_ROOT\}/,
         `${name} should not require a host plugin-root variable`);
     }
   });
 
-  it('uses the unversioned local CLI for each recovery command source asset', () => {
+  it('uses the bundled CLI for each recovery command source asset', () => {
     for (const name of ['resume', 'switch', 'save']) {
       const content = readFileSync(join(ROOT, 'commands', 'ssf', `${name}.md`), 'utf8');
       assert.match(content, new RegExp(`\\b${SOURCE_RUNTIME_COMMAND}\\s+`),
         `${name} should use the source runtime command`);
+      assert.ok(content.includes(BUNDLED_RUNTIME_DEFINITION), `${name} should resolve the bundled runtime`);
       assert.doesNotMatch(content, FIXED_NPM_RUNTIME,
         `${name} should not pin an npm runtime version`);
+      assert.doesNotMatch(content, BARE_SSF_RUNTIME,
+        `${name} should not resolve an unrelated ssf from PATH`);
     }
   });
 
@@ -69,9 +77,17 @@ describe('canonical skill runtime protocol', () => {
     assert.match(content, /runtime asset read skills\/code-reviewer\/code-reviewer-prompt\.md/);
   });
 
-  it('keeps the source command unversioned so npm link resolves the live checkout', () => {
-    for (const name of RUNTIME_SKILLS) {
-      assert.match(skill(name), /\bssf\s+(?:audit|checkpoint|config|execution|handoff|inject|isolate|runtime|state|sync|workflow)\b/);
+  it('keeps reviewer prompts on the same bundled runtime', () => {
+    for (const file of [
+      'skills/build-executor/implementer-prompt.md',
+      'skills/build-executor/re-review-prompt.md',
+      'skills/build-executor/task-reviewer-prompt.md',
+      'skills/code-reviewer/code-reviewer-prompt.md',
+    ]) {
+      const content = readFileSync(join(ROOT, file), 'utf8');
+      assert.match(content, new RegExp(`\\b${SOURCE_RUNTIME_COMMAND}\\s+`));
+      assert.ok(content.includes(BUNDLED_RUNTIME_DEFINITION));
+      assert.doesNotMatch(content, BARE_SSF_RUNTIME, `${file} should not resolve an unrelated ssf from PATH`);
     }
   });
 });

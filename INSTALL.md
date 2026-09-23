@@ -7,7 +7,9 @@
 - [Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec) — 规划引擎（Schema 验证、Delta Spec、工件解析）
 - [obra/superpowers](https://github.com/obra/superpowers) — 执行纪律（TDD 铁律、SDD、系统化调试、代码审查）
 
-当前发布版本：**v2.0.0**。
+当前发布版本：**v2.0.1**。
+
+每个安装渠道都把 Skill 与 CLI runtime 作为同一个版本单元部署和升级；Skill 只运行该安装包内的 runtime，不依赖 `PATH` 中其他渠道留下的 `ssf`。
 
 ---
 
@@ -184,7 +186,7 @@ codex plugin add spec-superflow@awesome-codex-plugins
 当社区 marketplace 镜像尚未同步时，可直接指定本仓库的 release tag：
 
 ```bash
-codex plugin marketplace add MageByte-Zero/spec-superflow --ref v2.0.0
+codex plugin marketplace add MageByte-Zero/spec-superflow --ref v2.0.1
 codex plugin add spec-superflow@spec-superflow
 ```
 
