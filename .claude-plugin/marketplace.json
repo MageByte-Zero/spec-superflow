@@ -9,7 +9,7 @@
     {
       "name": "spec-superflow",
       "description": "Two-path workflow with optional planning, final review, recoverable state, and delta spec sync.",
-      "version": "2.0.2",
+      "version": "2.0.1",
       "source": "./",
       "author": {
         "name": "MageByte",
