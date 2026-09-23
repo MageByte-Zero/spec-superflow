@@ -18,7 +18,7 @@
 
 import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { cp, writeFile, mkdtemp } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -252,14 +252,20 @@ async function fetchLatestTag() {
   return data.tag_name;
 }
 
-async function cloneRelease(tag) {
-  const tmpDir = await mkdtemp(join('/tmp', 'spec-superflow-'));
+async function cloneRelease(tag, { clone = execFileSync } = {}) {
+  const stagingDir = await mkdtemp(join(tmpdir(), 'spec-superflow-'));
+  const pluginRoot = join(stagingDir, 'repo');
   const url = `https://github.com/${GITHUB_REPO}.git`;
-  console.log(`📥 Cloning ${tag} into ${tmpDir} ...`);
-  execFileSync('git', ['clone', '--depth', '1', '--branch', tag, url, tmpDir], {
-    stdio: 'inherit',
-  });
-  return tmpDir;
+  console.log(`📥 Cloning ${tag} into ${pluginRoot} ...`);
+  try {
+    clone('git', ['clone', '--depth', '1', '--branch', tag, url, pluginRoot], {
+      stdio: 'inherit',
+    });
+    return { pluginRoot, stagingDir };
+  } catch (error) {
+    rmSync(stagingDir, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 function readVersion(pluginRoot) {
@@ -412,7 +418,7 @@ export async function run(args) {
 
   // Resolve source: --local <path> | --tag <tag> | latest release.
   let pluginRoot = defaultPluginRoot;
-  let isTemp = false;
+  let stagingDir = null;
   let installedTag = null;
 
   if (values.local) {
@@ -421,8 +427,7 @@ export async function run(args) {
   } else {
     installedTag = values.tag || await fetchLatestTag();
     console.log(`⬆️  Installing spec-superflow ${installedTag} for WorkBuddy ...`);
-    pluginRoot = await cloneRelease(installedTag);
-    isTemp = true;
+    ({ pluginRoot, stagingDir } = await cloneRelease(installedTag));
   }
 
   try {
@@ -443,10 +448,10 @@ export async function run(args) {
     }
     console.log(`\nNext: restart WorkBuddy and try "用 workflow-start 开始".`);
   } finally {
-    if (isTemp) {
-      rmSync(pluginRoot, { recursive: true, force: true });
+    if (stagingDir) {
+      rmSync(stagingDir, { recursive: true, force: true });
     }
   }
 }
 
-export { listCommandNames, planInstall, installWorkBuddy, PLUGIN_NAME };
+export { listCommandNames, planInstall, installWorkBuddy, cloneRelease, PLUGIN_NAME };

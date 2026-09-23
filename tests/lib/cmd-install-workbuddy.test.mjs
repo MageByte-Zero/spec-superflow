@@ -4,19 +4,20 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { canCreateSymlink } from '../helpers/symlink-support.mjs';
 
 let tempDir;
-let planInstall, installWorkBuddy;
+let planInstall, installWorkBuddy, cloneRelease;
 
 describe('cmd-install-workbuddy', () => {
   beforeEach(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'ssf-workbuddy-'));
     const mod = await import(pathToFileURL(join(process.cwd(), 'scripts/lib/cmd-install-workbuddy.mjs')).href);
     planInstall = mod.planInstall;
+    cloneRelease = mod.cloneRelease;
     // Installer library functions write progress to stdout via an injected
     // logger; tests silence it so their stdout stays clean for the test runner
     // IPC channel (stray emoji bytes corrupt the v8-serialized frames).
@@ -324,5 +325,55 @@ describe('cmd-install-workbuddy', () => {
     } finally {
       process.chdir(previousCwd);
     }
+  });
+
+  it('clones into a destination that does not exist under the OS temp directory', async () => {
+    let target;
+    const clone = (_command, args) => {
+      target = args.at(-1);
+      assert.equal(existsSync(target), false);
+      mkdirSync(target);
+    };
+
+    const result = await cloneRelease('v-test', { clone });
+    try {
+      assert.equal(result.pluginRoot, target);
+      assert.equal(dirname(result.stagingDir), tmpdir());
+      assert.equal(dirname(target), result.stagingDir);
+    } finally {
+      rmSync(result.stagingDir, { recursive: true, force: true });
+    }
+  });
+
+  it('clones a tagged release with git into the isolated staging directory', async () => {
+    const source = join(tempDir, 'source');
+    execFileSync('git', ['init', '--quiet', source]);
+    writeFileSync(join(source, 'release.txt'), 'release asset\n');
+    execFileSync('git', ['-C', source, 'add', 'release.txt']);
+    execFileSync('git', ['-C', source, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '--quiet', '-m', 'fixture']);
+    execFileSync('git', ['-C', source, 'tag', 'v-test']);
+
+    const clone = (command, args) => {
+      const localArgs = [...args];
+      localArgs[localArgs.length - 2] = source;
+      execFileSync(command, localArgs, { stdio: 'pipe' });
+    };
+    const result = await cloneRelease('v-test', { clone });
+    try {
+      assert.equal(readFileSync(join(result.pluginRoot, 'release.txt'), 'utf-8'), 'release asset\n');
+    } finally {
+      rmSync(result.stagingDir, { recursive: true, force: true });
+    }
+  });
+
+  it('removes the staging directory if git clone fails', async () => {
+    let stagingDir;
+    const clone = (_command, args) => {
+      stagingDir = dirname(args.at(-1));
+      throw new Error('synthetic clone failure');
+    };
+
+    await assert.rejects(cloneRelease('v-test', { clone }), /synthetic clone failure/);
+    assert.equal(existsSync(stagingDir), false);
   });
 });
