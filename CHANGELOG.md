@@ -6,6 +6,10 @@ The format loosely follows Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixed
+
+- Record the change's start commit and branch when `workflow start` enters executing, and resolve the final review range from that anchor, so a repository whose trunk is not named `main`/`master` can record its final review and complete instead of failing with "Final review requires an unambiguous recorded target branch". An isolation context recorded later no longer moves the range origin.
+
 ## [2.0.1] - 2026-09-22
 
 ### Fixed

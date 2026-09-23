@@ -25,6 +25,8 @@ const BUILTIN_DEFAULTS = {
   test_result: null,
   spec_merged: false,
   spec_publication_receipt: null,
+  review_base: null,
+  target_branch: null,
   change_name: null,
   last_transition: null,
   last_transition_from: null,
@@ -77,6 +79,10 @@ export function writeState(changeDir, state) {
   lines.push(`test_result: ${state.test_result ?? 'null'}`);
   lines.push(`spec_merged: ${state.spec_merged ?? false}`);
   lines.push(`spec_publication_receipt: ${state.spec_publication_receipt ?? 'null'}`);
+  lines.push('');
+  lines.push('# === Review anchor (recorded on the first entry into executing) ===');
+  lines.push(`review_base: ${state.review_base ?? 'null'}`);
+  lines.push(`target_branch: ${state.target_branch ?? 'null'}`);
   lines.push('');
   lines.push('# === Metadata ===');
   lines.push(`change_name: ${state.change_name ?? path.basename(changeDir)}`);
