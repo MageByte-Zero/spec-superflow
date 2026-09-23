@@ -10,6 +10,7 @@ The format loosely follows Keep a Changelog.
 
 - Record the change's start commit and branch when `workflow start` enters executing, and resolve the final review range from that anchor, so a repository whose trunk is not named `main`/`master` can record its final review and complete instead of failing with "Final review requires an unambiguous recorded target branch". An isolation context recorded later no longer moves the range origin.
 - Allow a change that entered executing before the start anchor existed to record it once with `ssf state set <change-dir> review_base <start-commit>`. Both anchor fields are write-once: a recorded anchor cannot be overwritten or cleared, so the reviewed range cannot be narrowed through `ssf state set`.
+- Accept a relative `<change-dir>` for every `ssf execution` subcommand. `ssf execution review` previously wrote the report snapshot to the directory the relative path pointed at, then validated it against the change directory's realpath, so the documented `ssf execution review changes/<name> ...` form always failed with an ENOENT on a doubled path.
 
 ## [2.0.1] - 2026-09-22
 

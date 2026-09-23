@@ -157,6 +157,21 @@ test('the recorded start anchor is write-once through ssf state set', t => {
   assert.equal(readState(f.dir).review_base, anchor);
 });
 
+test('review accepts the change directory as either a relative or absolute path', t => {
+  const f = developTrunkFixture(t);
+  f.start();
+  const anchor = readState(f.dir).review_base;
+  const head = f.commit('impl.txt', 'impl\n');
+  f.report();
+  // INSTALL.md documents the relative form, so both spellings must behave alike.
+  const relative = spawnSync(process.execPath,
+    [CLI, 'execution', 'review', 'changes/demo', '--wave', 'final', '--base', anchor, '--head', head,
+      '--report', '.superpowers/sdd/reviews/final.md', '--verdict', 'pass'],
+    { cwd: f.root, encoding: 'utf8' });
+  assert.equal(relative.status, 0, relative.stderr);
+  assert.equal(checkExecutionReviewsPassed(f.dir).pass, true);
+});
+
 test('the review anchor never redirects a merge onto another equal-commit branch', t => {
   const f = developTrunkFixture(t);
   f.start();
