@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readState, writeState, updateField, rebuildState, SETTABLE_FIELDS } from './state-loader.mjs';
+import { readState, writeState, updateField, rebuildState, SETTABLE_FIELDS, WRITE_ONCE_FIELDS } from './state-loader.mjs';
 import { computeArtifactsHash, computeContractHash } from './hash.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -223,6 +223,12 @@ export async function run(args) {
         console.error(`⛔ Field '${field}' is not settable (use 'transition' for state, or check SETTABLE_FIELDS)`);
         process.exit(1);
       }
+      // 开工锚点只写一次：允许为存量变更补写，但不允许把已记录的锚点改成更晚的
+      // 提交或清空，否则审查范围可以被悄悄缩小。
+      if (WRITE_ONCE_FIELDS.includes(field) && readState(changeDir)[field] != null) {
+        console.error(`⛔ '${field}' records this change's start anchor and is write-once; it cannot be overwritten or cleared through 'ssf state set'`);
+        process.exit(1);
+      }
       const resolvedValue = /^dp_[0-7]_timestamp$/.test(field) && value === 'now'
         ? new Date().toISOString()
         : value;
@@ -230,11 +236,15 @@ export async function run(args) {
         console.error('State field values must not contain control characters or line separators');
         process.exit(1);
       }
-      updateField(changeDir, field, resolvedValue);
+      // 开工锚点必须是本仓库的有效提交。短 SHA、无效引用或不存在的提交若先落盘，
+      // 之后会被只写一次挡住而无法用完整 SHA 更正；所以写入前解析为规范化完整 SHA，
+      // 解析不出来就拒绝且不写入。
+      const anchoredValue = field === 'review_base' ? normalizeReviewBase(changeDir, resolvedValue) : resolvedValue;
+      updateField(changeDir, field, anchoredValue);
       if (values.json) {
-        console.log(JSON.stringify({ ok: true, field, value: resolvedValue }));
+        console.log(JSON.stringify({ ok: true, field, value: anchoredValue }));
       } else {
-        console.log(`✅ Set ${field} = ${resolvedValue}`);
+        console.log(`✅ Set ${field} = ${anchoredValue}`);
       }
       break;
     }
@@ -242,4 +252,14 @@ export async function run(args) {
       console.error(`Unknown subcommand: ${sub}. Valid: init, check, transition, get, rebuild, set`);
       process.exit(2);
   }
+}
+
+function normalizeReviewBase(changeDir, value) {
+  const result = spawnSync('git', ['-C', changeDir, 'rev-parse', '--verify', `${value}^{commit}`], { encoding: 'utf8' });
+  const sha = result.status === 0 ? (result.stdout ?? '').trim() : '';
+  if (!/^[0-9a-f]{40}$/i.test(sha)) {
+    console.error(`⛔ 'review_base' must name an existing commit in this repository; '${value}' did not resolve`);
+    process.exit(1);
+  }
+  return sha;
 }

@@ -1,4 +1,5 @@
 import { parseArgs } from 'node:util';
+import { resolve } from 'node:path';
 import { adjudicateWave, createPlan, describeWaves, describeReviews, EXECUTION_MODES, readPlan, recordReview, resolveRecommendationPlanRevision, resyncPlan, validatePlan, writePlan, writePlanRevision } from './execution-plan.mjs';
 import {
   createRecommendationReceipt,
@@ -31,7 +32,11 @@ export function run(args, io = { stdout: process.stdout, stderr: process.stderr 
     allowPositionals: true,
   });
   const subcommand = positionals[0];
-  const changeDir = positionals[1];
+  // Overlay paths are derived from the change directory and are later resolved
+  // against its realpath, so a relative argument would be resolved twice (the
+  // snapshot write lands correctly but its validation reads a doubled path).
+  // One canonical form makes `ssf execution <cmd> <dir>` identical either way.
+  const changeDir = positionals[1] ? resolve(positionals[1]) : positionals[1];
 
   if (values.help || subcommand === undefined) {
     printHelp(io);

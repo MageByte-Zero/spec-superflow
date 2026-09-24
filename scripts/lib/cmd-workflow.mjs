@@ -3,7 +3,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { resolve, relative, isAbsolute, sep } from 'node:path';
 import { parseTasks } from './task-parser.mjs';
 import { createPlan, readPlan, validatePlan, writePlan, writePlanRevision, describeReviews } from './execution-plan.mjs';
-import { resolveIsolationChange } from './isolation-context.mjs';
+import { readIsolationContext, resolveIsolationChange } from './isolation-context.mjs';
 import { computeArtifactsHash, computeContractHash } from './hash.mjs';
 import { runGuard } from '../guard/guard.mjs';
 import { join } from 'node:path';
@@ -137,6 +137,10 @@ function safeText(value, label) {
   return value.trim();
 }
 
+function gitLine(dir, args) {
+  return execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', stdio: 'pipe' }).trim();
+}
+
 function checkChangePath(dir) {
   const root = execFileSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', stdio: 'pipe' }).trim();
   const rel = relative(realpathSync.native(root), realpathSync.native(dir));
@@ -154,6 +158,7 @@ function start(dir, values) {
   if (!['direct', 'planned'].includes(values.path)) throw new UsageError('--path must be direct or planned');
   checkChangePath(dir);
   const state = readState(dir);
+  const previousState = state.state;
   const existing = readPlan(dir);
   const compact = ['planned', 'direct'].includes(state.workflow_variant);
   if (existsSync(join(dir, '.spec-superflow.yaml')) && !compact
@@ -197,6 +202,21 @@ function start(dir, values) {
   }
   state.state = 'executing'; state.test_result = null; state.dp_6_result = null;
   state.artifacts_hash = computeArtifactsHash(dir); state.contract_hash = computeContractHash(dir);
+  // 开工锚点：本变更进入 executing 时的 commit 与分支，是终评范围的起点。
+  // 缺失时优先继承已记录的隔离起点（可能早于当前 HEAD），使晚到的重新确认不会
+  // 把范围起点往后挪；只有真正的首次进入 executing 才记录当前 HEAD。已是执行中
+  // 的存量变更若起点未知，则留空，由补写入口补锚点，绝不默认取当前 HEAD 缩小
+  // 范围。target_branch 同理，避免为未知起点算出一个偏差的 merge-base 回退目标。
+  const isolation = readIsolationContext(dir);
+  const alreadyActive = ['executing', 'debugging'].includes(previousState) || existing !== null;
+  if (!state.review_base) {
+    if (isolation?.review_base) state.review_base = isolation.review_base;
+    else if (!alreadyActive) state.review_base = gitLine(dir, ['rev-parse', 'HEAD']);
+  }
+  if (!state.target_branch) {
+    if (isolation?.target_branch) state.target_branch = isolation.target_branch;
+    else if (!alreadyActive) state.target_branch = gitLine(dir, ['branch', '--show-current']) || null;
+  }
   state.last_transition = new Date().toISOString();
   writeState(dir, state);
   return print({ ok: true, state: 'executing', path: values.path, mode: readPlan(dir)?.mode ?? 'inline' }, values.json);

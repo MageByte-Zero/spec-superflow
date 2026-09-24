@@ -6,6 +6,14 @@ The format loosely follows Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixed
+
+- Record the change's start commit and branch when `workflow start` enters executing, and resolve the final review range from that anchor, so a repository whose trunk is not named `main`/`master` can record its final review and complete instead of failing with "Final review requires an unambiguous recorded target branch". An isolation context recorded later no longer moves the range origin.
+- Allow a change that entered executing before the start anchor existed to record it once with `ssf state set <change-dir> review_base <start-commit>`. Both anchor fields are write-once: a recorded anchor cannot be overwritten or cleared, so the reviewed range cannot be narrowed through `ssf state set`.
+- Accept a relative `<change-dir>` for every `ssf execution` subcommand. `ssf execution review` previously wrote the report snapshot to the directory the relative path pointed at, then validated it against the change directory's realpath, so the documented `ssf execution review changes/<name> ...` form always failed with an ENOENT on a doubled path.
+- Keep the recorded start anchor when an executing change is re-approved: `ssf workflow start` now inherits the isolation context's start commit instead of overwriting a missing anchor with the current `HEAD`, and never guesses `HEAD` when the start is already unknown. Re-confirming a plan could previously move the anchor forward and let the final review range skip the commits implemented before that point; such a change now stays blocked until the start commit is backfilled with `ssf state set <change-dir> review_base <start-commit>`.
+- Validate the review anchor before it is persisted: `ssf state set <change-dir> review_base <commit>` requires the value to resolve to a commit in the repository and stores its canonical full SHA. A short or invalid reference was previously written first and then locked by the write-once guard, leaving no way to correct it with the full SHA.
+
 ## [2.0.1] - 2026-09-22
 
 ### Fixed
