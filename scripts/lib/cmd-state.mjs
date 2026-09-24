@@ -236,11 +236,15 @@ export async function run(args) {
         console.error('State field values must not contain control characters or line separators');
         process.exit(1);
       }
-      updateField(changeDir, field, resolvedValue);
+      // 开工锚点必须是本仓库的有效提交。短 SHA、无效引用或不存在的提交若先落盘，
+      // 之后会被只写一次挡住而无法用完整 SHA 更正；所以写入前解析为规范化完整 SHA，
+      // 解析不出来就拒绝且不写入。
+      const anchoredValue = field === 'review_base' ? normalizeReviewBase(changeDir, resolvedValue) : resolvedValue;
+      updateField(changeDir, field, anchoredValue);
       if (values.json) {
-        console.log(JSON.stringify({ ok: true, field, value: resolvedValue }));
+        console.log(JSON.stringify({ ok: true, field, value: anchoredValue }));
       } else {
-        console.log(`✅ Set ${field} = ${resolvedValue}`);
+        console.log(`✅ Set ${field} = ${anchoredValue}`);
       }
       break;
     }
@@ -248,4 +252,14 @@ export async function run(args) {
       console.error(`Unknown subcommand: ${sub}. Valid: init, check, transition, get, rebuild, set`);
       process.exit(2);
   }
+}
+
+function normalizeReviewBase(changeDir, value) {
+  const result = spawnSync('git', ['-C', changeDir, 'rev-parse', '--verify', `${value}^{commit}`], { encoding: 'utf8' });
+  const sha = result.status === 0 ? (result.stdout ?? '').trim() : '';
+  if (!/^[0-9a-f]{40}$/i.test(sha)) {
+    console.error(`⛔ 'review_base' must name an existing commit in this repository; '${value}' did not resolve`);
+    process.exit(1);
+  }
+  return sha;
 }

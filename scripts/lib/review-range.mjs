@@ -41,6 +41,6 @@ function resolveTargetBranch(changeDir) {
     try { git(changeDir, ['rev-parse', '--verify', `refs/heads/${name}`]); return true; }
     catch { return false; }
   });
-  if (trunks.length !== 1) throw new Error('Final review requires an unambiguous recorded target branch');
+  if (trunks.length !== 1) throw new Error(`Final review has no recorded start anchor; backfill it once with "ssf state set ${changeDir} review_base <start-commit>"`);
   return trunks[0];
 }

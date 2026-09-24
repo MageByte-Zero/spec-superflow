@@ -135,7 +135,7 @@ test('a change created before the anchor existed can record it once and then rev
   const head = f.commit('impl.txt', 'impl\n');
   // Without a recorded anchor and without a main/master trunk there is nothing
   // to derive the range from, so the review stays blocked until it is recorded.
-  assert.throws(() => recordReview(f.dir, 'final', { status: 'pass', base: anchor, head, report: f.report() }), /unambiguous recorded target branch/);
+  assert.throws(() => recordReview(f.dir, 'final', { status: 'pass', base: anchor, head, report: f.report() }), /no recorded start anchor/);
   const backfill = f.setState('review_base', anchor);
   assert.equal(backfill.status, 0, backfill.stderr);
   assert.equal(readState(f.dir).review_base, anchor);
@@ -188,4 +188,75 @@ test('the review anchor never redirects a merge onto another equal-commit branch
   assert.equal(f.git('rev-parse', 'HEAD'), head);
   assert.equal(readState(f.dir).review_base, anchor);
   assert.equal(readCurrentReview(f.dir, 'final', readPlan(f.dir))?.status, 'pass');
+});
+
+test('a re-approved executing change inherits the isolation anchor instead of taking HEAD', t => {
+  const f = developTrunkFixture(t);
+  f.start();
+  const anchor = readState(f.dir).review_base;
+  f.forgetAnchor();
+  assert.equal(readState(f.dir).review_base, null);
+  // The isolation context predates the plugin upgrade and holds the real start A.
+  // isolation_branch matches the current branch so recovery resolves the change
+  // directory without a checkout switch.
+  writeIsolationContext(f.dir, {
+    change_name: 'demo', target_branch: 'develop', isolation_branch: 'develop',
+    target_root: f.root, isolation_root: f.root, kind: 'branch',
+    finish_status: 'pending', review_base: anchor,
+  });
+  const mid = f.commit('impl.txt', 'impl\n');
+  assert.notEqual(mid, anchor);
+  // Re-approving after a tasks.md edit must reuse A, not adopt HEAD (B) and skip A->B.
+  fs.writeFileSync(join(f.dir, 'tasks.md'), '# Tasks\n\n- [ ] 1 do the work\n- [ ] 2 cover it\n');
+  f.start('re-approved scope');
+  assert.equal(readState(f.dir).review_base, anchor);
+  const head = f.commit('impl2.txt', 'impl2\n');
+  const report = f.report();
+  assert.throws(() => recordReview(f.dir, 'final', { status: 'pass', base: mid, head, report }), /complete target merge-base/);
+  assert.equal(recordReview(f.dir, 'final', { status: 'pass', base: anchor, head, report }).status, 'pass');
+});
+
+test('a re-approved executing change with no known anchor never records HEAD', t => {
+  const f = developTrunkFixture(t);
+  f.start();
+  const start = readState(f.dir).review_base;
+  f.forgetAnchor();
+  const mid = f.commit('impl.txt', 'impl\n');
+  assert.notEqual(mid, start);
+  fs.writeFileSync(join(f.dir, 'tasks.md'), '# Tasks\n\n- [ ] 1 do the work\n- [ ] 2 cover it\n');
+  f.start('re-approved scope');
+  // The start is genuinely unknown, so it must not guess HEAD and silently narrow
+  // the range; the change stays blocked until the anchor is backfilled.
+  assert.equal(readState(f.dir).review_base, null);
+  assert.equal(readState(f.dir).target_branch, null);
+  const head = f.commit('impl2.txt', 'impl2\n');
+  assert.throws(() => recordReview(f.dir, 'final', { status: 'pass', base: start, head, report: f.report() }), /no recorded start anchor/);
+  assert.equal(f.setState('review_base', start).status, 0);
+  assert.equal(recordReview(f.dir, 'final', { status: 'pass', base: start, head, report: f.report() }).status, 'pass');
+});
+
+test('ssf state set review_base normalizes a short SHA to the full commit', t => {
+  const f = developTrunkFixture(t);
+  f.start();
+  const anchor = readState(f.dir).review_base;
+  assert.match(anchor, /^[0-9a-f]{40}$/);
+  f.forgetAnchor();
+  const short = f.setState('review_base', anchor.slice(0, 12));
+  assert.equal(short.status, 0, short.stderr);
+  assert.equal(readState(f.dir).review_base, anchor);
+  // The write-once guard still holds after normalization.
+  const overwrite = f.setState('review_base', anchor.slice(0, 12));
+  assert.equal(overwrite.status, 1);
+  assert.match(overwrite.stderr, /write-once/);
+  assert.equal(readState(f.dir).review_base, anchor);
+});
+
+test('an unresolvable review_base is rejected before it is persisted', t => {
+  const f = developTrunkFixture(t);
+  f.start();
+  f.forgetAnchor();
+  const invalid = f.setState('review_base', 'not-a-commit');
+  assert.equal(invalid.status, 1);
+  assert.match(invalid.stderr, /must name an existing commit/);
+  assert.equal(readState(f.dir).review_base, null);
 });
