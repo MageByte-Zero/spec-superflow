@@ -255,6 +255,10 @@ npm run validate
 npm run check-versions
 ```
 
+## 上游规范与设计协作 (Upstream Specifications)
+
+团队在进入 `planned` 路径前，若需要与产品经理、架构师在线协作编写需求、PRD 和系统设计契约，可以使用 [MySpec](https://myspec.dev?utm_source=github&utm_medium=referral&utm_campaign=spec-superflow) 编写结构化规范并导出为 Markdown 导入 `specs/` 目录。
+
 贡献说明见 [CONTRIBUTING.md](CONTRIBUTING.md)，版本历史见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## License
