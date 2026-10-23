@@ -12,14 +12,16 @@ describe('workflow-start path recommendation protocol', () => {
     assert.match(skill, /Infer scope and risks/i);
     assert.match(skill, /do not turn CLI fields into a questionnaire/i);
     assert.match(skill, /same turn/i);
-    assert.match(skill, /workflow accept.*--verification/i);
+    assert.match(read('docs/legacy-workflow.md'), /workflow accept.*--verification/i);
     assert.match(skill, /Reuse authorization already given/i);
-    assert.match(skill, /nonrecommended choice requires acknowledgment/i);
+    assert.match(read('docs/legacy-workflow.md'), /nonrecommended choice requires acknowledgment/i);
   });
   it('validates and initializes before recommending a new change', () => {
     const skill = read('skills/workflow-start/SKILL.md');
     assert.match(skill, /single safe relative path segment under `changes\//);
-    assert.ok(skill.indexOf('SSF state init') < skill.indexOf('SSF workflow recommend'));
+    const legacy = read('docs/legacy-workflow.md');
+    assert.ok(legacy.indexOf('SSF state init') < legacy.indexOf('SSF workflow recommend'));
+    assert.doesNotMatch(skill, /SSF state init/);
     assert.match(skill, /Never infer approval from artifact existence/i);
   });
 

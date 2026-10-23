@@ -4,7 +4,7 @@ This file provides guidance to Codex (codex.ai) when working with code in this r
 
 ## Current default (new changes)
 
-Use only when the user opts into spec-superflow. New tasks have direct and planned entry points (`workflow start`), not a five-path questionnaire. Planned work uses proposal.md + tasks.md and one concrete approval; specs/design are optional. No handwritten execution-contract or recommendation receipt is required. Native/final is default, delegation and worktrees are explicit. Ordinary debugging stays in executing. `workflow complete` runs final checks and records verified or explicit accepted-risk delivery; failure is never rewritten as pass. The eight-state and DP descriptions below are legacy compatibility, not additional steps for new changes. User instructions always take precedence.
+Use only when the user opts into spec-superflow. New tasks have direct and planned entry points (`workflow start`), not a five-path questionnaire. Planned work uses proposal.md + tasks.md and one concrete approval; specs/design are optional. No handwritten execution-contract or recommendation receipt is required. Native/final is default, delegation and worktrees are explicit. Ordinary debugging stays in executing. `workflow complete` runs final checks and records verified or explicit accepted-risk delivery; failure is never rewritten as pass. User instructions always take precedence.
 
 ## What This Is
 
@@ -43,75 +43,19 @@ TypeScript interfaces + regex-based parsers. Compiles to `dist/` (ES2022 + NodeN
 - **proposal.md**: `## Why` ≥ 50 characters, `## What Changes` cannot be empty
 - `Validator` returns `ValidationReport` with `{valid, issues: [{level, path, message}], summary}`. Strict mode treats warnings as errors.
 
-### Skills (`skills/`)
+### Skills and workflow
 
-9 skills, one per directory. Each contains a `SKILL.md` that Codex loads as an instruction set:
+New changes use direct or planned. Read `skills/workflow-start/SKILL.md` when explicitly enabling the workflow. Planned work has proposal.md + tasks.md, optional behavior specs/design, one concrete approval, current-session execution and final review. Ordinary debugging stays in executing. Complete with `workflow complete`; merge and release remain separately authorized operations.
 
-| Skill | Phase | Purpose |
-|-------|-------|---------|
-| `workflow-start` | Entry | Content-level state detection, 8-state routing, blocks illegal transitions |
-| `need-explorer` | Exploring | One-question-at-a-time elicitation, 2-3 approach comparison with recommendation |
-| `spec-writer` | Specifying | Generate planning artifacts + Schema engine validation |
-| `contract-builder` | Bridging | Parsing engine auto-extracts 4 planning artifacts → compresses into `execution-contract.md` |
-| `build-executor` | Executing | TDD Iron Law + SDD subagent-driven development + Review Gates |
-| `bug-investigator` | Debugging | 4-phase root cause analysis. 3+ fix failures → question architecture → escalate |
-| `code-reviewer` | Review | Structured review with 3 severity levels (Critical/Important/Minor) |
-| `release-archivist` | Closing | Verification-before-completion Iron Law, archiving, risk summary |
-| `spec-merger` | Sync | Delta Spec → intelligent merge into main specs, conflict detection |
+For an existing change, identify the current path using recorded state and evidence: direct requires a valid schema-3 workflow-selection receipt; planned requires a schema-2 execution plan. Schema-1/2 direct receipts and legacy plans use [legacy recovery](docs/legacy-workflow.md), retaining original approvals and receipt obligations. A direct variant alone is insufficient, and internal `workflow: full` also occurs in v2 planned changes. Missing or corrupt evidence requires investigation rather than initialization or downgrade. Do not migrate active legacy changes automatically.
 
-### Skill Sub-Prompts
+Load only the skill needed for the current action: need-explorer for uncertain scope, spec-writer for a concrete plan, build-executor for implementation, bug-investigator for diagnosis, code-reviewer for review, spec-merger for actual delta specs, release-archivist for verification/closure. Contract-builder is only for existing legacy contracts.
 
-- `skills/build-executor/implementer-prompt.md` — Subagent implementation template with TDD evidence + self-review requirements
-- `skills/build-executor/task-reviewer-prompt.md` — Dual-verdict review (spec compliance + code quality)
-- `skills/code-reviewer/code-reviewer-prompt.md` — Structured code review template with 3 severity levels
+### Runtime and supporting assets
 
-### State Machine
+`scripts/spec-superflow.mjs` is the bundled CLI. Source skills use `SSF` as a placeholder for this runtime, never an arbitrary binary from PATH. Runtime references are read through its allowlisted `runtime asset read` command. Preserve this access path when moving guidance: installers must carry both skills and referenced assets.
 
-8 states: `exploring`, `specifying`, `bridging`, `approved-for-build`, `executing`, `debugging`, `closing`, `abandoned`.
-
-```
-exploring → specifying → bridging → approved-for-build → executing → closing
-                ↑              ↑             |                 ↑    |
-                |              |             v                 |    |
-                |              |         debugging ────────────┘    |
-                |              |                                    |
-                +--------------+------------------------------------+
-                (scope change → re-specify)    (contract drift → re-bridge)
-```
-
-`workflow-start` is the single entry point. It reads artifact content (not just file existence) to determine current state.
-
-### Hard Constraints
-
-- No `execution-contract.md` or no user approval → implementation is **blocked**
-- Requirements change mid-execution → forced rewind to `specifying` or `bridging`
-- Bug encountered → must enter `debugging` state; no "just try random fixes"
-- Contract scope drift detected (proposal intent lock ≠ contract intent) → re-bridge
-
-### Helper Scripts (`scripts/`)
-
-- `spec-superflow.mjs` — CLI entrypoint for `ssf` / `spec-superflow` commands.
-- `lib/` — CLI subcommand modules (`cmd-validate.mjs`, `cmd-doctor.mjs`, `cmd-state.mjs`, etc.), config loader, hash utilities.
-- `validate-artifacts` — Reads a change directory, validates proposal.md + all specs/*/spec.md, prints a report.
-
-### Hooks (`hooks/`)
-
-- `hooks/session-start` — Emits a short resume pointer only when the current project/change directory contains `.spec-superflow.yaml`; inactive sessions receive no injected context.
-- `hooks/hooks.json` — Claude Code hook config (SessionStart).
-- `hooks/hooks-cursor.json` — Cursor equivalent.
-
-### Key Files
-
-- `templates/*.md` — Templates for the 5 artifacts (proposal, spec, design, tasks, execution-contract)
-- `docs/examples/` — Two complete change sets (`add-dark-mode`, `refactor-auth-boundary`) used by tests as real input data
-- `docs/state-machine.md` — Formal state machine documentation
-- `docs/artifact-contract.md` — Artifact roles and mapping from planning to execution
-- `docs/decision-points.md` — Standard decision-point protocol
-
-### Fast Paths (v0.6.0+)
-
-- **hotfix** — ≤2 files, no new modules; skips full exploration and specification.
-- **tweak** — ≤4 files, config/docs only; skips exploration, specification, and bridging.
+`templates/` supplies artifact formats; `docs/examples/` contains legacy fixtures used by tests. State-machine, decision-point and execution-contract documents describe compatibility rules, not additional steps for new changes. Hooks only supply recovery pointers for active changes; ordinary coding does not opt into the workflow automatically.
 
 ## Design Decisions
 
@@ -138,6 +82,6 @@ Test data lives in `docs/examples/` — real proposal/spec/design artifacts from
 
 Refer to `docs/release-checklist.md` before publishing. Key items:
 - Keep `README.md`, `docs/README_en.md`, `INSTALL.md`, `CHANGELOG.md`, and all plugin manifests/installers in sync. Use `ssf version <semver>`.
-- Verify all examples are complete (proposal + specs + design + tasks + execution-contract + README)
+- Validate examples according to their workflow variant; legacy contract fixtures retain their existing artifacts.
 - No stray `TODO` or `TBD` markers
 - `package.json` version matches `.claude-plugin/plugin.json` version

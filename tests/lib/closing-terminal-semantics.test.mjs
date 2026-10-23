@@ -29,7 +29,7 @@ describe('closing terminal lifecycle', () => {
   });
 
   it('keeps spec synchronization and audit before logical closure', () => {
-    const release = read('skills/release-archivist/SKILL.md');
+    const release = read('docs/legacy-workflow.md').split('## release-archivist')[1];
     assert.ok(release.indexOf('Synchronize actual delta') < release.indexOf(`${RUNTIME_PREFIX} state transition`));
     assert.ok(release.indexOf(`${RUNTIME_PREFIX} audit`) < release.indexOf(`${RUNTIME_PREFIX} state transition`));
     const merger = section(read('skills/spec-merger/SKILL.md'), '## Execution-State Guard');
