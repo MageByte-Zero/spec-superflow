@@ -16,7 +16,7 @@ test('CatPaw import folder retains the matching CLI and all nine skills after re
   const output = join(temp, 'spec-superflow');
   const packaged = run([CLI, 'package-catpaw', output], temp);
   assert.equal(packaged.status, 0, packaged.stderr);
-  assert.match(readFileSync(join(output, 'SKILL.md'), 'utf8'), /^---\nname: spec-superflow\n/);
+  assert.match(readFileSync(join(output, 'SKILL.md'), 'utf8'), /^---\r?\nname: spec-superflow\r?\n/);
   const version = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
   assert.equal(JSON.parse(readFileSync(join(output, 'package.json'), 'utf8')).version, version);
   assert.equal(readdirSync(join(output, 'skills')).length, 9);
