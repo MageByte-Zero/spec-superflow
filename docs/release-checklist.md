@@ -11,14 +11,14 @@ Use this checklist before publishing a new version of `spec-superflow`.
 - `LICENSE` is present
 - `ssf version <semver>` covers all manifests (JSON) + documentation (Markdown/shell)
 - `node scripts/check-version-consistency.mjs` passes (also runs in CI)
-- Verify all nine runtime-dependent canonical skills use the exact release version, and local installer output rewrites them to its bundled `scripts/spec-superflow.mjs`.
+- Verify all nine runtime-dependent canonical skills invoke the CLI bundled with the same release, and local installer output binds them to its bundled `scripts/spec-superflow.mjs`; do not add independent npm version pins to source skills.
 - Verify `.github/plugin/marketplace.json` and `.claude-plugin/marketplace.json` versions match
 
 ## Workflow Integrity
 
 - skill descriptions still match their actual responsibilities
 - `workflow-start` still acts as the primary entry point
-- `contract-builder` still requires explicit approval before execution
+- `contract-builder` remains limited to legacy changes and retains their recorded approval obligations; new direct/planned changes do not create a handwritten execution contract.
 - planning artifacts and execution contract roles remain distinct
 - self-contained ownership is preserved
 
@@ -32,7 +32,7 @@ Use this checklist before publishing a new version of `spec-superflow`.
 
 ## Example Quality
 
-For each example in `docs/examples/`:
+Validate examples according to their recorded workflow variant. Existing legacy fixtures in `docs/examples/` retain the following artifacts; new planned examples require proposal.md + tasks.md, with specs/design only when needed:
 
 - `README.md` explains the scenario
 - `proposal.md` defines intent and scope
