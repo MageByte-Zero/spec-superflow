@@ -6,6 +6,10 @@ The format loosely follows Keep a Changelog.
 
 ## [Unreleased]
 
+### Changed
+
+- Separate legacy recovery instructions from default workflow skills; route existing changes by recorded workflow variant and ship the compatibility reference with the bundled runtime.
+
 ### Fixed
 
 - Record the change's start commit and branch when `workflow start` enters executing, and resolve the final review range from that anchor, so a repository whose trunk is not named `main`/`master` can record its final review and complete instead of failing with "Final review requires an unambiguous recorded target branch". An isolation context recorded later no longer moves the range origin.

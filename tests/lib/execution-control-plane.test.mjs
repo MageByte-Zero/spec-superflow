@@ -49,18 +49,15 @@ describe('execution control plane instructions', () => {
     }
   });
 
-  it('limits planning and review receipts to Full and legacy Hotfix', () => {
-    for (const path of [
-      'skills/workflow-start/SKILL.md',
-      'skills/build-executor/SKILL.md',
-      'skills/contract-builder/SKILL.md',
-      'skills/release-archivist/SKILL.md',
-    ]) {
-      const content = read(path);
-      assert.match(content, /Quick.*direct|direct.*Quick/is, `${path} publishes Quick direct execution`);
-      assert.match(content, /legacy Hotfix/is, `${path} distinguishes legacy Hotfix`);
-      assert.match(content, /test_result.*pass/is, `${path} requires a persisted short-path verification result`);
+  it('keeps legacy receipt obligations in the compatibility reference', () => {
+    const legacy = read('docs/legacy-workflow.md');
+    assert.match(legacy, /Quick.*direct|direct.*Quick/is);
+    assert.match(legacy, /legacy Hotfix/is);
+    assert.match(legacy, /test_result.*pass/is);
+    for (const name of ['workflow-start', 'build-executor', 'release-archivist']) {
+      assert.match(read(`skills/${name}/SKILL.md`), /runtime asset read docs\/legacy-workflow\.md/);
     }
+    assert.match(read('skills/contract-builder/SKILL.md'), /Legacy compatibility only/i);
   });
 
   it('documents receipt-bound planless debugging for every direct workflow path', () => {
@@ -254,9 +251,11 @@ describe('execution control plane instructions', () => {
     const inject = read('scripts/lib/cmd-inject.mjs');
 
     assert.match(workflowStart, /SSF resume <change-dir> --json/);
-    assert.match(buildExecutor, /execution recommend/i);
-    assert.match(buildExecutor, /review-policy final/);
-    assert.match(buildExecutor, /Old plans with no policy retain wave/i);
+    assert.match(read('docs/legacy-workflow.md'), /execution recommend/i);
+    assert.doesNotMatch(buildExecutor, /SSF execution recommend/);
+    assert.match(read('docs/legacy-workflow.md'), /review-policy final/);
+    assert.match(buildExecutor, /Native plans default to `final`/);
+    assert.match(read('docs/legacy-workflow.md'), /Old plans with no policy retain wave/i);
     assert.match(buildExecutor, /platform support.*otherwise report/is);
     assert.match(buildExecutor, /Critical\/Important.*fail.*repair.*pass/is);
     assert.match(codeReviewer, /execution review <change-dir>.*--verdict <pass\|fail>/s);

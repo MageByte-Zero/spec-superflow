@@ -4,12 +4,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const timestampSkills = [
-  ['skills/workflow-start/SKILL.md', 'dp_0_timestamp'],
-  ['skills/need-explorer/SKILL.md', 'dp_1_timestamp'],
-  ['skills/spec-writer/SKILL.md', 'dp_2_timestamp'],
+  ['docs/legacy-workflow.md', 'dp_0_timestamp'],
+  ['docs/legacy-workflow.md', 'dp_1_timestamp'],
+  ['docs/legacy-workflow.md', 'dp_2_timestamp'],
   ['skills/contract-builder/SKILL.md', 'dp_3_timestamp'],
-  ['skills/release-archivist/SKILL.md', 'dp_6_timestamp'],
-  ['skills/release-archivist/SKILL.md', 'dp_7_timestamp'],
+  ['docs/legacy-workflow.md', 'dp_6_timestamp'],
+  ['docs/legacy-workflow.md', 'dp_7_timestamp'],
 ];
 
 describe('cross-platform skill commands', () => {

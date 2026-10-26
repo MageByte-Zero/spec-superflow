@@ -174,7 +174,8 @@ describe('planning document readability contract', () => {
     const tasks = read('templates/tasks.md');
 
     assert.match(writer, /without pausing between individual artifacts/i);
-    assert.match(writer, /one DP-2/i);
+    assert.match(writer, /one concrete plan for approval/i);
+    assert.doesNotMatch(writer, /SSF state set.*dp_2/);
     assert.match(writer, /Self-check five questions once/i);
     assert.match(proposal, /完成证明/);
     assert.match(proposal, /Scope[\s\S]*In Scope[\s\S]*Out of Scope/);
@@ -208,11 +209,11 @@ describe('test-quality guidance contract', () => {
         `${name} must point agents to the shared test-quality guide`);
     }
 
-    assert.match(executor, /Quick follows the verification strategy persisted in its receipt/,
+    assert.match(read('docs/legacy-workflow.md'), /Quick follows the verification strategy persisted in its receipt/,
       'Quick must retain its user-selected verification strategy');
-    assert.match(executor, /Tweak skips TDD/,
+    assert.match(read('docs/legacy-workflow.md'), /Tweak skips TDD/,
       'Tweak must retain its direct-edit boundary');
-    assert.match(executor, /Full and legacy Hotfix use RED → GREEN → REFACTOR/,
+    assert.match(read('docs/legacy-workflow.md'), /Full and legacy Hotfix use RED → GREEN → REFACTOR/,
       'Full work must retain the TDD iron law');
   });
 });

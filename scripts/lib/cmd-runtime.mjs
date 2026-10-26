@@ -11,6 +11,7 @@ const ASSETS = new Set([
   'docs/artifact-contract.md',
   'docs/decision-points.md',
   'docs/state-machine.md',
+  'docs/legacy-workflow.md',
   'skills/build-executor/implementer-prompt.md',
   'skills/build-executor/task-reviewer-prompt.md',
   'skills/build-executor/re-review-prompt.md',

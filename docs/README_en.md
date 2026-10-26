@@ -22,6 +22,8 @@ The defaults minimize overhead: execute in the current session, review once at t
 
 Marketplace and platform installers upgrade each skill together with its same-version CLI runtime. Skills invoke only the runtime bundled with that installation, never an unrelated older `ssf` found on `PATH`.
 
+Default skills describe v2 direct/planned execution. Existing changes with legacy receipts or execution plans load [legacy recovery](legacy-workflow.md) only when needed; their approvals and receipts are preserved.
+
 ## Why v2
 
 The old flow classified work into several modes and copied state across planning, contracts, execution, and reviews. It could constrain complex work, but charged the same fixed cost to ordinary changes and could bounce between phases when receipts were stale or damaged.
