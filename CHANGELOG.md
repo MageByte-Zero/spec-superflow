@@ -6,6 +6,8 @@ The format loosely follows Keep a Changelog.
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-26
+
 ### Changed
 
 - Separate legacy recovery instructions from default workflow skills; route existing changes by recorded workflow variant and ship the compatibility reference with the bundled runtime.
