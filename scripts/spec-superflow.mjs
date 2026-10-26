@@ -41,6 +41,7 @@ const COMMANDS = {
   'install-qoder':    () => import('./lib/cmd-install-qoder.mjs'),
   'install-zcode':     () => import('./lib/cmd-install-zcode.mjs'),
   'install-codebuddy': () => import('./lib/cmd-install-codebuddy.mjs'),
+  'package-catpaw': () => import('./lib/cmd-package-catpaw.mjs'),
   'uninstall-codebuddy': () => import('./lib/cmd-uninstall-codebuddy.mjs'),
 };
 
@@ -134,6 +135,7 @@ Commands:
   install-qoder         Deploy to .qoder/ + .qoder/rules/ (Qoder)
   install-codebuddy     Deploy to ~/.codebuddy/skills/ + settings.json (CodeBuddy Code CLI)
   uninstall-codebuddy   Remove spec-superflow from ~/.codebuddy/ (CodeBuddy Code CLI)
+  package-catpaw <dir>  Create a self-contained Skill folder for CatPaw (妙手) import
 
 Options:
   --help, -h            Show this help message

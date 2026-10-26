@@ -281,6 +281,49 @@ describe('cmd-install-workbuddy', () => {
     assert.equal(existsSync(staleCommand), false);
   });
 
+  it('registers the local plugin for client discovery and preserves unrelated installations on upgrade', async () => {
+    const pluginRoot = makePluginRoot();
+    const homeDir = join(tempDir, 'registered-home');
+    const registryPath = join(homeDir, '.workbuddy', 'plugins', 'installed_plugins.json');
+    mkdirSync(dirname(registryPath), { recursive: true });
+    const unrelated = [{ scope: 'user', installPath: '/other/plugin', version: '1.0.0' }];
+    const project = { scope: 'project', installPath: '/project/plugin', version: '0.8.13' };
+    writeFileSync(registryPath, JSON.stringify({ version: 2,
+      plugins: { 'other@market': unrelated, 'spec-superflow@test': [project] } }));
+
+    const first = await installWorkBuddy({ pluginRoot, homeDir, marketplaceName: 'test' });
+    const initial = JSON.parse(readFileSync(registryPath, 'utf8')).plugins[first.enabledPluginKey].find(entry => entry.scope === 'user');
+    assert.equal(initial.scope, 'user');
+    assert.equal(initial.installPath, first.targetPluginDir);
+    assert.equal(initial.version, '0.8.14');
+    assert.ok(initial.installedAt);
+    assert.equal(JSON.parse(readFileSync(join(initial.installPath, 'package.json'), 'utf8')).version, initial.version);
+
+    writeFileSync(join(pluginRoot, 'package.json'), JSON.stringify({ version: '0.8.15' }));
+    await installWorkBuddy({ pluginRoot, homeDir, marketplaceName: 'test' });
+    const saved = JSON.parse(readFileSync(registryPath, 'utf8'));
+    assert.deepEqual(saved.plugins['other@market'], unrelated);
+    assert.deepEqual(saved.plugins[first.enabledPluginKey][0], project);
+    assert.equal(saved.plugins[first.enabledPluginKey].length, 2);
+    assert.equal(saved.plugins[first.enabledPluginKey][1].version, '0.8.15');
+    assert.equal(saved.plugins[first.enabledPluginKey][1].installedAt, initial.installedAt);
+  });
+
+  it('preserves the installed plugin when its client registry is corrupt', async () => {
+    const pluginRoot = makePluginRoot();
+    const homeDir = join(tempDir, 'corrupt-home');
+    const first = await installWorkBuddy({ pluginRoot, homeDir, marketplaceName: 'test' });
+    const registryPath = join(homeDir, '.workbuddy', 'plugins', 'installed_plugins.json');
+    const sentinel = join(first.targetPluginDir, 'keep.txt');
+    writeFileSync(sentinel, 'keep');
+    for (const corrupt of ['{broken', '{"version":2,"plugins":[]}', '{"version":2,"plugins":{"spec-superflow@test":[null]}}']) {
+      writeFileSync(registryPath, corrupt);
+      await assert.rejects(installWorkBuddy({ pluginRoot, homeDir, marketplaceName: 'test' }));
+      assert.equal(readFileSync(sentinel, 'utf8'), 'keep');
+      assert.equal(readFileSync(registryPath, 'utf8'), corrupt);
+    }
+  });
+
   it('installs all canonical package assets into a real temporary WorkBuddy home', async () => {
     const pluginRoot = process.cwd();
     const homeDir = join(tempDir, 'real-home');

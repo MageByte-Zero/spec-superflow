@@ -34,6 +34,8 @@ spec-superflow 共支持 **19 个** AI 编程平台。每个平台按三层接�
 
 Codex manifest 通过 `"hooks": {}` 抑制 `hooks/hooks.json` 自动发现，因此 CLI / App 只加载 skills，不会自动注入 SessionStart 上下文；新会话需显式调用 `workflow-start`。
 
+另提供新版 CatPaw（妙手）的导入包预览：`ssf package-catpaw <new-dir>` 生成包含同版本 CLI 和九个流程技能的单一 Skill 文件夹，通过客户端导入。已验证本地包与 CLI，妙手客户端和云端模式尚未验收，因此暂不计入上表的完整平台支持。
+
 ## 路径来源
 
 所有 `skillsDir` / `rulesDir` / `rulesFormat` / `hookFormat` 均与 [comet](https://github.com/rpamis/comet) 的 `src/core/platforms.ts` 交叉核实，并对照各平台官方约定。spec-superflow 的守卫机制是 **phase-guard 规则文件**（平台自动加载），而非 comet 的 PreToolUse 钩子——这是两层架构的根本区别。

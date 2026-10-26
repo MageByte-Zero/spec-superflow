@@ -32,13 +32,14 @@
 // recovery command adapters, and merges SessionStart into settings.json.
 
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { cp, writeFile, mkdtemp } from 'node:fs/promises';
-import { homedir, tmpdir } from 'node:os';
+import { cp, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { rewriteRuntime } from './runtime-rewrite.mjs';
+import { cloneRelease } from './release-source.mjs';
 import { createPhaseGuardContent } from './phase-guard-content.mjs';
 import { writeShims, applyPathEntry } from './path-shim.mjs';
 
@@ -337,16 +338,6 @@ async function fetchLatestTag() {
   return data.tag_name;
 }
 
-async function cloneRelease(tag) {
-  const tmpDir = await mkdtemp(join(tmpdir(), 'spec-superflow-'));
-  const url = `https://github.com/${GITHUB_REPO}.git`;
-  console.log(`📥 Cloning ${tag} into ${tmpDir} ...`);
-  execFileSync('git', ['clone', '--depth', '1', '--branch', tag, url, tmpDir], {
-    stdio: 'inherit',
-  });
-  return tmpDir;
-}
-
 function readVersion(pluginRoot) {
   try {
     const pkg = JSON.parse(readFileSync(join(pluginRoot, 'package.json'), 'utf-8'));
@@ -527,7 +518,7 @@ export async function run(args) {
 
   // Resolve source: --local <path> | --tag <tag> | latest release.
   let pluginRoot = defaultPluginRoot;
-  let isTemp = false;
+  let stagingDir = null;
   let installedTag = null;
 
   if (values.local) {
@@ -536,8 +527,7 @@ export async function run(args) {
   } else {
     installedTag = values.tag || await fetchLatestTag();
     console.log(`⬆️  Installing spec-superflow ${installedTag} for CodeBuddy ...`);
-    pluginRoot = await cloneRelease(installedTag);
-    isTemp = true;
+    ({ pluginRoot, stagingDir } = await cloneRelease(installedTag));
   }
 
   try {
@@ -563,8 +553,8 @@ export async function run(args) {
     }
     console.log(`\nNext: restart CodeBuddy Code CLI and try "用 workflow-start 开始".`);
   } finally {
-    if (isTemp) {
-      rmSync(pluginRoot, { recursive: true, force: true });
+    if (stagingDir) {
+      rmSync(stagingDir, { recursive: true, force: true });
     }
   }
 }
