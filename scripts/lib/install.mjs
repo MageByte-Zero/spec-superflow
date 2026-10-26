@@ -15,13 +15,14 @@
 // platform), not a PreToolUse hook; no hook configs are written here.
 
 import { existsSync, mkdirSync, readdirSync, statSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
-import { cp, writeFile, mkdtemp } from 'node:fs/promises';
+import { cp, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { getPlatform, rulesTargetDir, phaseGuardFileName } from './platforms.mjs';
 import { rewriteRuntime } from './runtime-rewrite.mjs';
+import { cloneRelease } from './release-source.mjs';
 import { createPhaseGuardContent } from './phase-guard-content.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -47,16 +48,6 @@ async function fetchLatestTag() {
     throw new Error('GitHub API response missing tag_name');
   }
   return data.tag_name;
-}
-
-async function cloneRelease(tag) {
-  const tmpDir = await mkdtemp(join('/tmp', 'spec-superflow-'));
-  const url = `https://github.com/${GITHUB_REPO}.git`;
-  console.log(`📥 Cloning ${tag} into ${tmpDir} ...`);
-  execFileSync('git', ['clone', '--depth', '1', '--branch', tag, url, tmpDir], {
-    stdio: 'inherit',
-  });
-  return tmpDir;
 }
 
 /** Recursively copy a directory; returns the number of top-level entries. */
@@ -151,7 +142,7 @@ export async function installPlatform(platformId, opts = {}) {
   const targetRoot = opts.cwd || process.cwd();
 
   let pluginRoot = defaultPluginRoot;
-  let isTemp = false;
+  let stagingDir = null;
   let installedTag = null;
 
   if (local) {
@@ -160,14 +151,13 @@ export async function installPlatform(platformId, opts = {}) {
   } else {
     installedTag = tag || await fetchLatestTag();
     console.log(`⬆️  Installing spec-superflow ${installedTag} for ${platform.name} ...`);
-    pluginRoot = await cloneRelease(installedTag);
-    isTemp = true;
+    ({ pluginRoot, stagingDir } = await cloneRelease(installedTag));
   }
 
   const sourceSkills = join(pluginRoot, 'skills');
   if (!existsSync(sourceSkills)) {
     console.error(`❌ skills/ directory not found at ${pluginRoot}`);
-    if (isTemp) rmSync(pluginRoot, { recursive: true, force: true });
+    if (stagingDir) rmSync(stagingDir, { recursive: true, force: true });
     process.exit(1);
   }
 
@@ -189,6 +179,7 @@ export async function installPlatform(platformId, opts = {}) {
         console.log(`   ${dir}/ — skipped (not found)`);
       }
     }
+    await cp(join(pluginRoot, 'package.json'), join(targetPluginDir, 'package.json'), { force: true });
 
     // 2. Copy skills to <skillsDir>/skills/ with portable commands rewritten
     const count = await copySkillsWithRoot(sourceSkills, targetSkills, pluginRootAbs);
@@ -220,8 +211,8 @@ export async function installPlatform(platformId, opts = {}) {
       console.log(`   Note: ${platform.notes}`);
     }
   } finally {
-    if (isTemp) {
-      rmSync(pluginRoot, { recursive: true, force: true });
+    if (stagingDir) {
+      rmSync(stagingDir, { recursive: true, force: true });
     }
   }
 }

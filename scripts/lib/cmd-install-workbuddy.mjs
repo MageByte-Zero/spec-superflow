@@ -16,14 +16,16 @@
 // ${CLAUDE_PLUGIN_ROOT} rewrite, phase-guard rule) but targets the marketplace
 // plugin structure instead of a project-local `.platform/` directory.
 
-import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { cp, writeFile, mkdtemp } from 'node:fs/promises';
-import { homedir, tmpdir } from 'node:os';
+import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { cp, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { rewriteRuntime } from './runtime-rewrite.mjs';
+import { cloneRelease } from './release-source.mjs';
 import { createPhaseGuardContent } from './phase-guard-content.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -252,22 +254,6 @@ async function fetchLatestTag() {
   return data.tag_name;
 }
 
-async function cloneRelease(tag, { clone = execFileSync, logger = console } = {}) {
-  const stagingDir = await mkdtemp(join(tmpdir(), 'spec-superflow-'));
-  const pluginRoot = join(stagingDir, 'repo');
-  const url = `https://github.com/${GITHUB_REPO}.git`;
-  logger.log(`📥 Cloning ${tag} into ${pluginRoot} ...`);
-  try {
-    clone('git', ['clone', '--depth', '1', '--branch', tag, url, pluginRoot], {
-      stdio: 'inherit',
-    });
-    return { pluginRoot, stagingDir };
-  } catch (error) {
-    rmSync(stagingDir, { recursive: true, force: true });
-    throw error;
-  }
-}
-
 function readVersion(pluginRoot) {
   try {
     const pkg = JSON.parse(readFileSync(join(pluginRoot, 'package.json'), 'utf-8'));
@@ -326,6 +312,17 @@ function planInstall({ pluginRoot = defaultPluginRoot, homeDir = homedir(), mark
 async function installWorkBuddy({ pluginRoot, homeDir, marketplaceName, plan, logger = console } = {}) {
   const installPlan = plan || planInstall({ pluginRoot, homeDir, marketplaceName });
   const { skillNames, commandNames, commandAssets, targetPluginDir, targetSkills, targetCommands, targetRules, manifestDir, settingsPath, enabledPluginKey, version, pluginRootAbs } = installPlan;
+  const settings = readJsonIfExists(settingsPath);
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+    throw new Error(`Invalid WorkBuddy settings; preserve and repair ${settingsPath} before installing`);
+  }
+  const registryPath = join(installPlan.workbuddyRoot, 'plugins', 'installed_plugins.json');
+  const registry = existsSync(registryPath) ? readJsonIfExists(registryPath) : { version: 2, plugins: {} };
+  if (!registry?.plugins || typeof registry.plugins !== 'object' || Array.isArray(registry.plugins)
+    || (registry.plugins[enabledPluginKey] !== undefined && (!Array.isArray(registry.plugins[enabledPluginKey])
+      || registry.plugins[enabledPluginKey].some(entry => !entry || typeof entry !== 'object' || Array.isArray(entry))))) {
+    throw new Error(`Invalid WorkBuddy plugin registry; preserve and repair ${registryPath} before installing`);
+  }
 
   // 0. Clean old plugin dir.
   if (existsSync(targetPluginDir)) {
@@ -345,6 +342,8 @@ async function installWorkBuddy({ pluginRoot, homeDir, marketplaceName, plan, lo
       logger.log(`   ${dir}/ — skipped (not found)`);
     }
   }
+  const packageJson = join(installPlan.pluginRoot, 'package.json');
+  if (existsSync(packageJson)) await cp(packageJson, join(targetPluginDir, 'package.json'));
 
   // 2. Copy canonical recovery commands as complete Markdown assets.
   const commandCount = await copyValidatedCommands(commandAssets, targetCommands, pluginRootAbs);
@@ -364,9 +363,25 @@ async function installWorkBuddy({ pluginRoot, homeDir, marketplaceName, plan, lo
   await writeFile(join(manifestDir, 'plugin.json'), JSON.stringify(pluginManifest(skillNames, version), null, 2) + '\n', 'utf-8');
   logger.log(`   manifest → ${join(manifestDir, 'plugin.json')}`);
 
+  // The desktop client discovers installed plugins through this registry.
+  const entries = registry.plugins[enabledPluginKey] ?? [];
+  const previous = entries.find(entry => entry.scope === 'user');
+  const now = new Date().toISOString();
+  registry.plugins[enabledPluginKey] = [...entries.filter(entry => entry.scope !== 'user'), {
+    ...previous, scope: 'user', installPath: pluginRootAbs, version,
+    installedAt: previous?.installedAt ?? now, lastUpdated: now,
+  }];
+  const temporaryRegistry = `${registryPath}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporaryRegistry, JSON.stringify(registry, null, 2) + '\n');
+    renameSync(temporaryRegistry, registryPath);
+  } finally {
+    rmSync(temporaryRegistry, { force: true });
+  }
+  logger.log(`   registry → ${enabledPluginKey} installed`);
+
   // 6. Enable plugin in settings.json.
   ensureDir(installPlan.workbuddyRoot);
-  const settings = readJsonIfExists(settingsPath);
   settings.enabledPlugins = settings.enabledPlugins && typeof settings.enabledPlugins === 'object'
     ? settings.enabledPlugins
     : {};

@@ -208,7 +208,15 @@ copilot plugin install spec-superflow@spec-superflow
 gemini extensions install https://github.com/MageByte-Zero/spec-superflow
 ```
 
-项目支持 19 个 AI 编程平台。其他平台的安装器、目录和卸载方式见 [INSTALL.md](INSTALL.md)，能力差异见 [平台矩阵](docs/platform-matrix.md)。
+### CatPaw（妙手，导入包预览）
+
+```bash
+node scripts/spec-superflow.mjs package-catpaw ./catpaw-spec-superflow
+```
+
+在妙手「技能」中导入生成的文件夹。包内包含同版本 CLI 和九个流程技能，升级时一起重新导入。此命令随下一版本发布；目前已验证包结构与本地 CLI，尚未完成妙手客户端验收。
+
+项目另支持 19 个 AI 编程平台。其他平台的安装器、目录和卸载方式见 [INSTALL.md](INSTALL.md)，能力差异见 [平台矩阵](docs/platform-matrix.md)。
 
 ## 命令
 
@@ -223,6 +231,7 @@ gemini extensions install https://github.com/MageByte-Zero/spec-superflow
 | `ssf sync <dir>` | 原子同步 delta spec 到发布基线 |
 | `ssf doctor` | 检查安装、版本和资源一致性 |
 | `ssf finish <dir>` | 验证并合并已记录的隔离分支 |
+| `ssf package-catpaw <new-dir>` | 生成妙手可导入的完整技能文件夹 |
 
 运行 `ssf --help` 查看完整命令。`workflow recommend/select/accept`、旧 execution plan 和八状态路由只用于恢复 v1 变更。
 

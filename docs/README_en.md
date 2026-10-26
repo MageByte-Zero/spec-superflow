@@ -182,7 +182,15 @@ copilot plugin install spec-superflow@spec-superflow
 gemini extensions install https://github.com/MageByte-Zero/spec-superflow
 ```
 
-The project supports 19 AI coding platforms. See [INSTALL.md](../INSTALL.md) for every installer and uninstall path, and the [platform matrix](platform-matrix.md) for capability differences.
+### CatPaw (妙手, import preview)
+
+```bash
+node scripts/spec-superflow.mjs package-catpaw ./catpaw-spec-superflow
+```
+
+Import the generated folder from CatPaw's Skills page. It contains the matching CLI and all nine workflow skills; reimport the whole folder when upgrading. This command is planned for the next release. Package structure and local CLI behavior have been tested; CatPaw client acceptance is pending.
+
+The project also supports 19 AI coding platforms. See [INSTALL.md](../INSTALL.md) for every installer and uninstall path, and the [platform matrix](platform-matrix.md) for capability differences.
 
 ## Commands
 
@@ -197,6 +205,7 @@ The project supports 19 AI coding platforms. See [INSTALL.md](../INSTALL.md) for
 | `ssf sync <dir>` | Atomically publish delta specs to the baseline |
 | `ssf doctor` | Check installation, versions, and assets |
 | `ssf finish <dir>` | Verify and merge recorded isolation |
+| `ssf package-catpaw <new-dir>` | Create a complete Skill folder for CatPaw import |
 
 Run `ssf --help` for the full command list. `workflow recommend/select/accept`, legacy execution plans, and the eight-state router remain only for v1 recovery.
 

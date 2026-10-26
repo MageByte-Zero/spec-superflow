@@ -8,12 +8,13 @@
 //
 // Defaults to the latest GitHub release; use --local <path> to deploy from a local repo.
 import { existsSync, mkdirSync, readdirSync, statSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
-import { cp, writeFile, mkdtemp } from 'node:fs/promises';
+import { cp, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { rewriteRuntime } from './lib/runtime-rewrite.mjs';
+import { cloneRelease } from './lib/release-source.mjs';
 import { createPhaseGuardContent } from './lib/phase-guard-content.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -40,16 +41,6 @@ async function fetchLatestTag() {
     throw new Error('GitHub API response missing tag_name');
   }
   return data.tag_name;
-}
-
-async function cloneRelease(tag) {
-  const tmpDir = await mkdtemp(join('/tmp', 'spec-superflow-'));
-  const url = `https://github.com/${GITHUB_REPO}.git`;
-  console.log(`📥 Cloning ${tag} into ${tmpDir} ...`);
-  execFileSync('git', ['clone', '--depth', '1', '--branch', tag, url, tmpDir], {
-    stdio: 'inherit',
-  });
-  return tmpDir;
 }
 
 /**
@@ -156,7 +147,7 @@ async function main() {
   });
 
   let pluginRoot = defaultPluginRoot;
-  let isTemp = false;
+  let stagingDir = null;
   let installedTag = null;
 
   if (values.local) {
@@ -165,14 +156,13 @@ async function main() {
   } else {
     installedTag = values.tag || await fetchLatestTag();
     console.log(`⬆️  Installing spec-superflow ${installedTag} ...`);
-    pluginRoot = await cloneRelease(installedTag);
-    isTemp = true;
+    ({ pluginRoot, stagingDir } = await cloneRelease(installedTag));
   }
 
   const sourceSkills = join(pluginRoot, 'skills');
   if (!existsSync(sourceSkills)) {
     console.error(`❌ skills/ directory not found at ${pluginRoot}`);
-    if (isTemp) rmSync(pluginRoot, { recursive: true, force: true });
+    if (stagingDir) rmSync(stagingDir, { recursive: true, force: true });
     process.exit(1);
   }
 
@@ -195,6 +185,7 @@ async function main() {
         console.log(`   ${dir}/ — skipped (not found)`);
       }
     }
+    await cp(join(pluginRoot, 'package.json'), join(targetPluginDir, 'package.json'), { force: true });
 
     // 2. Copy skills to .zcode/skills/ with CLAUDE_PLUGIN_ROOT replaced
     const count = await copySkillsWithRoot(sourceSkills, targetSkills, pluginRootAbs);
@@ -215,8 +206,8 @@ async function main() {
     }
     console.log(`\nNext: open ZCODE Agent and try "/workflow-start".`);
   } finally {
-    if (isTemp) {
-      rmSync(pluginRoot, { recursive: true, force: true });
+    if (stagingDir) {
+      rmSync(stagingDir, { recursive: true, force: true });
     }
   }
 }

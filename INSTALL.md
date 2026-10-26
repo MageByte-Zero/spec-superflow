@@ -38,6 +38,7 @@
 | Gemini CLI | `gemini extensions install` | `gemini extensions update` | `gemini extensions uninstall` |
 | OpenCode | plugin entry / skills 目录 | `git pull` | 删除 plugin/skills |
 | WorkBuddy | `ssf install-workbuddy` | 重新运行安装器 | 删除 marketplace 插件并禁用 |
+| CatPaw（妙手，预览） | `ssf package-catpaw <new-dir>` 后在客户端导入 | 重新生成并导入整个文件夹 | 在妙手技能管理中卸载 |
 | CodeBuddy Code CLI | `ssf install-codebuddy` | 重新运行安装器 | `ssf uninstall-codebuddy` |
 | Trae IDE / TRAE Work | `.trae/skills` / 上传 zip 或 .skill / marketplace | `git pull` + 重新导入 | UI 卸载或删除技能目录 |
 | Cline | `ssf install-cline` | 重新运行脚本 | 删除 `.cline/skills/`、`.clinerules/` |
@@ -357,6 +358,8 @@ rm -rf your-project/.agents/skills
 
 WorkBuddy 把 Skill 作为 marketplace 插件管理。安装器把 spec-superflow 部署为单个插件，包含 9 个 skill、运行时依赖（scripts/docs/templates/dist/hooks）、phase-guard 规则和 `.codebuddy-plugin/plugin.json` 清单，写入 `~/.workbuddy/plugins/marketplaces/<marketplace>/plugins/spec-superflow/`。
 
+安装器同时在 `~/.workbuddy/plugins/installed_plugins.json` 登记本地插件的路径与版本，并在 `settings.json` 启用。仅复制文件和写入 `enabledPlugins` 无法让当前桌面客户端识别插件。安装器不修改官方市场清单，也不表示已上架官方市场。
+
 安装器还会分发三份 canonical Markdown command adapter：`/ssf:resume`、`/ssf:switch`、`/ssf:save`。它们仅在 CodeBuddy/WorkBuddy 的 command 机制中提供这些 slash 名称，并调用同一组 CLI guard；不表示所有平台都有完全相同的 slash 命令。
 
 ### 安装（推荐：一键脚本）
@@ -387,13 +390,14 @@ ssf install-workbuddy --dry-run
 ├── rules/phase-guard.md            ← phase-guard 规则（WorkBuddy 自动加载）
 ├── scripts/  docs/  templates/     ← 运行时依赖
 ├── dist/  hooks/
+├── package.json                    ← 同包 CLI 的版本元数据
 ```
 
 `~/.workbuddy/settings.json` 中启用键为 `spec-superflow@cb_teams_marketplace`（单个键，非每 skill 一个）。
 
 ### 升级
 
-重新运行安装命令即可覆盖旧插件并保留已有 `enabledPlugins` 配置。
+重新运行安装命令即可覆盖旧插件，更新安装登记，并保留其他插件的配置与登记。登记文件损坏时会停止安装，保留原插件供排查。
 
 ### 卸载
 
@@ -401,7 +405,7 @@ ssf install-workbuddy --dry-run
 rm -rf ~/.workbuddy/plugins/marketplaces/cb_teams_marketplace/plugins/spec-superflow
 ```
 
-然后从 `~/.workbuddy/settings.json` 的 `enabledPlugins` 中移除 `spec-superflow@cb_teams_marketplace`。
+然后从 `~/.workbuddy/settings.json` 的 `enabledPlugins` 和 `~/.workbuddy/plugins/installed_plugins.json` 的 `plugins` 中移除 `spec-superflow@cb_teams_marketplace` 的本地安装记录，保留其他插件记录。
 
 ### 验证
 
@@ -412,6 +416,22 @@ cat ~/.workbuddy/plugins/marketplaces/cb_teams_marketplace/plugins/spec-superflo
 ```
 
 重启 WorkBuddy 后，在对话中输入「用 workflow-start 开始」即可启动工作流。
+
+---
+
+## CatPaw（妙手，导入包预览）
+
+针对新版妙手工作台，使用[官方支持的本地技能文件夹导入](https://catpaw.meituan.com/docs#/desktop/skills-market)，不写入未经确认的内部目录。此命令随下一版本发布；在当前仓库可先运行：
+
+```bash
+node scripts/spec-superflow.mjs package-catpaw ./catpaw-spec-superflow
+```
+
+输出目录必须不存在。生成的目录包含根 `SKILL.md`、九个流程技能以及同版本 CLI 和所需资源。在妙手「技能」→ 导入本地技能中选择这个文件夹；应用仅需发现根技能 `spec-superflow`，其余流程按需读取包内文件。若选择 ZIP 导入，先压缩完整文件夹，不要只上传 `SKILL.md`。
+
+使用时选择 `spec-superflow` 技能，或明确要求使用 spec-superflow。执行端需要 Node.js 20+ 和 Git。升级时用新版本 CLI 重新生成完整文件夹，再通过妙手导入；不要仅替换技能正文或单独升级全局 `ssf`。
+
+当前已验证生成包移动后仍能运行 CLI、读取参考文档及启动 direct 流程；尚未进行妙手客户端导入和模型调用验收，也未验证云端模式。
 
 ---
 

@@ -10,8 +10,15 @@ The format loosely follows Keep a Changelog.
 
 - Separate legacy recovery instructions from default workflow skills; route existing changes by recorded workflow variant and ship the compatibility reference with the bundled runtime.
 
+### Added
+
+- Add `ssf package-catpaw <new-dir>` to generate one self-contained Skill folder for the current CatPaw (妙手) desktop import flow (#112). The folder carries the matching CLI and nine workflow skills; package relocation and local runtime behavior are verified, while client and cloud acceptance remain pending.
+
 ### Fixed
 
+- Use the operating system's temporary directory for Qoder and shared release installers, including Cursor and ZCODE, fixing Windows installation failures (#134). Reuse WorkBuddy's isolated clone destination and cleanup on failure across all five installer paths, preserving the fix for #89.
+- Register WorkBuddy local installations in `installed_plugins.json` as well as `enabledPlugins`, so the desktop client discovers the installed suite. Preserve other installations and non-user scopes on upgrades, reject damaged registries before replacing the plugin, and carry the CLI version metadata.
+- Include `package.json` with the bundled CLI in shared, Cursor and ZCODE installs so version identification and module metadata stay with the matching skills.
 - Record the change's start commit and branch when `workflow start` enters executing, and resolve the final review range from that anchor, so a repository whose trunk is not named `main`/`master` can record its final review and complete instead of failing with "Final review requires an unambiguous recorded target branch". An isolation context recorded later no longer moves the range origin.
 - Allow a change that entered executing before the start anchor existed to record it once with `ssf state set <change-dir> review_base <start-commit>`. Both anchor fields are write-once: a recorded anchor cannot be overwritten or cleared, so the reviewed range cannot be narrowed through `ssf state set`.
 - Accept a relative `<change-dir>` for every `ssf execution` subcommand. `ssf execution review` previously wrote the report snapshot to the directory the relative path pointed at, then validated it against the change directory's realpath, so the documented `ssf execution review changes/<name> ...` form always failed with an ENOENT on a doubled path.
