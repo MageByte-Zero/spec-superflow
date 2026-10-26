@@ -116,7 +116,7 @@ Validate examples according to their recorded workflow variant. Existing legacy 
     --expected-version <semver>
   ```
 
-- This check is a **blocking release CI gate**: the upstream marketplace PR must be submitted and merged, and its generated manifest must report the release version, before pushing the `v<semver>` tag. The gate runs before GitHub Release creation and npm publishing.
+- This is an **advisory release CI check**. Marketplace lag does not block the release tag, GitHub Release or npm publication. Submit the synchronization PR and verify marketplace delivery separately after maintainers merge it and the generator finishes.
 
 - Before creating the marketplace sync branch, fast-forward the personal fork to the upstream default branch. After opening the PR, verify its diff is limited to the intended catalog entry (normally `README.md`); do not carry generated marketplace files or unrelated fork history into the PR.
 

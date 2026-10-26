@@ -144,7 +144,8 @@ jobs:
       - run: npm test
       - name: Check version consistency
         run: node scripts/check-version-consistency.mjs
-      - name: Verify marketplace release gate
+      - name: Check marketplace sync (advisory)
+        continue-on-error: true
         env:
           EXPECTED_VERSION: ${{ github.ref_name }}
         run: |
